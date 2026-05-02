@@ -1,0 +1,1027 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AntiMatter — AI Code Editor</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0d0f12;
+    --bg2: #12151a;
+    --bg3: #181c23;
+    --bg4: #1e232c;
+    --border: #252b36;
+    --border2: #2e3645;
+    --text: #c9d1e0;
+    --text2: #7a8599;
+    --text3: #4a5568;
+    --accent: #4f9cf9;
+    --accent2: #3b82f6;
+    --green: #34d399;
+    --amber: #fbbf24;
+    --red: #f87171;
+    --purple: #a78bfa;
+    --font-mono: 'JetBrains Mono', monospace;
+    --font-ui: 'DM Sans', sans-serif;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-ui);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* TOP BAR */
+  .topbar {
+    height: 44px;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 16px;
+    flex-shrink: 0;
+    z-index: 10;
+  }
+
+  .logo {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.05em;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .logo-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .topbar-mid {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .file-badge {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text2);
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    padding: 3px 10px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .file-badge .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+
+  .topbar-actions { display: flex; align-items: center; gap: 8px; }
+
+  .btn {
+    font-family: var(--font-ui);
+    font-size: 12px;
+    font-weight: 500;
+    padding: 5px 12px;
+    border-radius: 5px;
+    border: 1px solid var(--border2);
+    background: var(--bg3);
+    color: var(--text2);
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .btn:hover { background: var(--bg4); color: var(--text); border-color: var(--border2); }
+  .btn.primary { background: var(--accent2); border-color: var(--accent2); color: #fff; }
+  .btn.primary:hover { background: var(--accent); border-color: var(--accent); }
+  .btn.success { background: transparent; border-color: var(--green); color: var(--green); }
+  .btn.success:hover { background: rgba(52,211,153,0.08); }
+
+  /* MAIN LAYOUT */
+  .main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* SIDEBAR */
+  .sidebar {
+    width: 220px;
+    background: var(--bg2);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+
+  .sidebar-header {
+    padding: 10px 14px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    color: var(--text3);
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .upload-zone {
+    margin: 12px;
+    border: 1px dashed var(--border2);
+    border-radius: 8px;
+    padding: 16px 12px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .upload-zone:hover { border-color: var(--accent); background: rgba(79,156,249,0.04); }
+  .upload-zone input { display: none; }
+  .upload-zone .icon { font-size: 20px; margin-bottom: 6px; }
+  .upload-zone p { font-size: 11px; color: var(--text2); line-height: 1.5; }
+  .upload-zone span { color: var(--accent); }
+
+  .file-list { flex: 1; overflow-y: auto; padding: 4px 0; }
+
+  .file-item {
+    padding: 6px 14px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text2);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    transition: all 0.1s;
+    border-left: 2px solid transparent;
+  }
+  .file-item:hover { background: var(--bg3); color: var(--text); }
+  .file-item.active { background: var(--bg3); color: var(--accent); border-left-color: var(--accent); }
+  .file-icon { font-size: 12px; }
+
+  .sidebar-bottom {
+    padding: 10px 12px;
+    border-top: 1px solid var(--border);
+  }
+
+  /* EDITOR PANE */
+  .editor-pane {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    position: relative;
+  }
+
+  .editor-tabs {
+    height: 36px;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: flex-end;
+    padding: 0 12px;
+    gap: 2px;
+  }
+
+  .tab {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 6px 14px;
+    color: var(--text2);
+    cursor: pointer;
+    border-radius: 4px 4px 0 0;
+    border: 1px solid transparent;
+    border-bottom: none;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .tab.active { background: var(--bg); color: var(--text); border-color: var(--border); }
+  .tab .close { opacity: 0; font-size: 10px; }
+  .tab:hover .close { opacity: 1; }
+
+  #monaco-container { flex: 1; }
+
+  .editor-footer {
+    height: 24px;
+    background: var(--accent2);
+    display: flex;
+    align-items: center;
+    padding: 0 14px;
+    gap: 16px;
+    font-size: 11px;
+    color: rgba(255,255,255,0.8);
+    font-family: var(--font-mono);
+  }
+  .editor-footer span { opacity: 0.7; }
+  .editor-footer .status { opacity: 1; font-weight: 500; }
+
+  /* AI PANEL */
+  .ai-panel {
+    width: 360px;
+    background: var(--bg2);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+
+  .ai-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .ai-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .ai-badge {
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    background: rgba(79,156,249,0.15);
+    color: var(--accent);
+    border: 1px solid rgba(79,156,249,0.3);
+    padding: 2px 6px;
+    border-radius: 3px;
+    text-transform: uppercase;
+  }
+
+  .model-selector {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text3);
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    padding: 3px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    color: var(--text2);
+  }
+
+  /* QUICK COMMANDS */
+  .quick-cmds {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .cmd-chip {
+    font-size: 11px;
+    font-family: var(--font-mono);
+    padding: 4px 10px;
+    border-radius: 20px;
+    border: 1px solid var(--border2);
+    background: var(--bg3);
+    color: var(--text2);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .cmd-chip:hover { border-color: var(--accent); color: var(--accent); background: rgba(79,156,249,0.06); }
+
+  /* MESSAGES */
+  .messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    scroll-behavior: smooth;
+  }
+
+  .messages::-webkit-scrollbar { width: 4px; }
+  .messages::-webkit-scrollbar-track { background: transparent; }
+  .messages::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+  .msg {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    animation: fadeUp 0.2s ease;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .msg-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .msg-label.you { color: var(--text3); }
+  .msg-label.ai { color: var(--accent); }
+
+  .msg-bubble {
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  .msg-bubble.you {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+
+  .msg-bubble.ai {
+    background: rgba(79,156,249,0.06);
+    border: 1px solid rgba(79,156,249,0.15);
+    color: var(--text);
+  }
+
+  .msg-bubble code {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    background: var(--bg);
+    padding: 1px 5px;
+    border-radius: 3px;
+    color: var(--purple);
+  }
+
+  .msg-bubble pre {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin: 8px 0;
+    overflow-x: auto;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1.6;
+    color: var(--text);
+  }
+
+  /* apply to editor button */
+  .apply-btn {
+    margin-top: 6px;
+    font-size: 11px;
+    font-family: var(--font-mono);
+    padding: 4px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--green);
+    background: transparent;
+    color: var(--green);
+    cursor: pointer;
+    transition: all 0.15s;
+    display: none;
+  }
+  .apply-btn:hover { background: rgba(52,211,153,0.1); }
+  .apply-btn.visible { display: inline-flex; align-items: center; gap: 5px; }
+
+  /* THINKING INDICATOR */
+  .thinking {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0;
+    font-size: 12px;
+    color: var(--text3);
+    font-family: var(--font-mono);
+  }
+  .thinking-dots { display: flex; gap: 3px; }
+  .thinking-dots span {
+    width: 4px; height: 4px; border-radius: 50%;
+    background: var(--accent);
+    animation: blink 1.2s ease-in-out infinite;
+  }
+  .thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+  .thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes blink { 0%,100%{opacity:0.2} 50%{opacity:1} }
+
+  /* INPUT AREA */
+  .input-area {
+    padding: 12px;
+    border-top: 1px solid var(--border);
+    background: var(--bg2);
+  }
+
+  .input-wrap {
+    background: var(--bg3);
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    transition: border-color 0.15s;
+  }
+  .input-wrap:focus-within { border-color: var(--accent); }
+
+  #chat-input {
+    width: 100%;
+    background: transparent;
+    border: none;
+    outline: none;
+    resize: none;
+    padding: 10px 12px 4px;
+    font-family: var(--font-ui);
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.5;
+    min-height: 42px;
+    max-height: 120px;
+  }
+
+  #chat-input::placeholder { color: var(--text3); }
+
+  .input-footer {
+    padding: 6px 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .input-hint { font-size: 10px; color: var(--text3); font-family: var(--font-mono); }
+
+  .send-btn {
+    width: 28px; height: 28px;
+    border-radius: 6px;
+    border: none;
+    background: var(--accent2);
+    color: #fff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+    font-size: 13px;
+  }
+  .send-btn:hover { background: var(--accent); transform: scale(1.05); }
+  .send-btn:disabled { background: var(--bg4); color: var(--text3); transform: none; cursor: not-allowed; }
+
+  /* EMPTY STATE */
+  .empty-state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 24px;
+    text-align: center;
+  }
+  .empty-icon { font-size: 32px; opacity: 0.3; }
+  .empty-title { font-size: 14px; font-weight: 500; color: var(--text2); }
+  .empty-sub { font-size: 12px; color: var(--text3); line-height: 1.5; }
+
+  /* CONTEXT INDICATOR */
+  .context-bar {
+    padding: 6px 12px;
+    background: rgba(167,139,250,0.06);
+    border-bottom: 1px solid rgba(167,139,250,0.12);
+    font-size: 11px;
+    color: var(--purple);
+    font-family: var(--font-mono);
+    display: none;
+    align-items: center;
+    gap: 6px;
+  }
+  .context-bar.visible { display: flex; }
+
+  /* RESIZER */
+  .resizer {
+    width: 4px;
+    background: var(--border);
+    cursor: col-resize;
+    transition: background 0.15s;
+    flex-shrink: 0;
+  }
+  .resizer:hover { background: var(--accent); }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="logo">
+    <div class="logo-dot"></div>
+    AntiMatter
+  </div>
+  <div class="topbar-mid">
+    <div class="file-badge" id="current-file-badge" style="display:none">
+      <div class="dot"></div>
+      <span id="current-file-name">untitled</span>
+    </div>
+  </div>
+  <div class="topbar-actions">
+    <button class="btn" id="index-btn" onclick="indexProject()">⬡ Index project</button>
+    <button class="btn" onclick="clearChat()">↺ Clear chat</button>
+    <button class="btn success" id="run-btn" onclick="runCode()" style="display:none">▶ Run</button>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <span>Explorer</span>
+    </div>
+
+    <label class="upload-zone">
+      <input type="file" id="file-upload" multiple accept=".py,.js,.ts,.html,.css,.json,.md,.txt,.jsx,.tsx,.java,.cpp,.c,.go,.rs" onchange="loadFiles(event)">
+      <div class="icon">📂</div>
+      <p>Drop files or <span>browse</span><br>to open in editor</p>
+    </label>
+
+    <div class="file-list" id="file-list"></div>
+
+    <div class="sidebar-bottom">
+      <button class="btn" style="width:100%;justify-content:center;" onclick="document.getElementById('file-upload').click()">+ Open file</button>
+    </div>
+  </div>
+
+  <!-- EDITOR PANE -->
+  <div class="editor-pane">
+    <div class="editor-tabs" id="editor-tabs">
+      <div style="font-size:11px;color:var(--text3);padding:0 4px;align-self:center;font-family:var(--font-mono)">no file open</div>
+    </div>
+    <div id="monaco-container"></div>
+    <div class="editor-footer">
+      <span class="status" id="editor-status">Ready</span>
+      <span id="cursor-pos">Ln 1, Col 1</span>
+      <span id="lang-indicator">—</span>
+      <span style="margin-left:auto">UTF-8</span>
+    </div>
+  </div>
+
+  <div class="resizer" id="resizer"></div>
+
+  <!-- AI PANEL -->
+  <div class="ai-panel" id="ai-panel">
+    <div class="ai-header">
+      <div class="ai-title">
+        ✦ AI Assistant
+        <span class="ai-badge">Groq</span>
+      </div>
+      <select class="model-selector" id="model-select">
+        <option value="llama-3.3-70b-versatile">llama-3.3-70b</option>
+        <option value="deepseek-r1-distill-llama-70b">deepseek-r1</option>
+        <option value="mixtral-8x7b-32768">mixtral-8x7b</option>
+      </select>
+    </div>
+
+    <!-- CONTEXT BAR -->
+    <div class="context-bar" id="context-bar">
+      <span>⬡</span>
+      <span id="context-text">Using file context</span>
+    </div>
+
+    <!-- QUICK COMMANDS -->
+    <div class="quick-cmds">
+      <div class="cmd-chip" onclick="quickCmd('/explain')">/explain</div>
+      <div class="cmd-chip" onclick="quickCmd('/refactor')">/refactor</div>
+      <div class="cmd-chip" onclick="quickCmd('/tests')">/tests</div>
+      <div class="cmd-chip" onclick="quickCmd('/fix')">/fix</div>
+      <div class="cmd-chip" onclick="quickCmd('/docs')">/docs</div>
+    </div>
+
+    <!-- MESSAGES -->
+    <div class="messages" id="messages">
+      <div class="empty-state" id="empty-state">
+        <div class="empty-icon">✦</div>
+        <div class="empty-title">AntiMatter AI</div>
+        <div class="empty-sub">Open a file and ask anything about your code. Use /explain, /refactor, /fix and more.</div>
+      </div>
+    </div>
+
+    <!-- INPUT -->
+    <div class="input-area">
+      <div class="input-wrap">
+        <textarea id="chat-input" placeholder="Ask about your code..." rows="1"
+          onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+        <div class="input-footer">
+          <span class="input-hint">↵ send · shift+↵ newline</span>
+          <button class="send-btn" id="send-btn" onclick="sendMessage()">↑</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Monaco Loader -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js"></script>
+<script>
+  // ─── STATE ────────────────────────────────────────────
+  const BACKEND = 'http://localhost:1842';
+  let editor = null;
+  let files = {};          // { filename: content }
+  let activeFile = null;
+  let messages = [];
+  let isStreaming = false;
+  let conversationHistory = [];
+
+  // ─── MONACO INIT ─────────────────────────────────────
+  require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' } });
+
+  require(['vs/editor/editor.main'], function() {
+    editor = monaco.editor.create(document.getElementById('monaco-container'), {
+      value: '// Open a file from the sidebar to get started\n// Then ask the AI anything about your code ✦',
+      language: 'javascript',
+      theme: 'vs-dark',
+      fontSize: 13,
+      fontFamily: "'JetBrains Mono', monospace",
+      fontLigatures: true,
+      lineHeight: 22,
+      minimap: { enabled: true, scale: 1 },
+      scrollBeyondLastLine: false,
+      padding: { top: 12 },
+      smoothScrolling: true,
+      cursorBlinking: 'smooth',
+      cursorSmoothCaretAnimation: 'on',
+      bracketPairColorization: { enabled: true },
+      guides: { bracketPairs: true },
+      renderWhitespace: 'selection',
+      wordWrap: 'on',
+    });
+
+    // Cursor position
+    editor.onDidChangeCursorPosition(e => {
+      document.getElementById('cursor-pos').textContent =
+        `Ln ${e.position.lineNumber}, Col ${e.position.column}`;
+    });
+
+    // Content change
+    editor.onDidChangeModelContent(() => {
+      if (activeFile) files[activeFile] = editor.getValue();
+    });
+
+    // Handle resize
+    window.addEventListener('resize', () => editor.layout());
+  });
+
+  // ─── FILE HANDLING ────────────────────────────────────
+  function loadFiles(event) {
+    const fileInputs = Array.from(event.target.files);
+    fileInputs.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = e => {
+        files[file.name] = e.target.result;
+        renderFileList();
+        if (!activeFile) openFile(file.name);
+      };
+      reader.readAsText(file);
+    });
+  }
+
+  function renderFileList() {
+    const list = document.getElementById('file-list');
+    list.innerHTML = '';
+    Object.keys(files).forEach(name => {
+      const item = document.createElement('div');
+      item.className = 'file-item' + (name === activeFile ? ' active' : '');
+      item.innerHTML = `<span class="file-icon">${getFileIcon(name)}</span>${name}`;
+      item.onclick = () => openFile(name);
+      list.appendChild(item);
+    });
+  }
+
+  function openFile(name) {
+    activeFile = name;
+    const content = files[name];
+    const lang = detectLanguage(name);
+
+    const model = monaco.editor.createModel(content, lang);
+    editor.setModel(model);
+
+    // Update UI
+    document.getElementById('current-file-badge').style.display = 'flex';
+    document.getElementById('current-file-name').textContent = name;
+    document.getElementById('lang-indicator').textContent = lang;
+    document.getElementById('run-btn').style.display = ['python','javascript','js','py'].some(e => name.endsWith('.'+e)) ? 'flex' : 'none';
+    document.getElementById('editor-status').textContent = 'Editing';
+
+    // Update tabs
+    const tabs = document.getElementById('editor-tabs');
+    tabs.innerHTML = `<div class="tab active"><span>${getFileIcon(name)}</span>${name}<span class="close" onclick="closeFile('${name}')">✕</span></div>`;
+
+    // Update context bar
+    document.getElementById('context-bar').className = 'context-bar visible';
+    document.getElementById('context-text').textContent = `Context: ${name} (${content.split('\n').length} lines)`;
+
+    renderFileList();
+  }
+
+  function closeFile(name) {
+    delete files[name];
+    if (activeFile === name) {
+      activeFile = null;
+      const remaining = Object.keys(files);
+      if (remaining.length) openFile(remaining[0]);
+      else {
+        document.getElementById('current-file-badge').style.display = 'none';
+        document.getElementById('context-bar').className = 'context-bar';
+        document.getElementById('editor-tabs').innerHTML = `<div style="font-size:11px;color:var(--text3);padding:0 4px;align-self:center;font-family:var(--font-mono)">no file open</div>`;
+      }
+    }
+    renderFileList();
+  }
+
+  function getFileIcon(name) {
+    const ext = name.split('.').pop().toLowerCase();
+    const icons = { py:'🐍', js:'🟨', ts:'🔷', jsx:'⚛', tsx:'⚛', html:'🌐', css:'🎨', json:'📋', md:'📝', go:'🐹', rs:'🦀', java:'☕', cpp:'⚙', c:'⚙' };
+    return icons[ext] || '📄';
+  }
+
+  function detectLanguage(name) {
+    const ext = name.split('.').pop().toLowerCase();
+    const map = { py:'python', js:'javascript', ts:'typescript', jsx:'javascript', tsx:'typescript', html:'html', css:'css', json:'json', md:'markdown', go:'go', rs:'rust', java:'java', cpp:'cpp', c:'c' };
+    return map[ext] || 'plaintext';
+  }
+
+  // ─── CHAT ─────────────────────────────────────────────
+  function quickCmd(cmd) {
+    const input = document.getElementById('chat-input');
+    const cmds = {
+      '/explain': 'Explain what this code does in detail.',
+      '/refactor': 'Refactor this code to be cleaner and more efficient.',
+      '/tests': 'Write unit tests for this code.',
+      '/fix': 'Find and fix any bugs or issues in this code.',
+      '/docs': 'Add docstrings and comments to this code.',
+    };
+    input.value = cmds[cmd] || cmd + ' ';
+    input.focus();
+    autoResize(input);
+  }
+
+  function handleKey(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  }
+
+  function autoResize(el) {
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+  }
+
+  async function sendMessage() {
+    if (isStreaming) return;
+    const input = document.getElementById('chat-input');
+    const text = input.value.trim();
+    if (!text) return;
+
+    input.value = '';
+    input.style.height = 'auto';
+    hideEmptyState();
+
+    // Add user message
+    addMessage('you', text);
+    conversationHistory.push({ role: 'user', content: text });
+
+    // Disable send
+    isStreaming = true;
+    document.getElementById('send-btn').disabled = true;
+
+    // Show thinking
+    const thinkingId = showThinking();
+
+    // Prepare request
+    const selectedModel = document.getElementById('model-select').value;
+    const fileContent = activeFile ? files[activeFile] : '';
+    const filename = activeFile || '';
+
+    try {
+      const response = await fetch(`${BACKEND}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: text,
+          file_content: fileContent,
+          filename: filename,
+          model: selectedModel,
+          history: conversationHistory.slice(-10),
+          use_rag: true
+        })
+      });
+
+      removeThinking(thinkingId);
+
+      if (!response.ok) throw new Error(`Server error: ${response.status}`);
+
+      const aiMsgEl = addMessage('ai', '');
+      const bubble = aiMsgEl.querySelector('.msg-bubble');
+      const applyBtn = aiMsgEl.querySelector('.apply-btn');
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullText = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value);
+        fullText += chunk;
+        bubble.innerHTML = formatMessage(fullText);
+        scrollMessages();
+      }
+
+      conversationHistory.push({ role: 'assistant', content: fullText });
+
+      // Show apply button if code block detected
+      if (fullText.includes('```')) {
+        applyBtn.classList.add('visible');
+        applyBtn.onclick = () => applyToEditor(fullText);
+      }
+
+    } catch (err) {
+      removeThinking(thinkingId);
+      addMessage('ai', `⚠ Connection error: ${err.message}\n\nMake sure your backend is running on port 1842.`);
+    }
+
+    isStreaming = false;
+    document.getElementById('send-btn').disabled = false;
+    document.getElementById('chat-input').focus();
+  }
+  async function indexProject() {
+    if (Object.keys(files).length === 0) {
+        alert('Open some files first, then index them.');
+        return;
+    }
+    const btn = document.getElementById('index-btn');
+    btn.textContent = '⬡ Indexing...';
+    btn.disabled = true;
+
+    try {
+        const res = await fetch('http://localhost:1842/index-project', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ files })
+        });
+        const data = await res.json();
+        btn.textContent = `✓ ${data.chunks_created} chunks`;
+        addMessage('ai', `Project indexed ✓\n\n- **Files:** ${data.files_indexed}\n- **Chunks:** ${data.chunks_created}\n\nI can now answer questions across your entire codebase.`);
+        hideEmptyState();
+    } catch (e) {
+        btn.textContent = '⬡ Index project';
+        alert('Indexing failed: ' + e.message);
+    } finally {
+        btn.disabled = false;
+    }
+}
+  function formatMessage(text) {
+    // Code blocks
+    text = text.replace(/```(\w+)?\n([\s\S]*?)```/g, (_, lang, code) =>
+      `<pre><code>${escapeHtml(code.trim())}</code></pre>`
+    );
+    // Inline code
+    text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
+    // Bold
+    text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    // Newlines
+    text = text.replace(/\n/g, '<br>');
+    return text;
+  }
+
+  function escapeHtml(text) {
+    return text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function applyToEditor(text) {
+    if (!editor) return;
+    const codeMatch = text.match(/```(?:\w+)?\n([\s\S]*?)```/);
+    if (codeMatch) {
+      const selection = editor.getSelection();
+      if (selection && !selection.isEmpty()) {
+        editor.executeEdits('ai-apply', [{
+          range: selection,
+          text: codeMatch[1].trim()
+        }]);
+      } else {
+        editor.setValue(codeMatch[1].trim());
+      }
+      if (activeFile) files[activeFile] = editor.getValue();
+      document.getElementById('editor-status').textContent = 'AI applied ✓';
+      setTimeout(() => document.getElementById('editor-status').textContent = 'Editing', 2000);
+    }
+  }
+
+  function addMessage(role, text) {
+    const msgs = document.getElementById('messages');
+    const div = document.createElement('div');
+    div.className = 'msg';
+    div.innerHTML = `
+      <div class="msg-label ${role}">${role === 'you' ? '● You' : '✦ AI'}</div>
+      <div class="msg-bubble ${role}">${role === 'you' ? escapeHtml(text).replace(/\n/g,'<br>') : formatMessage(text)}</div>
+      ${role === 'ai' ? '<button class="apply-btn">⤷ Apply to editor</button>' : ''}
+    `;
+    msgs.appendChild(div);
+    scrollMessages();
+    return div;
+  }
+
+  function showThinking() {
+    const msgs = document.getElementById('messages');
+    const div = document.createElement('div');
+    div.className = 'thinking';
+    div.id = 'thinking-' + Date.now();
+    div.innerHTML = `<div class="thinking-dots"><span></span><span></span><span></span></div><span>AI is thinking</span>`;
+    msgs.appendChild(div);
+    scrollMessages();
+    return div.id;
+  }
+
+  function removeThinking(id) {
+    const el = document.getElementById(id);
+    if (el) el.remove();
+  }
+
+  function hideEmptyState() {
+    const es = document.getElementById('empty-state');
+    if (es) es.remove();
+  }
+
+  function scrollMessages() {
+    const msgs = document.getElementById('messages');
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  function clearChat() {
+    const msgs = document.getElementById('messages');
+    msgs.innerHTML = `<div class="empty-state" id="empty-state">
+      <div class="empty-icon">✦</div>
+      <div class="empty-title">AntiMatter AI</div>
+      <div class="empty-sub">Open a file and ask anything about your code.</div>
+    </div>`;
+    conversationHistory = [];
+  }
+
+  function runCode() {
+    addMessage('you', 'Run this code and show me the output.');
+    sendMessage();
+  }
+
+  // ─── RESIZER ──────────────────────────────────────────
+  const resizer = document.getElementById('resizer');
+  const aiPanel = document.getElementById('ai-panel');
+  let isResizing = false;
+
+  resizer.addEventListener('mousedown', e => {
+    isResizing = true;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  });
+
+  document.addEventListener('mousemove', e => {
+    if (!isResizing) return;
+    const container = document.querySelector('.main');
+    const rect = container.getBoundingClientRect();
+    const newWidth = rect.right - e.clientX;
+    if (newWidth > 260 && newWidth < 600) {
+      aiPanel.style.width = newWidth + 'px';
+      if (editor) editor.layout();
+    }
+  });
+
+  document.addEventListener('mouseup', () => {
+    isResizing = false;
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  });
+</script>
+</body>
+</html>

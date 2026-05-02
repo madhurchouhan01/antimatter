@@ -1,0 +1,13 @@
+# Environment variables
+.env
+.env.*
+
+# Virtual env
+antimatter-env/
+
+# Python
+__pycache__/
+*.pyc
+
+# ChromaDB / memory
+project/memory/chromadb/
