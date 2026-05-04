@@ -317,17 +317,12 @@
   /* MESSAGES */
   .messages {
     flex: 1;
-    overflow-y: auto;
     padding: 12px;
     display: flex;
     flex-direction: column;
     gap: 12px;
-    scroll-behavior: smooth;
+    min-height: 120px;
   }
-
-  .messages::-webkit-scrollbar { width: 4px; }
-  .messages::-webkit-scrollbar-track { background: transparent; }
-  .messages::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
 
   .msg {
     display: flex;
@@ -529,6 +524,168 @@
     flex-shrink: 0;
   }
   .resizer:hover { background: var(--accent); }
+
+
+/* // ─────────────────────────────────────────────────────────────────────────────
+// ANTIMATTER — Agent Panel additions for index.html
+// Add these inside your <script> block, and the HTML to your AI panel
+// ─────────────────────────────────────────────────────────────────────────────
+  */
+
+.mode-toggle {
+  display: flex;
+  margin: 0 12px 0;
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.mode-btn {
+  flex: 1;
+  padding: 6px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  background: var(--bg3);
+  color: var(--text2);
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.mode-btn.active { background: var(--accent2); color: #fff; }
+ 
+/* ai-body: scrollable container holding agent panel + messages */
+.ai-body {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  scroll-behavior: smooth;
+  min-height: 0;
+}
+.ai-body::-webkit-scrollbar { width: 4px; }
+.ai-body::-webkit-scrollbar-track { background: transparent; }
+.ai-body::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+.agent-panel { display: none; flex-direction: column; gap: 8px; padding: 10px 12px; flex-shrink: 0; }
+.agent-panel.visible { display: flex; }
+ 
+.agent-card {
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  transition: border-color 0.2s;
+  background: var(--bg3);
+}
+.agent-card.active { border-color: var(--accent); background: rgba(79,156,249,0.03); }
+.agent-card.done { border-color: var(--green); background: rgba(52,211,153,0.02); }
+.agent-card.error { border-color: var(--red); }
+ 
+.agent-card-header {
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+  background: var(--bg4);
+  transition: background 0.15s;
+}
+.agent-card-header:hover { background: var(--bg3); }
+
+.agent-card-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.agent-name {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.agent-status {
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-family: var(--font-mono);
+}
+.status-waiting  { background: var(--bg4); color: var(--text3); }
+.status-running  { background: rgba(79,156,249,0.15); color: var(--accent); }
+.status-done     { background: rgba(52,211,153,0.12); color: var(--green); }
+.status-error    { background: rgba(248,113,113,0.12); color: var(--red); }
+
+/* Chevron toggle icon */
+.card-chevron {
+  font-size: 10px;
+  color: var(--text3);
+  transition: transform 0.25s ease;
+  margin-left: 4px;
+  flex-shrink: 0;
+}
+.card-chevron.open { transform: rotate(180deg); }
+ 
+.agent-card-body {
+  padding: 0 12px;
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.35s ease, padding 0.3s ease;
+  font-size: 12px;
+  color: var(--text2);
+  line-height: 1.6;
+  background: var(--bg3);
+}
+.agent-card-body.open { max-height: 800px; padding: 10px 12px 14px; }
+ 
+.plan-step {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 4px 0;
+  font-size: 12px;
+  color: var(--text2);
+}
+.step-num {
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: var(--bg4);
+  border: 1px solid var(--border2);
+  font-size: 10px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  color: var(--text3);
+  font-family: var(--font-mono);
+}
+.step-num.done { background: rgba(52,211,153,0.15); border-color: var(--green); color: var(--green); }
+ 
+.critique-item {
+  padding: 5px 8px;
+  border-radius: 5px;
+  font-size: 11px;
+  margin: 3px 0;
+  display: flex;
+  gap: 6px;
+}
+.critique-high   { background: rgba(248,113,113,0.08); color: var(--red); border-left: 2px solid var(--red); }
+.critique-medium { background: rgba(251,191,36,0.08); color: var(--amber); border-left: 2px solid var(--amber); }
+.critique-low    { background: rgba(52,211,153,0.06); color: var(--green); border-left: 2px solid var(--green); }
+ 
+.score-bar {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+  margin: 6px 0;
+  overflow: hidden;
+}
+.score-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.5s ease;
+}
+
 </style>
 </head>
 <body>
@@ -619,14 +776,73 @@
       <div class="cmd-chip" onclick="quickCmd('/docs')">/docs</div>
     </div>
 
-    <!-- MESSAGES -->
-    <div class="messages" id="messages">
-      <div class="empty-state" id="empty-state">
-        <div class="empty-icon">✦</div>
-        <div class="empty-title">AntiMatter AI</div>
-        <div class="empty-sub">Open a file and ask anything about your code. Use /explain, /refactor, /fix and more.</div>
-      </div>
+    <!-- MODE TOGGLE -->
+    <div class="mode-toggle" style="margin: 10px 12px 0;">
+      <button class="mode-btn active" id="mode-chat" onclick="setMode('chat')">💬 Chat</button>
+      <button class="mode-btn" id="mode-agent" onclick="setMode('agent')">⚡ Agent</button>
     </div>
+    
+    <!-- SCROLLABLE BODY: agent cards + messages share one scroll container -->
+    <div class="ai-body" id="ai-body">
+
+      <!-- AGENT PANEL (shown in agent mode) -->
+      <div class="agent-panel" id="agent-panel">
+        <!-- Planner Card -->
+        <div class="agent-card" id="card-planner">
+          <div class="agent-card-header" onclick="toggleCard('planner')">
+            <div class="agent-card-header-left">
+              <div class="agent-name">🧠 <span>Planner</span></div>
+              <span class="agent-status status-waiting" id="status-planner">waiting</span>
+            </div>
+            <span class="card-chevron open" id="chevron-planner">▼</span>
+          </div>
+          <div class="agent-card-body open" id="body-planner"></div>
+        </div>
+        <!-- Executor Card -->
+        <div class="agent-card" id="card-executor">
+          <div class="agent-card-header" onclick="toggleCard('executor')">
+            <div class="agent-card-header-left">
+              <div class="agent-name">⚙️ <span>Executor</span></div>
+              <span class="agent-status status-waiting" id="status-executor">waiting</span>
+            </div>
+            <span class="card-chevron open" id="chevron-executor">▼</span>
+          </div>
+          <div class="agent-card-body open" id="body-executor"></div>
+        </div>
+        <!-- Critic Card -->
+        <div class="agent-card" id="card-critic">
+          <div class="agent-card-header" onclick="toggleCard('critic')">
+            <div class="agent-card-header-left">
+              <div class="agent-name">🔍 <span>Critic</span></div>
+              <span class="agent-status status-waiting" id="status-critic">waiting</span>
+            </div>
+            <span class="card-chevron open" id="chevron-critic">▼</span>
+          </div>
+          <div class="agent-card-body open" id="body-critic"></div>
+        </div>
+        <!-- Memory Card -->
+        <div class="agent-card" id="card-memory">
+          <div class="agent-card-header" onclick="toggleCard('memory')">
+            <div class="agent-card-header-left">
+              <div class="agent-name">💾 <span>Memory</span></div>
+              <span class="agent-status status-waiting" id="status-memory">waiting</span>
+            </div>
+            <span class="card-chevron open" id="chevron-memory">▼</span>
+          </div>
+          <div class="agent-card-body open" id="body-memory"></div>
+        </div>
+      </div>
+
+      <!-- MESSAGES -->
+      <div class="messages" id="messages">
+        <div class="empty-state" id="empty-state">
+          <div class="empty-icon">✦</div>
+          <div class="empty-title">AntiMatter AI</div>
+          <div class="empty-sub">Open a file and ask anything about your code. Use /explain, /refactor, /fix and more.</div>
+        </div>
+      </div>
+
+    </div><!-- /ai-body -->
 
     <!-- INPUT -->
     <div class="input-area">
@@ -799,84 +1015,327 @@
     el.style.height = Math.min(el.scrollHeight, 120) + 'px';
   }
 
-  async function sendMessage() {
-    if (isStreaming) return;
-    const input = document.getElementById('chat-input');
-    const text = input.value.trim();
-    if (!text) return;
 
-    input.value = '';
-    input.style.height = 'auto';
-    hideEmptyState();
-
-    // Add user message
-    addMessage('you', text);
-    conversationHistory.push({ role: 'user', content: text });
-
-    // Disable send
-    isStreaming = true;
-    document.getElementById('send-btn').disabled = true;
-
-    // Show thinking
-    const thinkingId = showThinking();
-
-    // Prepare request
-    const selectedModel = document.getElementById('model-select').value;
-    const fileContent = activeFile ? files[activeFile] : '';
-    const filename = activeFile || '';
-
-    try {
-      const response = await fetch(`${BACKEND}/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: text,
-          file_content: fileContent,
-          filename: filename,
-          model: selectedModel,
-          history: conversationHistory.slice(-10),
-          use_rag: true
-        })
-      });
-
-      removeThinking(thinkingId);
-
-      if (!response.ok) throw new Error(`Server error: ${response.status}`);
-
-      const aiMsgEl = addMessage('ai', '');
-      const bubble = aiMsgEl.querySelector('.msg-bubble');
-      const applyBtn = aiMsgEl.querySelector('.apply-btn');
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let fullText = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value);
-        fullText += chunk;
-        bubble.innerHTML = formatMessage(fullText);
-        scrollMessages();
-      }
-
-      conversationHistory.push({ role: 'assistant', content: fullText });
-
-      // Show apply button if code block detected
-      if (fullText.includes('```')) {
-        applyBtn.classList.add('visible');
-        applyBtn.onclick = () => applyToEditor(fullText);
-      }
-
-    } catch (err) {
-      removeThinking(thinkingId);
-      addMessage('ai', `⚠ Connection error: ${err.message}\n\nMake sure your backend is running on port 1842.`);
-    }
-
-    isStreaming = false;
-    document.getElementById('send-btn').disabled = false;
-    document.getElementById('chat-input').focus();
+  let currentMode = 'chat';
+ 
+function setMode(mode) {
+  currentMode = mode;
+  document.getElementById('mode-chat').classList.toggle('active', mode === 'chat');
+  document.getElementById('mode-agent').classList.toggle('active', mode === 'agent');
+ 
+  // Show/hide agent panel vs messages
+  const agentPanel = document.getElementById('agent-panel');
+  const messages   = document.getElementById('messages');
+  if (mode === 'agent') {
+    agentPanel.classList.add('visible');
+    document.getElementById('chat-input').placeholder = 'Describe a task for the agent pipeline...';
+  } else {
+    agentPanel.classList.remove('visible');
+    document.getElementById('chat-input').placeholder = 'Ask about your code...';
   }
+}
+ 
+function toggleCard(name) {
+  const body = document.getElementById('body-' + name);
+  const chevron = document.getElementById('chevron-' + name);
+  const isOpen = body.classList.toggle('open');
+  if (chevron) chevron.classList.toggle('open', isOpen);
+}
+ 
+function setAgentStatus(name, status) {
+  const el = document.getElementById('status-' + name);
+  const card = document.getElementById('card-' + name);
+  el.className = 'agent-status status-' + status;
+  el.textContent = status;
+  card.className = 'agent-card ' + (status === 'running' ? 'active' : status === 'done' ? 'done' : '');
+  if (status === 'running') {
+    const body = document.getElementById('body-' + name);
+    const chevron = document.getElementById('chevron-' + name);
+    body.classList.add('open');
+    if (chevron) chevron.classList.add('open');
+  }
+}
+ 
+function resetAgentCards() {
+  ['planner','executor','critic','memory'].forEach(name => {
+    setAgentStatus(name, 'waiting');
+    const body = document.getElementById('body-' + name);
+    const chevron = document.getElementById('chevron-' + name);
+    body.innerHTML = '';
+    body.classList.add('open');   // keep expanded after reset
+    if (chevron) chevron.classList.add('open');
+  });
+}
+ 
+function renderPlan(plan) {
+  const body = document.getElementById('body-planner');
+  const steps = (plan.steps || []).map((s, i) =>
+    `<div class="plan-step">
+      <div class="step-num done">${i+1}</div>
+      <div>${s}</div>
+    </div>`
+  ).join('');
+  const warnings = (plan.warnings || []).filter(w => w).map(w =>
+    `<div class="critique-item critique-medium">⚠ ${w}</div>`
+  ).join('');
+  body.innerHTML = `
+    <div style="margin-bottom:6px;">
+      <span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;">Understanding</span>
+      <div style="color:var(--text);font-size:12px;margin-top:2px;">${plan.understanding || ''}</div>
+    </div>
+    <div style="margin-bottom:6px;">
+      <span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;">Approach</span>
+      <div style="color:var(--text2);font-size:12px;margin-top:2px;">${plan.approach || ''}</div>
+    </div>
+    <div style="margin-bottom:4px;">
+      <span style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;">Steps</span>
+      <div style="margin-top:4px;">${steps}</div>
+    </div>
+    ${warnings ? `<div style="margin-top:6px;">${warnings}</div>` : ''}
+  `;
+}
+ 
+function renderCritique(critique) {
+  const body = document.getElementById('body-critic');
+  const verdict = critique.verdict || 'approved';
+  const score   = critique.score || 7;
+  const scoreColor = score >= 8 ? 'var(--green)' : score >= 5 ? 'var(--amber)' : 'var(--red)';
+ 
+  const issues = (critique.issues || []).map(i =>
+    `<div class="critique-item critique-${i.severity || 'low'}">
+      <span>${i.severity === 'high' ? '🔴' : i.severity === 'medium' ? '🟡' : '🟢'}</span>
+      <span>${i.description}</span>
+    </div>`
+  ).join('') || '<div style="color:var(--text3);font-size:11px;">No issues found</div>';
+ 
+  const improvements = (critique.improvements || []).map(s =>
+    `<div style="font-size:11px;color:var(--text2);padding:2px 0;">• ${s}</div>`
+  ).join('');
+ 
+  body.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+      <div style="font-size:13px;font-weight:600;color:${verdict === 'approved' ? 'var(--green)' : 'var(--amber)'}">
+        ${verdict === 'approved' ? '✓ Approved' : verdict === 'needs_revision' ? '△ Needs revision' : '✕ Rejected'}
+      </div>
+      <div style="font-family:var(--font-mono);font-size:12px;color:${scoreColor}">Score: ${score}/10</div>
+    </div>
+    <div class="score-bar"><div class="score-fill" style="width:${score*10}%;background:${scoreColor}"></div></div>
+    <div style="font-size:11px;color:var(--text2);margin:6px 0 8px;">${critique.summary || ''}</div>
+    <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Issues</div>
+    ${issues}
+    ${improvements ? `
+      <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin:8px 0 4px;">Suggestions</div>
+      ${improvements}
+    ` : ''}
+  `;
+}
+ 
+async function sendAgentTask(taskText) {
+  resetAgentCards();
+  isStreaming = true;
+  document.getElementById('send-btn').disabled = true;
+ 
+  const selectedModel = document.getElementById('model-select').value;
+  const fileContent = activeFile ? files[activeFile] : '';
+  const availableFiles = Object.keys(files);
+ 
+  // Add task to messages too
+  hideEmptyState();
+  addMessage('you', taskText);
+ 
+  try {
+    const response = await fetch('http://localhost:1842/agent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        task: taskText,
+        file_content: fileContent,
+        filename: activeFile || '',
+        available_files: availableFiles,
+        model: selectedModel,
+      })
+    });
+ 
+    const reader  = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let executorText = '';
+ 
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value);
+ 
+      // Process complete events from buffer
+      if (buffer.includes('[PLANNER_START]')) {
+        setAgentStatus('planner', 'running');
+        document.getElementById('body-planner').innerHTML =
+          '<div class="thinking"><div class="thinking-dots"><span></span><span></span><span></span></div><span>Planning...</span></div>';
+      }
+ 
+      // Parse planner result
+      const planMatch = buffer.match(/\[PLANNER_RESULT\]([\s\S]*?)\[\/PLANNER_RESULT\]/);
+      if (planMatch && document.getElementById('status-planner').textContent !== 'done') {
+        try {
+          const plan = JSON.parse(planMatch[1]);
+          renderPlan(plan);
+          setAgentStatus('planner', 'done');
+        } catch(e) {}
+      }
+ 
+      if (buffer.includes('[EXECUTOR_START]')) {
+        setAgentStatus('executor', 'running');
+        const execBody = document.getElementById('body-executor');
+        if (!execBody.querySelector('.exec-output')) {
+          execBody.innerHTML = '<div class="exec-output" style="font-family:var(--font-mono);font-size:11px;color:var(--text2);white-space:pre-wrap;"></div>';
+        }
+      }
+ 
+      // Stream executor chunks
+      const execChunks = [...buffer.matchAll(/\[EXECUTOR_CHUNK\]([\s\S]*?)\[\/EXECUTOR_CHUNK\]/g)];
+      if (execChunks.length > 0) {
+        const execOutput = document.querySelector('.exec-output');
+        if (execOutput) {
+          const newText = execChunks.map(m => m[1]).join('');
+          executorText += newText;
+          execOutput.innerHTML = formatMessage(executorText);
+          // Clear matched chunks from buffer to avoid re-processing
+          buffer = buffer.replace(/\[EXECUTOR_CHUNK\][\s\S]*?\[\/EXECUTOR_CHUNK\]/g, '');
+        }
+      }
+ 
+      if (buffer.includes('[EXECUTOR_DONE]')) {
+        setAgentStatus('executor', 'done');
+        // Show apply button
+        if (executorText.includes('```')) {
+          const execBody = document.getElementById('body-executor');
+          const applyBtn = document.createElement('button');
+          applyBtn.className = 'apply-btn visible';
+          applyBtn.innerHTML = '⤷ Apply to editor';
+          applyBtn.style.marginTop = '8px';
+          applyBtn.onclick = () => applyToEditor(executorText);
+          execBody.appendChild(applyBtn);
+        }
+      }
+ 
+      if (buffer.includes('[CRITIC_START]')) {
+        setAgentStatus('critic', 'running');
+        document.getElementById('body-critic').innerHTML =
+          '<div class="thinking"><div class="thinking-dots"><span></span><span></span><span></span></div><span>Reviewing...</span></div>';
+      }
+ 
+      const criticMatch = buffer.match(/\[CRITIC_RESULT\]([\s\S]*?)\[\/CRITIC_RESULT\]/);
+      if (criticMatch && document.getElementById('status-critic').textContent !== 'done') {
+        try {
+          const critique = JSON.parse(criticMatch[1]);
+          renderCritique(critique);
+          setAgentStatus('critic', 'done');
+        } catch(e) {}
+      }
+ 
+      if (buffer.includes('[MEMORY_SAVED]')) {
+        setAgentStatus('memory', 'done');
+        document.getElementById('body-memory').innerHTML =
+          '<div style="font-size:11px;color:var(--green);padding:4px 0;">✓ Task saved to memory</div>';
+        document.getElementById('body-memory').classList.add('open');
+      }
+ 
+      if (buffer.includes('[PIPELINE_DONE]')) {
+        // Add final result to messages panel too
+        addMessage('ai', executorText);
+        break;
+      }
+    }
+ 
+  } catch(err) {
+    addMessage('ai', `⚠ Agent error: ${err.message}`);
+    ['planner','executor','critic','memory'].forEach(n => {
+      if (document.getElementById('status-' + n).textContent === 'running')
+        setAgentStatus(n, 'error');
+    });
+  }
+ 
+  isStreaming = false;
+  document.getElementById('send-btn').disabled = false;
+}
+ 
+// ── Override sendMessage to route to agent pipeline if in agent mode ──────────
+// Replace your existing sendMessage function with this:
+ 
+async function sendMessage() {
+  if (isStreaming) return;
+  const input = document.getElementById('chat-input');
+  const text  = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  input.style.height = 'auto';
+ 
+  if (currentMode === 'agent') {
+    await sendAgentTask(text);
+    return;
+  }
+ 
+  // ── original chat mode below ─────────────────────────────────────────────
+  hideEmptyState();
+  addMessage('you', text);
+  conversationHistory.push({ role: 'user', content: text });
+ 
+  isStreaming = true;
+  document.getElementById('send-btn').disabled = true;
+  const thinkingId = showThinking();
+ 
+  const selectedModel = document.getElementById('model-select').value;
+  const fileContent   = activeFile ? files[activeFile] : '';
+ 
+  try {
+    const response = await fetch('http://localhost:1842/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: text,
+        file_content: fileContent,
+        filename: activeFile || '',
+        model: selectedModel,
+        history: conversationHistory.slice(-10),
+        use_rag: true,
+      })
+    });
+ 
+    removeThinking(thinkingId);
+    if (!response.ok) throw new Error(`Server error: ${response.status}`);
+ 
+    const aiMsgEl = addMessage('ai', '');
+    const bubble  = aiMsgEl.querySelector('.msg-bubble');
+    const applyBtn = aiMsgEl.querySelector('.apply-btn');
+ 
+    const reader  = response.body.getReader();
+    const decoder = new TextDecoder();
+    let fullText  = '';
+ 
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      fullText += decoder.decode(value);
+      bubble.innerHTML = formatMessage(fullText);
+      scrollMessages();
+    }
+ 
+    conversationHistory.push({ role: 'assistant', content: fullText });
+    if (fullText.includes('```')) {
+      applyBtn.classList.add('visible');
+      applyBtn.onclick = () => applyToEditor(fullText);
+    }
+ 
+  } catch(err) {
+    removeThinking(thinkingId);
+    addMessage('ai', `⚠ Error: ${err.message}`);
+  }
+ 
+  isStreaming = false;
+  document.getElementById('send-btn').disabled = false;
+  document.getElementById('chat-input').focus();
+}
+ 
   async function indexProject() {
     if (Object.keys(files).length === 0) {
         alert('Open some files first, then index them.');
@@ -976,8 +1435,8 @@
   }
 
   function scrollMessages() {
-    const msgs = document.getElementById('messages');
-    msgs.scrollTop = msgs.scrollHeight;
+    const aiBody = document.getElementById('ai-body');
+    if (aiBody) aiBody.scrollTop = aiBody.scrollHeight;
   }
 
   function clearChat() {

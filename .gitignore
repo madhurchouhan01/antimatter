@@ -10,4 +10,5 @@ __pycache__/
 *.pyc
 
 # ChromaDB / memory
-project/memory/chromadb/
+project/memory/*
+# project/memory/chromadb/
