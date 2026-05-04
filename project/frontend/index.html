@@ -317,13 +317,17 @@
   /* MESSAGES */
   .messages {
     flex: 1;
+    overflow-y: auto;        /* ← THIS IS MISSING */
+
     padding: 12px;
     display: flex;
     flex-direction: column;
     gap: 12px;
-    min-height: 120px;
+    min-height: 0;
   }
-
+/* also add scrollbar styling */
+.messages::-webkit-scrollbar { width: 4px; }
+.messages::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
   .msg {
     display: flex;
     flex-direction: column;
@@ -406,6 +410,10 @@
   }
   .apply-btn:hover { background: rgba(52,211,153,0.1); }
   .apply-btn.visible { display: inline-flex; align-items: center; gap: 5px; }
+
+  .diff-btn { margin-top:6px; margin-left:6px; font-size:11px; font-family:var(--font-mono); padding:4px 10px; border-radius:4px; border:1px solid var(--amber); background:transparent; color:var(--amber); cursor:pointer; transition:all .15s; display:none; align-items:center; gap:5px; }
+  .diff-btn:hover { background:rgba(251,191,36,.1); }
+  .diff-btn.visible { display:inline-flex; }
 
   /* THINKING INDICATOR */
   .thinking {
@@ -639,7 +647,7 @@
   background: var(--bg3);
 }
 .agent-card-body.open { max-height: 800px; padding: 10px 12px 14px; }
- 
+
 .plan-step {
   display: flex;
   gap: 8px;
@@ -686,9 +694,48 @@
   transition: width 0.5s ease;
 }
 
+  /* DIFF MODAL */
+  .diff-modal { position:fixed; inset:0; background:rgba(0,0,0,.7); display:none; align-items:center; justify-content:center; z-index:1000; backdrop-filter:blur(4px); }
+  .diff-modal.open { display:flex; }
+  .diff-box { background:var(--bg2); border:1px solid var(--border2); border-radius:12px; width:90vw; max-width:1000px; max-height:80vh; display:flex; flex-direction:column; overflow:hidden; }
+  .diff-header { padding:14px 18px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+  .diff-title { font-size:13px; font-weight:600; color:var(--text); display:flex; align-items:center; gap:8px; }
+  .diff-actions { display:flex; gap:8px; }
+  .diff-content { display:grid; grid-template-columns:1fr 1fr; flex:1; overflow:hidden; }
+  .diff-pane { display:flex; flex-direction:column; overflow:hidden; }
+  .diff-pane-header { padding:8px 14px; font-size:11px; font-family:var(--font-mono); font-weight:600; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:6px; }
+  .diff-pane-header.old { color:var(--red); background:rgba(248,113,113,.05); border-right:1px solid var(--border); }
+  .diff-pane-header.new { color:var(--green); background:rgba(52,211,153,.05); }
+  .diff-code { flex:1; overflow:auto; padding:12px 14px; font-family:var(--font-mono); font-size:11px; line-height:1.7; white-space:pre; }
+  .diff-code.old { background:rgba(248,113,113,.03); border-right:1px solid var(--border); color:var(--text2); }
+  .diff-code.new { background:rgba(52,211,153,.03); color:var(--text); }
+  .diff-line-removed { background:rgba(248,113,113,.12); color:var(--red); display:block; }
+  .diff-line-added { background:rgba(52,211,153,.1); color:var(--green); display:block; }
 </style>
 </head>
 <body>
+<!-- DIFF MODAL -->
+<div class="diff-modal" id="diff-modal">
+  <div class="diff-box">
+    <div class="diff-header">
+      <div class="diff-title">⟷ Diff View <span style="font-size:11px;color:var(--text3);font-family:var(--font-mono)" id="diff-filename"></span></div>
+      <div class="diff-actions">
+        <button class="btn success" onclick="applyDiff()">✓ Apply changes</button>
+        <button class="btn" onclick="closeDiff()">✕ Discard</button>
+      </div>
+    </div>
+    <div class="diff-content">
+      <div class="diff-pane">
+        <div class="diff-pane-header old">− Original</div>
+        <div class="diff-code old" id="diff-old"></div>
+      </div>
+      <div class="diff-pane">
+        <div class="diff-pane-header new">+ AI suggestion</div>
+        <div class="diff-code new" id="diff-new"></div>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- TOP BAR -->
 <div class="topbar">
@@ -751,7 +798,7 @@
   <div class="ai-panel" id="ai-panel">
     <div class="ai-header">
       <div class="ai-title">
-        ✦ AI Assistant
+        ⚛ ANTIMATTER
         <span class="ai-badge">Groq</span>
       </div>
       <select class="model-selector" id="model-select">
@@ -794,9 +841,9 @@
               <div class="agent-name">🧠 <span>Planner</span></div>
               <span class="agent-status status-waiting" id="status-planner">waiting</span>
             </div>
-            <span class="card-chevron open" id="chevron-planner">▼</span>
+            <span class="card-chevron close" id="chevron-planner">▼</span>
           </div>
-          <div class="agent-card-body open" id="body-planner"></div>
+          <div class="agent-card-body close" id="body-planner"></div>
         </div>
         <!-- Executor Card -->
         <div class="agent-card" id="card-executor">
@@ -836,7 +883,7 @@
       <!-- MESSAGES -->
       <div class="messages" id="messages">
         <div class="empty-state" id="empty-state">
-          <div class="empty-icon">✦</div>
+          <div class="empty-icon">⚛</div>
           <div class="empty-title">AntiMatter AI</div>
           <div class="empty-sub">Open a file and ask anything about your code. Use /explain, /refactor, /fix and more.</div>
         </div>
@@ -862,20 +909,18 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js"></script>
 <script>
   // ─── STATE ────────────────────────────────────────────
-  const BACKEND = 'http://localhost:1842';
-  let editor = null;
-  let files = {};          // { filename: content }
-  let activeFile = null;
-  let messages = [];
-  let isStreaming = false;
-  let conversationHistory = [];
+const BACKEND = 'http://localhost:1842';
+let editor = null, files = {}, activeFile = null;
+let isStreaming = false, conversationHistory = [];
+// let currentMode = 'chat';
+let pendingDiffCode = '';
 
   // ─── MONACO INIT ─────────────────────────────────────
   require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' } });
 
   require(['vs/editor/editor.main'], function() {
     editor = monaco.editor.create(document.getElementById('monaco-container'), {
-      value: '// Open a file from the sidebar to get started\n// Then ask the AI anything about your code ✦',
+      value: '// Open a file from the sidebar to get started\n// Then ask the AI anything about your code ⚛',
       language: 'javascript',
       theme: 'vs-dark',
       fontSize: 13,
@@ -972,6 +1017,9 @@
         document.getElementById('context-bar').className = 'context-bar';
         document.getElementById('editor-tabs').innerHTML = `<div style="font-size:11px;color:var(--text3);padding:0 4px;align-self:center;font-family:var(--font-mono)">no file open</div>`;
       }
+      document.getElementById('context-bar').className = 'context-bar';
+      document.getElementById('editor-status').textContent = 'Ready';
+      document.getElementById('lang-indicator').textContent = '—';
     }
     renderFileList();
   }
@@ -1041,7 +1089,42 @@ function toggleCard(name) {
   const isOpen = body.classList.toggle('open');
   if (chevron) chevron.classList.toggle('open', isOpen);
 }
- 
+
+
+
+// ── DIFF ──────────────────────────────────────────────────────────────────────
+function showDiff(newCode) {
+  const oldCode = activeFile ? files[activeFile] : '';
+  pendingDiffCode = newCode;
+  document.getElementById('diff-filename').textContent = activeFile || '';
+
+  const oldLines = escapeHtml(oldCode).split('\n');
+  const newLines = escapeHtml(newCode).split('\n');
+
+  document.getElementById('diff-old').innerHTML =
+    oldLines.map(l => `<span class="diff-line-removed">- ${l}</span>`).join('\n');
+  document.getElementById('diff-new').innerHTML =
+    newLines.map(l => `<span class="diff-line-added">+ ${l}</span>`).join('\n');
+
+  document.getElementById('diff-modal').classList.add('open');
+}
+
+function applyDiff() {
+  if (pendingDiffCode && editor) {
+    editor.setValue(pendingDiffCode);
+    if (activeFile) files[activeFile] = pendingDiffCode;
+    document.getElementById('editor-status').textContent = 'AI applied ✓';
+    setTimeout(() => document.getElementById('editor-status').textContent = 'Editing', 2000);
+  }
+  closeDiff();
+}
+
+function closeDiff() {
+  document.getElementById('diff-modal').classList.remove('open');
+  pendingDiffCode = '';
+}
+
+
 function setAgentStatus(name, status) {
   const el = document.getElementById('status-' + name);
   const card = document.getElementById('card-' + name);
@@ -1213,7 +1296,16 @@ async function sendAgentTask(taskText) {
           applyBtn.className = 'apply-btn visible';
           applyBtn.innerHTML = '⤷ Apply to editor';
           applyBtn.style.marginTop = '8px';
-          applyBtn.onclick = () => applyToEditor(executorText);
+          // applyBtn.onclick = () => applyToEditor(executorText);
+          const code = extractCode(executorText);
+          applyBtn.onclick = () => { editor.setValue(code); if(activeFile) files[activeFile]=code; };
+
+          const diffBtn2 = document.createElement('button');
+          diffBtn2.className = 'diff-btn visible';
+          diffBtn2.innerHTML = '⟷ Diff';
+          diffBtn2.style.marginTop = '8px';
+          diffBtn2.onclick = () => showDiff(code);
+          execBody.appendChild(diffBtn2);
           execBody.appendChild(applyBtn);
         }
       }
@@ -1240,11 +1332,11 @@ async function sendAgentTask(taskText) {
         document.getElementById('body-memory').classList.add('open');
       }
  
+      // KEEP only:
       if (buffer.includes('[PIPELINE_DONE]')) {
-        // Add final result to messages panel too
-        addMessage('ai', executorText);
-        break;
+      break;
       }
+
     }
  
   } catch(err) {
@@ -1307,7 +1399,8 @@ async function sendMessage() {
     const aiMsgEl = addMessage('ai', '');
     const bubble  = aiMsgEl.querySelector('.msg-bubble');
     const applyBtn = aiMsgEl.querySelector('.apply-btn');
- 
+    const diffBtn = aiMsgEl.querySelector('.diff-btn');
+
     const reader  = response.body.getReader();
     const decoder = new TextDecoder();
     let fullText  = '';
@@ -1324,6 +1417,10 @@ async function sendMessage() {
     if (fullText.includes('```')) {
       applyBtn.classList.add('visible');
       applyBtn.onclick = () => applyToEditor(fullText);
+      diffBtn.classList.add('visible');                        // ← add
+      const code = extractCode(fullText);                      // ← add
+      diffBtn.onclick = () => showDiff(code);                  // ← add
+
     }
  
   } catch(err) {
@@ -1404,9 +1501,13 @@ async function sendMessage() {
     const div = document.createElement('div');
     div.className = 'msg';
     div.innerHTML = `
-      <div class="msg-label ${role}">${role === 'you' ? '● You' : '✦ AI'}</div>
+      <div class="msg-label ${role}">${role === 'you' ? '● You' : '⚛ AI'}</div>
       <div class="msg-bubble ${role}">${role === 'you' ? escapeHtml(text).replace(/\n/g,'<br>') : formatMessage(text)}</div>
-      ${role === 'ai' ? '<button class="apply-btn">⤷ Apply to editor</button>' : ''}
+      ${role === 'ai' ? `
+        <div style="display:flex;gap:0;">
+          <button class="apply-btn">⤷ Apply to editor</button>
+          <button class="diff-btn">⟷ Diff</button>
+        </div>` : ''}
     `;
     msgs.appendChild(div);
     scrollMessages();
@@ -1442,15 +1543,17 @@ async function sendMessage() {
   function clearChat() {
     const msgs = document.getElementById('messages');
     msgs.innerHTML = `<div class="empty-state" id="empty-state">
-      <div class="empty-icon">✦</div>
+      <div class="empty-icon">⚛</div>
       <div class="empty-title">AntiMatter AI</div>
       <div class="empty-sub">Open a file and ask anything about your code.</div>
     </div>`;
     conversationHistory = [];
   }
 
+  // FIX — set input value and let sendMessage handle it
   function runCode() {
-    addMessage('you', 'Run this code and show me the output.');
+    const input = document.getElementById('chat-input');
+    input.value = 'Run this code and show me the output.';
     sendMessage();
   }
 
@@ -1481,6 +1584,23 @@ async function sendMessage() {
     document.body.style.cursor = '';
     document.body.style.userSelect = '';
   });
+
+  // ADD this function anywhere in the script block
+  function extractCode(text) {
+    const m = text.match(/```(?:\w+)?\n([\s\S]*?)```/);
+    return m ? m[1].trim() : text;
+  }
+  // FIX
+  function clearChat() {
+    const msgs = document.getElementById('messages');
+    msgs.innerHTML = `<div class="empty-state" id="empty-state">
+      <div class="empty-icon">⚛</div>
+      <div class="empty-title">AntiMatter AI</div>
+      <div class="empty-sub">Open a file and ask anything about your code.</div>
+    </div>`;
+    conversationHistory = [];
+    resetAgentCards();   // ← ADD THIS
+  }
 </script>
 </body>
 </html>
