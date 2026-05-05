@@ -580,7 +580,9 @@
 .agent-card {
   border-radius: 8px;
   border: 1px solid var(--border);
-  overflow: hidden;
+  overflow: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none; 
   transition: border-color 0.2s;
   background: var(--bg3);
 }
@@ -711,6 +713,171 @@
   .diff-code.new { background:rgba(52,211,153,.03); color:var(--text); }
   .diff-line-removed { background:rgba(248,113,113,.12); color:var(--red); display:block; }
   .diff-line-added { background:rgba(52,211,153,.1); color:var(--green); display:block; }
+
+/* CODE PICKER MODAL */
+.picker-modal {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.75);
+  display: none; align-items: center; justify-content: center;
+  z-index: 1100;
+  backdrop-filter: blur(5px);
+  padding: 20px;
+}
+.picker-modal.open { display: flex; }
+ 
+.picker-box {
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: 14px;
+  width: 100%;
+  max-width: 680px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: slideUp 0.2s ease;
+}
+ 
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+ 
+.picker-header {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  flex-shrink: 0;
+}
+ 
+.picker-title {
+  font-size: 13px; font-weight: 600; color: var(--text);
+  display: flex; align-items: center; gap: 8px;
+}
+ 
+.picker-subtitle {
+  font-size: 11px; color: var(--text3); font-family: var(--font-mono);
+  margin-top: 2px;
+}
+ 
+.picker-close {
+  width: 26px; height: 26px; border-radius: 6px;
+  border: 1px solid var(--border2); background: var(--bg3);
+  color: var(--text2); cursor: pointer; font-size: 12px;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+}
+.picker-close:hover { background: var(--bg4); color: var(--text); }
+ 
+.picker-list {
+  overflow-y: auto; padding: 12px;
+  display: flex; flex-direction: column; gap: 8px;
+  flex: 1;
+}
+.picker-list::-webkit-scrollbar { width: 4px; }
+.picker-list::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+ 
+/* Individual code block card */
+.code-block-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  background: var(--bg3);
+}
+.code-block-card:hover { border-color: var(--accent); background: rgba(79,156,249,0.03); }
+.code-block-card.selected { border-color: var(--accent); background: rgba(79,156,249,0.06); }
+ 
+.cbc-header {
+  padding: 8px 12px;
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--bg4);
+  border-bottom: 1px solid var(--border);
+}
+ 
+.cbc-meta {
+  display: flex; align-items: center; gap: 8px;
+}
+ 
+.cbc-index {
+  width: 20px; height: 20px; border-radius: 50%;
+  background: var(--bg3); border: 1px solid var(--border2);
+  font-size: 10px; font-family: var(--font-mono);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text3); flex-shrink: 0;
+}
+.code-block-card.selected .cbc-index {
+  background: var(--accent2); border-color: var(--accent2); color: #fff;
+}
+ 
+.cbc-lang {
+  font-family: var(--font-mono); font-size: 11px; font-weight: 600;
+  color: var(--accent);
+}
+ 
+.cbc-lines {
+  font-family: var(--font-mono); font-size: 10px; color: var(--text3);
+}
+ 
+.cbc-badges { display: flex; gap: 5px; }
+ 
+.cbc-badge {
+  font-size: 10px; font-family: var(--font-mono);
+  padding: 2px 6px; border-radius: 3px;
+}
+.cbc-badge.full-file { background: rgba(52,211,153,0.12); color: var(--green); }
+.cbc-badge.snippet   { background: rgba(251,191,36,0.1);  color: var(--amber); }
+.cbc-badge.test      { background: rgba(167,139,250,0.1); color: var(--purple); }
+ 
+.cbc-preview {
+  padding: 10px 12px;
+  font-family: var(--font-mono); font-size: 10.5px; line-height: 1.6;
+  color: var(--text2); white-space: pre; overflow: hidden;
+  max-height: 100px;
+  position: relative;
+}
+ 
+.cbc-preview::after {
+  content: '';
+  position: absolute; bottom: 0; left: 0; right: 0;
+  height: 30px;
+  background: linear-gradient(transparent, var(--bg3));
+  pointer-events: none;
+}
+.code-block-card.selected .cbc-preview::after {
+  background: linear-gradient(transparent, rgba(79,156,249,0.06));
+}
+ 
+/* Action bar at bottom of picker */
+.picker-actions {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  flex-shrink: 0;
+  background: var(--bg2);
+}
+ 
+.picker-selection-hint {
+  font-size: 11px; color: var(--text3); font-family: var(--font-mono);
+}
+ 
+.picker-btns { display: flex; gap: 8px; }
+
+/* Agent action row (Apply / Diff buttons inside executor card) */
+.agent-action-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+/* Increase executor card body max-height so action row is never clipped */
+#body-executor.open { max-height: 2000px; }
+
 </style>
 </head>
 <body>
@@ -904,7 +1071,27 @@
     </div>
   </div>
 </div>
-
+<div class="picker-modal" id="picker-modal">
+  <div class="picker-box">
+    <div class="picker-header">
+      <div>
+        <div class="picker-title">⟐ Choose code block to apply</div>
+        <div class="picker-subtitle" id="picker-subtitle">Select a block from the executor output</div>
+      </div>
+      <button class="picker-close" onclick="closePicker()">✕</button>
+    </div>
+    <div class="picker-list" id="picker-list"></div>
+    <div class="picker-actions">
+      <span class="picker-selection-hint" id="picker-hint">Click a block to select it</span>
+      <div class="picker-btns">
+        <button class="btn" onclick="closePicker()">Cancel</button>
+        <button class="btn" id="picker-diff-btn" onclick="pickerDiff()" disabled>⟷ Diff</button>
+        <button class="btn primary" id="picker-apply-btn" onclick="pickerApply()" disabled>⤷ Apply to editor</button>
+      </div>
+    </div>
+  </div>
+</div>
+ 
 <!-- Monaco Loader -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js"></script>
 <script>
@@ -1243,6 +1430,7 @@ async function sendAgentTask(taskText) {
     const decoder = new TextDecoder();
     let buffer = '';
     let executorText = '';
+    let executorDone = false;
  
     while (true) {
       const { done, value } = await reader.read();
@@ -1287,28 +1475,59 @@ async function sendAgentTask(taskText) {
         }
       }
  
-      if (buffer.includes('[EXECUTOR_DONE]')) {
+      if (buffer.includes('[EXECUTOR_DONE]') && !executorDone) {
+        executorDone = true;
         setAgentStatus('executor', 'done');
-        // Show apply button
-        if (executorText.includes('```')) {
-          const execBody = document.getElementById('body-executor');
-          const applyBtn = document.createElement('button');
-          applyBtn.className = 'apply-btn visible';
-          applyBtn.innerHTML = '⤷ Apply to editor';
-          applyBtn.style.marginTop = '8px';
-          // applyBtn.onclick = () => applyToEditor(executorText);
-          const code = extractCode(executorText);
-          applyBtn.onclick = () => { editor.setValue(code); if(activeFile) files[activeFile]=code; };
-
-          const diffBtn2 = document.createElement('button');
-          diffBtn2.className = 'diff-btn visible';
-          diffBtn2.innerHTML = '⟷ Diff';
-          diffBtn2.style.marginTop = '8px';
-          diffBtn2.onclick = () => showDiff(code);
-          execBody.appendChild(diffBtn2);
-          execBody.appendChild(applyBtn);
+ 
+        const execBody = document.getElementById('body-executor');
+        const blocks   = extractAllCodeBlocks(executorText);
+        const filename = activeFile || '';
+ 
+        if (blocks.length > 0) {
+          // Build action row
+          const actionRow = document.createElement('div');
+          actionRow.className = 'agent-action-row';
+ 
+          if (blocks.length === 1) {
+            // Single block: show Apply + Diff directly
+            const code = blocks[0].code;
+ 
+            const applyBtn = document.createElement('button');
+            applyBtn.className = 'apply-btn visible';
+            applyBtn.innerHTML = '⤷ Apply to editor';
+            applyBtn.onclick = () => {
+              editor.setValue(code);
+              if (activeFile) files[activeFile] = code;
+              document.getElementById('editor-status').textContent = 'AI applied ✓';
+              setTimeout(() => document.getElementById('editor-status').textContent = 'Editing', 2000);
+            };
+ 
+            const diffBtn = document.createElement('button');
+            diffBtn.className = 'diff-btn visible';
+            diffBtn.innerHTML = '⟷ Diff';
+            diffBtn.onclick = () => showDiff(code);
+ 
+            actionRow.appendChild(applyBtn);
+            actionRow.appendChild(diffBtn);
+          } else {
+            // Multiple blocks: show picker button with count badge
+            const pickerBtn = document.createElement('button');
+            pickerBtn.className = 'btn primary';
+            pickerBtn.style = 'font-family:var(--font-mono);font-size:11px;';
+            pickerBtn.innerHTML = `⟐ Choose block to apply <span style="background:rgba(255,255,255,0.2);padding:1px 6px;border-radius:10px;margin-left:4px;">${blocks.length}</span>`;
+            pickerBtn.onclick = () => openCodePicker(executorText, filename);
+            actionRow.appendChild(pickerBtn);
+ 
+            const hint = document.createElement('span');
+            hint.style = 'font-size:10px;color:var(--text3);font-family:var(--font-mono);';
+            hint.textContent = `${blocks.length} code blocks found`;
+            actionRow.appendChild(hint);
+          }
+ 
+          execBody.appendChild(actionRow);
         }
       }
+
  
       if (buffer.includes('[CRITIC_START]')) {
         setAgentStatus('critic', 'running');
@@ -1548,6 +1767,7 @@ async function sendMessage() {
       <div class="empty-sub">Open a file and ask anything about your code.</div>
     </div>`;
     conversationHistory = [];
+    resetAgentCards();
   }
 
   // FIX — set input value and let sendMessage handle it
@@ -1590,17 +1810,156 @@ async function sendMessage() {
     const m = text.match(/```(?:\w+)?\n([\s\S]*?)```/);
     return m ? m[1].trim() : text;
   }
-  // FIX
-  function clearChat() {
-    const msgs = document.getElementById('messages');
-    msgs.innerHTML = `<div class="empty-state" id="empty-state">
-      <div class="empty-icon">⚛</div>
-      <div class="empty-title">AntiMatter AI</div>
-      <div class="empty-sub">Open a file and ask anything about your code.</div>
-    </div>`;
-    conversationHistory = [];
-    resetAgentCards();   // ← ADD THIS
+
+
+
+  // ─── CODE BLOCK EXTRACTION ────────────────────────────────────────────────────
+ 
+/**
+ * Extracts ALL code blocks from a markdown-formatted string.
+ * Returns an array of objects with: lang, code, lines, type
+ */
+function extractAllCodeBlocks(text) {
+  const blocks = [];
+  const regex = /```(\w+)?\n([\s\S]*?)```/g;
+  let match;
+ 
+  while ((match = regex.exec(text)) !== null) {
+    const lang  = match[1] || 'text';
+    const code  = match[2].trim();
+    const lines = code.split('\n').length;
+ 
+    // Heuristic: classify what kind of block this is
+    let type = 'snippet';
+    if (lines > 20) type = 'full-file';
+    if (lang === 'python' && (code.includes('def test_') || code.includes('unittest') || code.includes('pytest'))) type = 'test';
+    if (lang === 'javascript' && (code.includes('describe(') || code.includes('it(') || code.includes('test('))) type = 'test';
+ 
+    blocks.push({ lang, code, lines, type });
   }
+ 
+  return blocks;
+}
+ 
+// ─── PICKER STATE ─────────────────────────────────────────────────────────────
+let pickerBlocks    = [];   // all extracted blocks
+let pickerSelected  = -1;   // index of selected block
+ 
+// ─── OPEN PICKER ──────────────────────────────────────────────────────────────
+function openCodePicker(executorText, targetFilename) {
+  pickerBlocks   = extractAllCodeBlocks(executorText);
+  pickerSelected = -1;
+ 
+  if (pickerBlocks.length === 0) {
+    // No code blocks found — nothing to apply
+    alert('No code blocks found in executor output.');
+    return;
+  }
+ 
+  if (pickerBlocks.length === 1) {
+    // Only one block — skip picker, go straight to diff
+    pickerBlocks   = pickerBlocks;
+    pickerSelected = 0;
+    showDiff(pickerBlocks[0].code);
+    return;
+  }
+ 
+  // Multiple blocks — show the picker
+  const subtitle = document.getElementById('picker-subtitle');
+  subtitle.textContent = `${pickerBlocks.length} code blocks found in executor output · ${targetFilename || 'no file'}`;
+ 
+  const list = document.getElementById('picker-list');
+  list.innerHTML = '';
+ 
+  pickerBlocks.forEach((block, i) => {
+    const card = document.createElement('div');
+    card.className = 'code-block-card';
+    card.id = `cbc-${i}`;
+ 
+    const badgeHtml = `<span class="cbc-badge ${block.type}">${
+      block.type === 'full-file' ? '● full file' :
+      block.type === 'test'      ? '◈ tests'     : '◎ snippet'
+    }</span>`;
+ 
+    const previewLines = block.code.split('\n').slice(0, 6).join('\n');
+ 
+    card.innerHTML = `
+      <div class="cbc-header">
+        <div class="cbc-meta">
+          <div class="cbc-index">${i + 1}</div>
+          <span class="cbc-lang">${block.lang}</span>
+          <span class="cbc-lines">${block.lines} lines</span>
+        </div>
+        <div class="cbc-badges">${badgeHtml}</div>
+      </div>
+      <div class="cbc-preview">${escapeHtml(previewLines)}</div>
+    `;
+ 
+    card.onclick = () => selectBlock(i);
+    list.appendChild(card);
+  });
+ 
+  // Reset action bar
+  document.getElementById('picker-hint').textContent = 'Click a block to select it';
+  document.getElementById('picker-diff-btn').disabled  = true;
+  document.getElementById('picker-apply-btn').disabled = true;
+ 
+  document.getElementById('picker-modal').classList.add('open');
+}
+ 
+// ─── SELECT A BLOCK ───────────────────────────────────────────────────────────
+function selectBlock(index) {
+  // Deselect previous
+  if (pickerSelected >= 0) {
+    const prev = document.getElementById(`cbc-${pickerSelected}`);
+    if (prev) { prev.classList.remove('selected'); prev.querySelector('.cbc-index').textContent = pickerSelected + 1; }
+  }
+ 
+  pickerSelected = index;
+  const card = document.getElementById(`cbc-${index}`);
+  if (card) { card.classList.add('selected'); card.querySelector('.cbc-index').textContent = '✓'; }
+ 
+  const block = pickerBlocks[index];
+  document.getElementById('picker-hint').textContent =
+    `Block ${index + 1} selected · ${block.lang} · ${block.lines} lines`;
+  document.getElementById('picker-diff-btn').disabled  = false;
+  document.getElementById('picker-apply-btn').disabled = false;
+}
+ 
+// ─── PICKER ACTIONS ───────────────────────────────────────────────────────────
+function pickerDiff() {
+  if (pickerSelected < 0) return;
+  closePicker();
+  showDiff(pickerBlocks[pickerSelected].code);
+}
+ 
+function pickerApply() {
+  if (pickerSelected < 0) return;
+  const code = pickerBlocks[pickerSelected].code;
+  if (editor) {
+    editor.setValue(code);
+    if (activeFile) files[activeFile] = code;
+    document.getElementById('editor-status').textContent = 'AI applied ✓';
+    setTimeout(() => document.getElementById('editor-status').textContent = 'Editing', 2000);
+  }
+  closePicker();
+}
+ 
+function closePicker() {
+  document.getElementById('picker-modal').classList.remove('open');
+  pickerSelected = -1;
+}
+ 
+// ─── CLOSE ON ESCAPE ──────────────────────────────────────────────────────────
+// Add this inside your existing keydown listener, or add a new one:
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    closeDiff();
+    closePicker();
+  }
+});
 </script>
+
+
 </body>
 </html>
