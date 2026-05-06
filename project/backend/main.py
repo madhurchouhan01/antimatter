@@ -3,7 +3,7 @@ ANTIMATTER Backend — v4.0
 Endpoints: /chat (RAG), /agent (multi-agent pipeline), /index-project, /memory
 """
 
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -13,7 +13,8 @@ from typing import List, Optional
 import os, sys, json
 from pydantic import BaseModel
 from typing import List, Optional, Dict
- 
+import winpty
+import asyncio
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from ai_engine.rag import CodebaseIndex, build_context
@@ -233,6 +234,58 @@ def patch(req: PatchRequest):
         "results": patch_results,
     }
  
+# ─── /terminal ───────────────────────────────────────────────────────────────
+active_terminals = {}  # session_id → pty process
+
+@app.websocket("/terminal")
+async def terminal_ws(websocket: WebSocket):
+    await websocket.accept()
+
+    import threading
+    loop = asyncio.get_event_loop()
+
+    # Spawn shell
+    pty_process = winpty.PtyProcess.spawn("powershell.exe")
+    session_id = id(websocket)
+    active_terminals[session_id] = pty_process
+    stop_event = threading.Event()
+
+    def read_pty_thread():
+        """Run in a dedicated thread — blocks on pty read without stalling asyncio."""
+        while not stop_event.is_set():
+            try:
+                output = pty_process.read(4096)
+                if output:
+                    asyncio.run_coroutine_threadsafe(
+                        websocket.send_text(output), loop
+                    )
+            except EOFError:
+                break
+            except Exception:
+                break
+
+    reader_thread = threading.Thread(target=read_pty_thread, daemon=True)
+    reader_thread.start()
+
+    try:
+        while True:
+            data = await websocket.receive_text()
+            msg = json.loads(data)
+
+            if msg["type"] == "input":
+                # write is blocking — run in executor so we don't stall event loop
+                await loop.run_in_executor(None, pty_process.write, msg["data"])
+            elif msg["type"] == "resize":
+                pty_process.setwinsize(msg["rows"], msg["cols"])
+    except (WebSocketDisconnect, Exception):
+        pass
+    finally:
+        stop_event.set()
+        try:
+            pty_process.close()
+        except Exception:
+            pass
+        active_terminals.pop(session_id, None)
 # ─── /health ──────────────────────────────────────────────────────────────────
 
 @app.get("/health")

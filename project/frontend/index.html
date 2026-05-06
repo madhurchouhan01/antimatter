@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AntiMatter — AI Code Editor</title>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css"/>
+<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -1234,6 +1237,7 @@
     <button class="btn" id="index-btn" onclick="indexProject()">⬡ Index project</button>
     <button class="btn" onclick="clearChat()">↺ Clear chat</button>
     <button class="btn success" id="run-btn" onclick="runCode()" style="display:none">▶ Run</button>
+    <button onclick="toggleTerminal()" title="Toggle Terminal">⌨ Terminal</button>
   </div>
 </div>
 
@@ -1288,7 +1292,31 @@
         <option value="mixtral-8x7b-32768">mixtral-8x7b</option>
       </select>
     </div>
-
+    <!-- Add after your main editor/AI panel split -->
+    <div id="terminal-panel" style="
+      position: fixed; bottom: 0; left: 220px; right: 380px;
+      height: 260px; background: #0d0d0d;
+      border-top: 2px solid #2a2a2a;
+      display: none; flex-direction: column; z-index: 500;
+    ">
+      <div style="display:flex; align-items:center; padding: 6px 12px;
+                  background:#141414; border-bottom:1px solid #2a2a2a;">
+        <span style="color:#888; font-size:12px; font-family:'JetBrains Mono'">
+          TERMINAL
+        </span>
+        <button onclick="clearTerminal()" 
+          style="margin-left:auto; background:none; border:none; 
+                color:#555; cursor:pointer; font-size:11px;">
+          clear
+        </button>
+        <button onclick="toggleTerminal()"
+          style="margin-left:8px; background:none; border:none;
+                color:#555; cursor:pointer; font-size:16px;">
+          ✕
+        </button>
+      </div>
+      <div id="terminal-container" style="flex:1; padding: 4px;"></div>
+  </div>
     <!-- CONTEXT BAR -->
     <div class="context-bar" id="context-bar">
       <span>⬡</span>
@@ -2802,6 +2830,84 @@ function applyAcceptedPatches() {
     `Task: *${patchState.task}*`
   );
 }
+
+  // ── Terminal State ──────────────────────────────────────────
+  let term = null;
+  let fitAddon = null;
+  let termSocket = null;
+  let terminalOpen = false;
+
+  function initTerminal() {
+    if (term) return; // already initialized
+
+    term = new Terminal({
+      fontFamily: "'JetBrains Mono', monospace",
+      fontSize: 13,
+      theme: {
+        background: '#0d0d0d',
+        foreground: '#d4d4d4',
+        cursor:     '#7c6aff',    // matches ANTIMATTER accent
+        selection:  '#3a3a5c',
+      },
+      cursorBlink: true,
+      scrollback: 1000,
+    });
+
+    fitAddon = new FitAddon.FitAddon();
+    term.loadAddon(fitAddon);
+    term.open(document.getElementById('terminal-container'));
+    fitAddon.fit();
+
+    // WebSocket connection
+    termSocket = new WebSocket('ws://localhost:1842/terminal');
+
+    termSocket.onopen = () => {
+      term.writeln('\x1b[32m⚡ ANTIMATTER Terminal connected\x1b[0m');
+      // Send initial size
+      termSocket.send(JSON.stringify({
+        type: 'resize', rows: term.rows, cols: term.cols
+      }));
+    };
+
+    termSocket.onmessage = (e) => {
+      term.write(e.data);
+    };
+
+    termSocket.onclose = () => {
+      term.writeln('\r\n\x1b[31m[disconnected]\x1b[0m');
+    };
+
+    // User keystrokes → send to backend PTY
+    term.onData((data) => {
+      if (termSocket?.readyState === WebSocket.OPEN) {
+        termSocket.send(JSON.stringify({ type: 'input', data }));
+      }
+    });
+
+    // Resize handling
+    term.onResize(({ rows, cols }) => {
+      if (termSocket?.readyState === WebSocket.OPEN) {
+        termSocket.send(JSON.stringify({ type: 'resize', rows, cols }));
+      }
+    });
+
+    window.addEventListener('resize', () => fitAddon.fit());
+  }
+
+  function toggleTerminal() {
+    const panel = document.getElementById('terminal-panel');
+    terminalOpen = !terminalOpen;
+    panel.style.display = terminalOpen ? 'flex' : 'none';
+
+    if (terminalOpen) {
+      initTerminal();         // lazy init on first open
+      setTimeout(() => fitAddon?.fit(), 50);  // fit after CSS transition
+    }
+  }
+
+  function clearTerminal() {
+    term?.clear();
+  }
  
 // Close on escape (add to existing keydown listener)
 document.addEventListener('keydown', e => {
