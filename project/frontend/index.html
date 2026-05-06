@@ -589,7 +589,7 @@
 .agent-card.active { border-color: var(--accent); background: rgba(79,156,249,0.03); }
 .agent-card.done { border-color: var(--green); background: rgba(52,211,153,0.02); }
 .agent-card.error { border-color: var(--red); }
- 
+
 .agent-card-header {
   padding: 8px 12px;
   display: flex;
@@ -878,6 +878,319 @@
 /* Increase executor card body max-height so action row is never clipped */
 #body-executor.open { max-height: 2000px; }
 
+/* PATCH REVIEW MODAL */
+.patch-modal {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.8);
+  display: none; align-items: flex-start; justify-content: center;
+  z-index: 1200;
+  backdrop-filter: blur(6px);
+  padding: 24px 20px;
+  overflow-y: auto;
+}
+.patch-modal.open { display: flex; }
+ 
+.patch-box {
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: 14px;
+  width: 100%; max-width: 900px;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  animation: slideUp 0.2s ease;
+  margin: auto;
+}
+ 
+/* PATCH MODAL HEADER */
+.patch-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: flex-start; justify-content: space-between;
+  flex-shrink: 0;
+  background: var(--bg3);
+}
+ 
+.patch-header-left { display: flex; flex-direction: column; gap: 4px; }
+ 
+.patch-title {
+  font-size: 14px; font-weight: 600; color: var(--text);
+  display: flex; align-items: center; gap: 8px;
+}
+ 
+.patch-task-preview {
+  font-size: 11px; color: var(--text3);
+  font-family: var(--font-mono);
+  max-width: 500px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+ 
+.patch-stats {
+  display: flex; gap: 10px; margin-top: 4px;
+}
+ 
+.patch-stat {
+  font-size: 11px; font-family: var(--font-mono);
+  padding: 2px 8px; border-radius: 10px;
+}
+.patch-stat.files   { background: rgba(79,156,249,0.12);  color: var(--accent); }
+.patch-stat.changes { background: rgba(52,211,153,0.12);  color: var(--green); }
+.patch-stat.warn    { background: rgba(251,191,36,0.1);   color: var(--amber); }
+ 
+.patch-close {
+  width: 28px; height: 28px; border-radius: 6px;
+  border: 1px solid var(--border2); background: var(--bg4);
+  color: var(--text2); cursor: pointer; font-size: 12px;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s; flex-shrink: 0;
+}
+.patch-close:hover { background: var(--red); color: #fff; border-color: var(--red); }
+ 
+/* PATCH LIST */
+.patch-list {
+  padding: 16px 20px;
+  display: flex; flex-direction: column; gap: 16px;
+  overflow-y: auto; max-height: 65vh;
+}
+.patch-list::-webkit-scrollbar { width: 4px; }
+.patch-list::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+ 
+/* FILE GROUP HEADER */
+.patch-file-group { display: flex; flex-direction: column; gap: 10px; }
+ 
+.patch-file-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+ 
+.patch-file-name {
+  font-family: var(--font-mono); font-size: 12px; font-weight: 600;
+  color: var(--text);
+}
+ 
+.patch-file-icon { font-size: 14px; }
+ 
+.patch-file-count {
+  font-size: 10px; font-family: var(--font-mono);
+  background: var(--bg4); color: var(--text3);
+  padding: 2px 6px; border-radius: 8px; margin-left: auto;
+}
+ 
+/* INDIVIDUAL PATCH CARD */
+.patch-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+.patch-card.accepted { border-color: var(--green); }
+.patch-card.rejected { border-color: var(--red); opacity: 0.5; }
+.patch-card.unresolved { border-color: var(--amber); }
+ 
+.patch-card-header {
+  padding: 8px 14px;
+  background: var(--bg4);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px;
+}
+ 
+.patch-card-meta {
+  display: flex; align-items: center; gap: 8px; flex: 1;
+}
+ 
+.patch-line-range {
+  font-family: var(--font-mono); font-size: 10px;
+  background: var(--bg3); border: 1px solid var(--border2);
+  color: var(--text2); padding: 2px 7px; border-radius: 4px;
+}
+ 
+.patch-explanation {
+  font-size: 11px; color: var(--text2);
+  flex: 1; line-height: 1.4;
+}
+ 
+.patch-card-actions { display: flex; gap: 6px; flex-shrink: 0; }
+ 
+.patch-accept-btn {
+  font-size: 11px; font-family: var(--font-mono);
+  padding: 4px 10px; border-radius: 4px;
+  border: 1px solid var(--green); background: transparent;
+  color: var(--green); cursor: pointer; transition: all 0.15s;
+  display: flex; align-items: center; gap: 4px;
+}
+.patch-accept-btn:hover,
+.patch-accept-btn.active { background: rgba(52,211,153,0.15); }
+ 
+.patch-reject-btn {
+  font-size: 11px; font-family: var(--font-mono);
+  padding: 4px 10px; border-radius: 4px;
+  border: 1px solid var(--border2); background: transparent;
+  color: var(--text3); cursor: pointer; transition: all 0.15s;
+  display: flex; align-items: center; gap: 4px;
+}
+.patch-reject-btn:hover,
+.patch-reject-btn.active { background: rgba(248,113,113,0.1); border-color: var(--red); color: var(--red); }
+ 
+/* DIFF VIEW INSIDE CARD */
+.patch-diff {
+  display: grid; grid-template-columns: 1fr 1fr;
+  font-family: var(--font-mono); font-size: 11px;
+  line-height: 1.7; overflow: hidden;
+}
+ 
+.patch-diff-pane {
+  overflow-x: auto; padding: 10px 14px;
+  white-space: pre;
+}
+ 
+.patch-diff-pane.old {
+  background: rgba(248,113,113,0.04);
+  border-right: 1px solid var(--border);
+}
+ 
+.patch-diff-pane.new {
+  background: rgba(52,211,153,0.03);
+}
+ 
+.patch-diff-pane-header {
+  font-size: 10px; font-weight: 600; letter-spacing: 0.06em;
+  text-transform: uppercase; padding: 5px 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 5px;
+}
+.patch-diff-pane-header.old {
+  color: var(--red); background: rgba(248,113,113,0.06);
+  border-right: 1px solid var(--border);
+}
+.patch-diff-pane-header.new {
+  color: var(--green); background: rgba(52,211,153,0.04);
+}
+ 
+.diff-line { display: flex; gap: 10px; }
+.diff-line-num {
+  color: var(--text3); user-select: none;
+  min-width: 28px; text-align: right; flex-shrink: 0;
+}
+.diff-line-content.removed {
+  background: rgba(248,113,113,0.15);
+  color: var(--red);
+  display: block; width: 100%;
+  border-radius: 2px; padding: 0 3px;
+}
+.diff-line-content.added {
+  background: rgba(52,211,153,0.12);
+  color: var(--green);
+  display: block; width: 100%;
+  border-radius: 2px; padding: 0 3px;
+}
+.diff-line-content.context { color: var(--text2); }
+ 
+/* UNRESOLVED PATCH */
+.patch-unresolved-body {
+  padding: 10px 14px;
+  font-size: 11px; color: var(--amber);
+  background: rgba(251,191,36,0.04);
+  font-family: var(--font-mono);
+}
+ 
+/* BOTTOM ACTION BAR */
+.patch-action-bar {
+  padding: 14px 20px;
+  border-top: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  flex-shrink: 0;
+  background: var(--bg3);
+}
+ 
+.patch-summary-text {
+  font-size: 12px; color: var(--text2);
+  font-family: var(--font-mono);
+}
+ 
+.patch-summary-text strong { color: var(--text); }
+ 
+.patch-apply-all {
+  font-family: var(--font-mono); font-size: 12px; font-weight: 600;
+  padding: 8px 18px; border-radius: 6px;
+  border: none; background: var(--green);
+  color: #0d0f12; cursor: pointer;
+  transition: all 0.15s;
+  display: flex; align-items: center; gap: 6px;
+}
+.patch-apply-all:hover { background: #5eead4; transform: translateY(-1px); }
+.patch-apply-all:disabled { background: var(--bg4); color: var(--text3); transform: none; cursor: not-allowed; }
+ 
+/* SMART FIX BUTTON in topbar */
+.btn.smart-fix {
+  background: linear-gradient(135deg, rgba(79,156,249,0.15), rgba(167,139,250,0.15));
+  border-color: rgba(79,156,249,0.4);
+  color: var(--accent);
+}
+.btn.smart-fix:hover {
+  background: linear-gradient(135deg, rgba(79,156,249,0.25), rgba(167,139,250,0.25));
+}
+ 
+/* SMART FIX INPUT OVERLAY */
+.smart-fix-overlay {
+  position: fixed; inset: 0;
+  display: none; align-items: flex-end; justify-content: center;
+  z-index: 1100; padding: 0 0 80px;
+  pointer-events: none;
+}
+.smart-fix-overlay.open {
+  display: flex; pointer-events: all;
+}
+ 
+.smart-fix-bar {
+  background: var(--bg2);
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  padding: 12px 16px;
+  width: 100%; max-width: 600px;
+  display: flex; gap: 10px; align-items: center;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  animation: slideUp 0.2s ease;
+}
+ 
+.smart-fix-input {
+  flex: 1; background: transparent; border: none; outline: none;
+  font-family: var(--font-ui); font-size: 13px; color: var(--text);
+}
+.smart-fix-input::placeholder { color: var(--text3); }
+ 
+.smart-fix-hint {
+  font-size: 10px; color: var(--text3);
+  font-family: var(--font-mono); white-space: nowrap;
+}
+ 
+.smart-fix-submit {
+  width: 32px; height: 32px; border-radius: 8px;
+  border: none; background: var(--accent2); color: #fff;
+  cursor: pointer; font-size: 14px;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s; flex-shrink: 0;
+}
+.smart-fix-submit:hover { background: var(--accent); }
+ 
+/* LOADING STATE */
+.patch-loading {
+  padding: 40px 20px;
+  display: flex; flex-direction: column; align-items: center; gap: 14px;
+  color: var(--text2); font-size: 13px;
+}
+.patch-loading-steps {
+  display: flex; flex-direction: column; gap: 6px;
+  font-family: var(--font-mono); font-size: 11px; color: var(--text3);
+  width: 280px;
+}
+.patch-loading-step {
+  display: flex; align-items: center; gap: 8px;
+  transition: color 0.3s;
+}
+.patch-loading-step.active { color: var(--accent); }
+.patch-loading-step.done   { color: var(--green); }
+.patch-loading-step .step-icon { font-size: 12px; }
 </style>
 </head>
 <body>
@@ -917,6 +1230,7 @@
     </div>
   </div>
   <div class="topbar-actions">
+    <button class="btn smart-fix" onclick="openSmartFix()">⟐ Smart Fix</button>
     <button class="btn" id="index-btn" onclick="indexProject()">⬡ Index project</button>
     <button class="btn" onclick="clearChat()">↺ Clear chat</button>
     <button class="btn success" id="run-btn" onclick="runCode()" style="display:none">▶ Run</button>
@@ -1092,6 +1406,81 @@
   </div>
 </div>
  
+<!-- Smart Fix Input Overlay (triggered by button or hotkey) -->
+<div class="smart-fix-overlay" id="smart-fix-overlay">
+  <div class="smart-fix-bar">
+    <span style="font-size:16px;">⟐</span>
+    <input
+      class="smart-fix-input"
+      id="smart-fix-input"
+      placeholder="Describe the fix or change... (e.g. 'fix the auth bug' or 'add input validation')"
+      onkeydown="handleSmartFixKey(event)"
+    />
+    <span class="smart-fix-hint">↵ run · esc cancel</span>
+    <button class="smart-fix-submit" onclick="runSmartFix()">↑</button>
+  </div>
+</div>
+ 
+<!-- Patch Review Modal -->
+<div class="patch-modal" id="patch-modal">
+  <div class="patch-box">
+ 
+    <!-- Header -->
+    <div class="patch-header">
+      <div class="patch-header-left">
+        <div class="patch-title">
+          ⟐ Review Changes
+          <span id="patch-header-badge" style="font-size:10px;font-family:var(--font-mono);color:var(--text3)"></span>
+        </div>
+        <div class="patch-task-preview" id="patch-task-preview"></div>
+        <div class="patch-stats" id="patch-stats"></div>
+      </div>
+      <button class="patch-close" onclick="closePatchModal()">✕</button>
+    </div>
+ 
+    <!-- Content: loading or patch list -->
+    <div id="patch-content">
+      <div class="patch-loading" id="patch-loading">
+        <div class="thinking-dots" style="transform:scale(1.5);">
+          <span></span><span></span><span></span>
+        </div>
+        <div>Analyzing your codebase...</div>
+        <div class="patch-loading-steps" id="patch-loading-steps">
+          <div class="patch-loading-step" id="pls-1">
+            <span class="step-icon">○</span> Searching codebase with RAG
+          </div>
+          <div class="patch-loading-step" id="pls-2">
+            <span class="step-icon">○</span> Identifying target files
+          </div>
+          <div class="patch-loading-step" id="pls-3">
+            <span class="step-icon">○</span> Generating surgical patches
+          </div>
+          <div class="patch-loading-step" id="pls-4">
+            <span class="step-icon">○</span> Resolving line numbers
+          </div>
+        </div>
+      </div>
+ 
+      <div class="patch-list" id="patch-list" style="display:none;"></div>
+    </div>
+ 
+    <!-- Action Bar -->
+    <div class="patch-action-bar" id="patch-action-bar" style="display:none;">
+      <div class="patch-summary-text" id="patch-summary-text">
+        Select patches to apply
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="btn" onclick="acceptAllPatches()">✓ Accept all</button>
+        <button class="btn" onclick="rejectAllPatches()">✕ Reject all</button>
+        <button class="patch-apply-all" id="patch-apply-all-btn" onclick="applyAcceptedPatches()" disabled>
+          ⟐ Apply accepted
+        </button>
+      </div>
+    </div>
+ 
+  </div>
+</div>
+ 
 <!-- Monaco Loader -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js"></script>
 <script>
@@ -1179,7 +1568,7 @@ let pendingDiffCode = '';
     document.getElementById('current-file-badge').style.display = 'flex';
     document.getElementById('current-file-name').textContent = name;
     document.getElementById('lang-indicator').textContent = lang;
-    document.getElementById('run-btn').style.display = ['python','javascript','js','py'].some(e => name.endsWith('.'+e)) ? 'flex' : 'none';
+    document.getElementById('run-btn').style.display = ['py', 'js', 'ts', 'jsx', 'tsx'].some(e => name.endsWith('.' + e)) ? 'flex' : 'none';
     document.getElementById('editor-status').textContent = 'Editing';
 
     // Update tabs
@@ -1496,7 +1885,7 @@ async function sendAgentTask(taskText) {
             applyBtn.className = 'apply-btn visible';
             applyBtn.innerHTML = '⤷ Apply to editor';
             applyBtn.onclick = () => {
-              editor.setValue(code);
+              applySmartEdit(code);
               if (activeFile) files[activeFile] = code;
               document.getElementById('editor-status').textContent = 'AI applied ✓';
               setTimeout(() => document.getElementById('editor-status').textContent = 'Editing', 2000);
@@ -1937,7 +2326,7 @@ function pickerApply() {
   if (pickerSelected < 0) return;
   const code = pickerBlocks[pickerSelected].code;
   if (editor) {
-    editor.setValue(code);
+    applySmartEdit(code);
     if (activeFile) files[activeFile] = code;
     document.getElementById('editor-status').textContent = 'AI applied ✓';
     setTimeout(() => document.getElementById('editor-status').textContent = 'Editing', 2000);
@@ -1949,7 +2338,476 @@ function closePicker() {
   document.getElementById('picker-modal').classList.remove('open');
   pickerSelected = -1;
 }
+
+function applySmartEdit(newCode) {
+  if (!editor || !activeFile) return;
+
+  const currentCode = editor.getValue();
+
+  // Try to detect if newCode is a partial block (single function/class)
+  const isFull = newCode.split('\n').length > currentCode.split('\n').length * 0.6;
+
+  if (isFull) {
+    // It's a full file replacement — just setValue
+    editor.setValue(newCode);
+    files[activeFile] = newCode;
+    return;
+  }
+
+  // It's a partial block — find the function name in newCode
+  const fnMatch = newCode.match(/^(?:def|function|class|async def|const|let|var)\s+(\w+)/m);
+  if (!fnMatch) {
+    // Can't identify function — fall back to full replace
+    editor.setValue(newCode);
+    files[activeFile] = newCode;
+    return;
+  }
+
+  const fnName = fnMatch[1];
+  const lines = currentCode.split('\n');
+
+  // Find the line where this function starts in the current file
+  const startIdx = lines.findIndex(l => {
+    const stripped = l.trim();
+    return stripped.startsWith(`def ${fnName}`) ||
+           stripped.startsWith(`function ${fnName}`) ||
+           stripped.startsWith(`class ${fnName}`) ||
+           stripped.startsWith(`async def ${fnName}`) ||
+           stripped.includes(`const ${fnName} =`) ||
+           stripped.includes(`let ${fnName} =`);
+  });
+
+  if (startIdx === -1) {
+    // Function not found in current file — fall back
+    editor.setValue(newCode);
+    files[activeFile] = newCode;
+    return;
+  }
+
+  // Detect end of function by indentation drop (Python) or brace matching
+  const indent = lines[startIdx].match(/^(\s*)/)[1].length;
+  let endIdx = startIdx + 1;
+  while (endIdx < lines.length) {
+    const line = lines[endIdx];
+    if (line.trim() === '') { endIdx++; continue; }
+    const lineIndent = line.match(/^(\s*)/)[1].length;
+    if (lineIndent <= indent && endIdx > startIdx + 1) break;
+    endIdx++;
+  }
+
+  // Replace only that range using Monaco's edit API
+  const range = new monaco.Range(startIdx + 1, 1, endIdx, lines[endIdx - 1]?.length + 1 || 1);
+  editor.executeEdits('ai-smart-apply', [{
+    range,
+    text: newCode
+  }]);
+
+  files[activeFile] = editor.getValue();
+  document.getElementById('editor-status').textContent = `Applied: ${fnName}() ✓`;
+  setTimeout(() => document.getElementById('editor-status').textContent = 'Editing', 2000);
+}
  
+// ─── STATE ────────────────────────────────────────────────────────────────────
+let patchState = {
+  task: '',
+  results: [],        // raw results from /patch endpoint
+  cards: [],          // rendered patch cards state
+  // cards[i] = { fileIdx, patchIdx, status: 'pending'|'accepted'|'rejected', patch }
+};
+ 
+// ─── SMART FIX TRIGGER ────────────────────────────────────────────────────────
+function openSmartFix() {
+  document.getElementById('smart-fix-overlay').classList.add('open');
+  setTimeout(() => document.getElementById('smart-fix-input').focus(), 50);
+}
+ 
+function closeSmartFix() {
+  document.getElementById('smart-fix-overlay').classList.remove('open');
+  document.getElementById('smart-fix-input').value = '';
+}
+ 
+function handleSmartFixKey(e) {
+  if (e.key === 'Enter') { e.preventDefault(); runSmartFix(); }
+  if (e.key === 'Escape') closeSmartFix();
+}
+ 
+// ─── LOADING STEPS ANIMATION ──────────────────────────────────────────────────
+function setLoadingStep(step, status) {
+  // step: 1-4, status: 'active' | 'done'
+  const el = document.getElementById(`pls-${step}`);
+  if (!el) return;
+  el.className = `patch-loading-step ${status}`;
+  el.querySelector('.step-icon').textContent =
+    status === 'done' ? '✓' : status === 'active' ? '▶' : '○';
+}
+ 
+// ─── RUN SMART FIX ────────────────────────────────────────────────────────────
+async function runSmartFix() {
+  const input = document.getElementById('smart-fix-input');
+  const task  = input.value.trim();
+  if (!task) return;
+ 
+  closeSmartFix();
+  openPatchModal(task);
+ 
+  // Reset loading steps
+  [1,2,3,4].forEach(s => setLoadingStep(s, 'pending'));
+  setLoadingStep(1, 'active');
+ 
+  try {
+    // Animate steps with slight delays to feel alive
+    const stepTimer = (step, delay) =>
+      new Promise(r => setTimeout(() => { setLoadingStep(step, 'done'); setLoadingStep(step+1, 'active'); r(); }, delay));
+ 
+    const fetchPromise = fetch(`${BACKEND}/patch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        task,
+        open_filename: activeFile || '',
+        open_file_content: activeFile ? files[activeFile] : '',
+        all_files: files,
+        model: document.getElementById('model-select').value,
+      })
+    });
+ 
+    // Animate steps while waiting
+    await stepTimer(1, 800);
+    await stepTimer(2, 1400);
+    await stepTimer(3, 2200);
+ 
+    const res  = await fetchPromise;
+    const data = await res.json();
+ 
+    setLoadingStep(4, 'done');
+    await new Promise(r => setTimeout(r, 300));
+ 
+    if (!data.success) {
+      showPatchError(data.error || 'Unknown error from patch engine');
+      return;
+    }
+ 
+    patchState.task    = task;
+    patchState.results = data.results;
+    renderPatchReview(data);
+ 
+  } catch(err) {
+    showPatchError(`Connection error: ${err.message}`);
+  }
+}
+ 
+// ─── OPEN / CLOSE MODAL ───────────────────────────────────────────────────────
+function openPatchModal(task) {
+  patchState = { task, results: [], cards: [] };
+ 
+  // Reset UI
+  document.getElementById('patch-loading').style.display = 'flex';
+  document.getElementById('patch-list').style.display    = 'none';
+  document.getElementById('patch-action-bar').style.display = 'none';
+  document.getElementById('patch-list').innerHTML = '';
+  document.getElementById('patch-task-preview').textContent = task;
+  document.getElementById('patch-stats').innerHTML = '';
+  document.getElementById('patch-header-badge').textContent = '';
+ 
+  document.getElementById('patch-modal').classList.add('open');
+}
+ 
+function closePatchModal() {
+  document.getElementById('patch-modal').classList.remove('open');
+}
+ 
+function showPatchError(msg) {
+  document.getElementById('patch-loading').style.display = 'none';
+  document.getElementById('patch-list').style.display    = 'flex';
+  document.getElementById('patch-list').innerHTML = `
+    <div style="padding:20px;text-align:center;color:var(--red);font-family:var(--font-mono);font-size:12px;">
+      ⚠ ${escapeHtml(msg)}
+    </div>`;
+}
+ 
+// ─── RENDER PATCH REVIEW ──────────────────────────────────────────────────────
+function renderPatchReview(data) {
+  document.getElementById('patch-loading').style.display = 'none';
+  document.getElementById('patch-list').style.display    = 'flex';
+  document.getElementById('patch-action-bar').style.display = 'flex';
+ 
+  const list = document.getElementById('patch-list');
+  list.innerHTML = '';
+  patchState.cards = [];
+ 
+  let totalPatches  = 0;
+  let totalResolved = 0;
+ 
+  data.results.forEach((fileResult, fileIdx) => {
+    if (!fileResult.success) {
+      list.innerHTML += `
+        <div style="padding:10px 14px;border:1px solid var(--amber);border-radius:8px;
+                    font-size:11px;color:var(--amber);font-family:var(--font-mono);">
+          ⚠ ${fileResult.file}: ${fileResult.error}
+        </div>`;
+      return;
+    }
+ 
+    const patches = fileResult.patches || [];
+    if (!patches.length) return;
+ 
+    totalPatches  += patches.length;
+    totalResolved += fileResult.resolved_count || 0;
+ 
+    // File group
+    const group = document.createElement('div');
+    group.className = 'patch-file-group';
+    group.innerHTML = `
+      <div class="patch-file-header">
+        <span class="patch-file-icon">${getFileIcon(fileResult.file)}</span>
+        <span class="patch-file-name">${fileResult.file}</span>
+        <span class="patch-file-count">${patches.length} change${patches.length > 1 ? 's' : ''}</span>
+      </div>`;
+ 
+    patches.forEach((patch, patchIdx) => {
+      const cardId  = `patch-card-${fileIdx}-${patchIdx}`;
+      const cardIdx = patchState.cards.length;
+ 
+      patchState.cards.push({
+        fileIdx, patchIdx,
+        status: patch.located ? 'pending' : 'unresolved',
+        patch,
+        file: fileResult.file,
+      });
+ 
+      const card = document.createElement('div');
+      card.className = `patch-card${!patch.located ? ' unresolved' : ''}`;
+      card.id = cardId;
+ 
+      const lineRange = patch.located
+        ? `lines ${patch.start_line}–${patch.end_line}`
+        : 'location unknown';
+ 
+      if (!patch.located) {
+        // Unresolved patch — show warning
+        card.innerHTML = `
+          <div class="patch-card-header">
+            <div class="patch-card-meta">
+              <span class="patch-line-range" style="border-color:var(--amber);color:var(--amber);">⚠ ${lineRange}</span>
+              <span class="patch-explanation">${escapeHtml(patch.explanation || '')}</span>
+            </div>
+          </div>
+          <div class="patch-unresolved-body">
+            Could not locate this code in the file. The AI may have paraphrased the original.
+            <br>Original: <code style="color:var(--text2)">${escapeHtml((patch.original || '').slice(0, 100))}</code>
+          </div>`;
+      } else {
+        // Resolved patch — show diff
+        const diffHtml = buildPatchDiff(
+          patch.original || '',
+          patch.replacement || '',
+          patch.start_line,
+        );
+ 
+        card.innerHTML = `
+          <div class="patch-card-header">
+            <div class="patch-card-meta">
+              <span class="patch-line-range">${lineRange}</span>
+              <span class="patch-explanation">${escapeHtml(patch.explanation || '')}</span>
+            </div>
+            <div class="patch-card-actions">
+              <button class="patch-accept-btn" id="accept-${cardId}" onclick="togglePatch(${cardIdx}, 'accepted')">
+                ✓ Accept
+              </button>
+              <button class="patch-reject-btn" id="reject-${cardId}" onclick="togglePatch(${cardIdx}, 'rejected')">
+                ✕ Reject
+              </button>
+            </div>
+          </div>
+          ${diffHtml}`;
+      }
+ 
+      group.appendChild(card);
+    });
+ 
+    list.appendChild(group);
+  });
+ 
+  // Summary
+  const fileCount = data.results.filter(r => r.success).length;
+  document.getElementById('patch-header-badge').textContent =
+    `${totalPatches} patch${totalPatches !== 1 ? 'es' : ''} · ${fileCount} file${fileCount !== 1 ? 's' : ''}`;
+ 
+  const statsEl = document.getElementById('patch-stats');
+  statsEl.innerHTML = `
+    <span class="patch-stat files">${fileCount} file${fileCount !== 1 ? 's' : ''}</span>
+    <span class="patch-stat changes">${totalResolved} located</span>
+    ${totalPatches - totalResolved > 0
+      ? `<span class="patch-stat warn">${totalPatches - totalResolved} unresolved</span>`
+      : ''}`;
+ 
+  updateApplyButton();
+ 
+  // Show summary in action bar
+  if (data.results[0]?.summary) {
+    document.getElementById('patch-summary-text').textContent =
+      data.results[0].summary;
+  }
+}
+ 
+// ─── BUILD DIFF HTML ──────────────────────────────────────────────────────────
+function buildPatchDiff(original, replacement, startLine) {
+  const oldLines = original.split('\n');
+  const newLines = replacement === '' ? ['(deleted)'] : replacement.split('\n');
+ 
+  const renderLines = (lines, type, startNum) =>
+    lines.map((line, i) => `
+      <div class="diff-line">
+        <span class="diff-line-num">${startNum + i}</span>
+        <span class="diff-line-content ${type}">${escapeHtml(line)}</span>
+      </div>`).join('');
+ 
+  return `
+    <div class="patch-diff">
+      <div>
+        <div class="patch-diff-pane-header old">− original</div>
+        <div class="patch-diff-pane old">${renderLines(oldLines, 'removed', startLine)}</div>
+      </div>
+      <div>
+        <div class="patch-diff-pane-header new">+ replacement</div>
+        <div class="patch-diff-pane new">${renderLines(newLines, 'added', startLine)}</div>
+      </div>
+    </div>`;
+}
+ 
+// ─── ACCEPT / REJECT ──────────────────────────────────────────────────────────
+function togglePatch(cardIdx, action) {
+  const card = patchState.cards[cardIdx];
+  if (!card || card.status === 'unresolved') return;
+ 
+  // Toggle: clicking same action again resets to pending
+  card.status = card.status === action ? 'pending' : action;
+ 
+  const cardId  = `patch-card-${card.fileIdx}-${card.patchIdx}`;
+  const cardEl  = document.getElementById(cardId);
+  const acceptEl = document.getElementById(`accept-${cardId}`);
+  const rejectEl = document.getElementById(`reject-${cardId}`);
+ 
+  cardEl.className  = `patch-card ${card.status !== 'pending' ? card.status : ''}`;
+  if (acceptEl) acceptEl.classList.toggle('active', card.status === 'accepted');
+  if (rejectEl) rejectEl.classList.toggle('active', card.status === 'rejected');
+ 
+  updateApplyButton();
+}
+ 
+function acceptAllPatches() {
+  patchState.cards.forEach((card, i) => {
+    if (card.status !== 'unresolved') {
+      card.status = 'accepted';
+      const cardId = `patch-card-${card.fileIdx}-${card.patchIdx}`;
+      const cardEl = document.getElementById(cardId);
+      if (cardEl) cardEl.className = 'patch-card accepted';
+      const acceptEl = document.getElementById(`accept-${cardId}`);
+      const rejectEl = document.getElementById(`reject-${cardId}`);
+      if (acceptEl) acceptEl.classList.add('active');
+      if (rejectEl) rejectEl.classList.remove('active');
+    }
+  });
+  updateApplyButton();
+}
+ 
+function rejectAllPatches() {
+  patchState.cards.forEach((card, i) => {
+    if (card.status !== 'unresolved') {
+      card.status = 'rejected';
+      const cardId = `patch-card-${card.fileIdx}-${card.patchIdx}`;
+      const cardEl = document.getElementById(cardId);
+      if (cardEl) cardEl.className = 'patch-card rejected';
+      const acceptEl = document.getElementById(`accept-${cardId}`);
+      const rejectEl = document.getElementById(`reject-${cardId}`);
+      if (acceptEl) acceptEl.classList.remove('active');
+      if (rejectEl) rejectEl.classList.add('active');
+    }
+  });
+  updateApplyButton();
+}
+ 
+function updateApplyButton() {
+  const accepted = patchState.cards.filter(c => c.status === 'accepted').length;
+  const btn = document.getElementById('patch-apply-all-btn');
+  btn.disabled = accepted === 0;
+  btn.textContent = accepted > 0
+    ? `⟐ Apply ${accepted} accepted patch${accepted !== 1 ? 'es' : ''}`
+    : '⟐ Apply accepted';
+ 
+  const total   = patchState.cards.filter(c => c.status !== 'unresolved').length;
+  const pending = patchState.cards.filter(c => c.status === 'pending').length;
+  document.getElementById('patch-summary-text').textContent =
+    `${accepted} accepted · ${patchState.cards.filter(c=>c.status==='rejected').length} rejected · ${pending} pending`;
+}
+ 
+// ─── APPLY ACCEPTED PATCHES ───────────────────────────────────────────────────
+function applyAcceptedPatches() {
+  const accepted = patchState.cards.filter(c => c.status === 'accepted' && c.patch.located);
+  if (!accepted.length) return;
+ 
+  // Group by file
+  const byFile = {};
+  accepted.forEach(card => {
+    if (!byFile[card.file]) byFile[card.file] = [];
+    byFile[card.file].push(card.patch);
+  });
+ 
+  let appliedCount = 0;
+ 
+  Object.entries(byFile).forEach(([filename, patches]) => {
+    const content = files[filename];
+    if (!content) return;
+ 
+    // Sort bottom-up to avoid line offset drift
+    const sorted = [...patches].sort((a, b) => b.start_line - a.start_line);
+ 
+    let lines = content.split('\n');
+ 
+    sorted.forEach(patch => {
+      const start = patch.start_line - 1;  // 0-indexed
+      const end   = patch.end_line;         // exclusive
+ 
+      if (patch.replacement === '') {
+        // Deletion
+        lines.splice(start, end - start);
+      } else {
+        // Replacement
+        const newLines = patch.replacement.split('\n');
+        lines.splice(start, end - start, ...newLines);
+      }
+      appliedCount++;
+    });
+ 
+    const newContent = lines.join('\n');
+    files[filename] = newContent;
+ 
+    // Update Monaco if this is the active file
+    if (filename === activeFile && editor) {
+      editor.setValue(newContent);
+    }
+  });
+ 
+  closePatchModal();
+ 
+  document.getElementById('editor-status').textContent = `⟐ ${appliedCount} patch${appliedCount !== 1 ? 'es' : ''} applied ✓`;
+  setTimeout(() => document.getElementById('editor-status').textContent = 'Editing', 3000);
+ 
+  // Show summary in chat messages
+  hideEmptyState();
+  addMessage('ai',
+    `**Smart Fix applied** ✓\n\n` +
+    `- ${appliedCount} patch${appliedCount !== 1 ? 'es' : ''} applied\n` +
+    `- Files modified: ${Object.keys(byFile).join(', ')}\n\n` +
+    `Task: *${patchState.task}*`
+  );
+}
+ 
+// Close on escape (add to existing keydown listener)
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { closeDiff(); closePicker(); closePatchModal(); closeSmartFix(); }
+});
+
 // ─── CLOSE ON ESCAPE ──────────────────────────────────────────────────────────
 // Add this inside your existing keydown listener, or add a new one:
 document.addEventListener('keydown', e => {

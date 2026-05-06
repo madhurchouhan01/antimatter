@@ -11,6 +11,9 @@ from groq import Groq
 from dotenv import load_dotenv
 from typing import List, Optional
 import os, sys, json
+from pydantic import BaseModel
+from typing import List, Optional, Dict
+ 
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from ai_engine.rag import CodebaseIndex, build_context
@@ -48,6 +51,14 @@ class AgentRequest(BaseModel):
 
 class IndexRequest(BaseModel):
     files: dict
+ 
+class PatchRequest(BaseModel):
+    task: str
+    open_filename: str = ""
+    open_file_content: str = ""
+    all_files: Dict[str, str] = {}   # { filename: content } for all open files
+    model: str = "llama-3.3-70b-versatile"
+ 
 
 # ─── /chat ────────────────────────────────────────────────────────────────────
 
@@ -67,6 +78,10 @@ def stream_chat(req: ChatRequest):
         "You are ANTIMATTER, an elite AI coding assistant inside a code editor. "
         "Be precise, concise, and practical. Always use markdown code blocks. "
         "Prefer showing code over long explanations."
+        "If the task is a small fix or targeted change (fixing a bug, adding validation, "
+        "renaming a variable), output ONLY the modified function or class, not the entire file. "
+        "If the task requires rewriting most of the file, then output the full file. "
+        "Always start your code block with a comment indicating what was changed and where."
     )
     if context:
         system += f"\n\n{context}"
@@ -158,6 +173,66 @@ def memory_runs():
 def memory_file(filename: str):
     return memory.get_file_decisions(filename)
 
+@app.post("/patch")
+def patch(req: PatchRequest):
+    """
+    Full surgical patch pipeline:
+    1. RAG search to find relevant chunks
+    2. Identify target files from task + RAG evidence
+    3. Generate structured JSON patches per file
+    4. Resolve patches to exact line numbers
+    5. Return resolved patch list to frontend
+    """
+    from ai_engine.patch_engine import identify_target_files, generate_surgical_patches
+ 
+    # Step 1 — RAG search
+    rag_context, rag_chunks = build_context(
+        query=req.task,
+        open_file_content=req.open_file_content,
+        open_filename=req.open_filename,
+        index=index,
+    )
+ 
+    # Step 2 — File identification
+    # Use a dummy plan with open file as starting point
+    planner_files = [req.open_filename] if req.open_filename else []
+    target_files = identify_target_files(
+        task=req.task,
+        rag_chunks=rag_chunks,
+        available_files=list(req.all_files.keys()),
+        planner_files=planner_files,
+        model=req.model,
+    )
+ 
+    if not target_files:
+        return {
+            "success": False,
+            "error": "Could not identify target files for this task.",
+            "patches": [],
+        }
+ 
+    # Step 3+4 — Generate and resolve patches
+    # Build rag_context string (top 3 non-target chunks for cross-file awareness)
+    rag_str = "\n\n".join(
+        f"## {c['metadata']['filename']} — `{c['metadata']['name']}`\n```\n{c['text'][:400]}\n```"
+        for c in rag_chunks[:3]
+        if c["metadata"].get("filename") not in target_files
+    )
+ 
+    patch_results = generate_surgical_patches(
+        task=req.task,
+        target_files=target_files,
+        file_contents=req.all_files,
+        rag_context=rag_str,
+        model=req.model,
+    )
+ 
+    return {
+        "success": True,
+        "target_files": target_files,
+        "results": patch_results,
+    }
+ 
 # ─── /health ──────────────────────────────────────────────────────────────────
 
 @app.get("/health")
