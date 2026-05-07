@@ -2838,7 +2838,7 @@ function applyAcceptedPatches() {
   let terminalOpen = false;
 
   function initTerminal() {
-    if (term) return; // already initialized
+    if (term) return;
 
     term = new Terminal({
       fontFamily: "'JetBrains Mono', monospace",
@@ -2846,8 +2846,7 @@ function applyAcceptedPatches() {
       theme: {
         background: '#0d0d0d',
         foreground: '#d4d4d4',
-        cursor:     '#7c6aff',    // matches ANTIMATTER accent
-        selection:  '#3a3a5c',
+        cursor: '#7c6aff',
       },
       cursorBlink: true,
       scrollback: 1000,
@@ -2858,57 +2857,60 @@ function applyAcceptedPatches() {
     term.open(document.getElementById('terminal-container'));
     fitAddon.fit();
 
-    // WebSocket connection
     termSocket = new WebSocket('ws://localhost:1842/terminal');
 
     termSocket.onopen = () => {
-      term.writeln('\x1b[32m⚡ ANTIMATTER Terminal connected\x1b[0m');
+      // ── Send files immediately on connect ──────────────────────
+      termSocket.send(JSON.stringify({
+        type: 'init',
+        files: files,           // your existing `files` state object
+      }));
+
+      term.writeln('\x1b[32m⚡ ANTIMATTER Sandbox initializing...\x1b[0m');
+
       // Send initial size
       termSocket.send(JSON.stringify({
-        type: 'resize', rows: term.rows, cols: term.cols
+        type: 'resize',
+        rows: term.rows,
+        cols: term.cols,
       }));
     };
 
-    termSocket.onmessage = (e) => {
-      term.write(e.data);
+    termSocket.onmessage = (e) => term.write(e.data);
+    termSocket.onclose   = () => {
+      term.writeln('\r\n\x1b[31m[sandbox terminated]\x1b[0m');
     };
 
-    termSocket.onclose = () => {
-      term.writeln('\r\n\x1b[31m[disconnected]\x1b[0m');
-    };
-
-    // User keystrokes → send to backend PTY
     term.onData((data) => {
       if (termSocket?.readyState === WebSocket.OPEN) {
         termSocket.send(JSON.stringify({ type: 'input', data }));
       }
     });
 
-    // Resize handling
     term.onResize(({ rows, cols }) => {
       if (termSocket?.readyState === WebSocket.OPEN) {
         termSocket.send(JSON.stringify({ type: 'resize', rows, cols }));
       }
     });
 
-    window.addEventListener('resize', () => fitAddon.fit());
+    window.addEventListener('resize', () => fitAddon?.fit());
   }
 
-  function toggleTerminal() {
-    const panel = document.getElementById('terminal-panel');
-    terminalOpen = !terminalOpen;
-    panel.style.display = terminalOpen ? 'flex' : 'none';
+function toggleTerminal() {
+  const panel = document.getElementById('terminal-panel');
+  terminalOpen = !terminalOpen;
+  panel.style.display = terminalOpen ? 'flex' : 'none';
 
-    if (terminalOpen) {
-      initTerminal();         // lazy init on first open
-      setTimeout(() => fitAddon?.fit(), 50);  // fit after CSS transition
-    }
+  if (terminalOpen) {
+    initTerminal();
+    setTimeout(() => fitAddon?.fit(), 50);
   }
+}
 
-  function clearTerminal() {
-    term?.clear();
-  }
- 
+function clearTerminal() {
+  term?.clear();
+}
+
 // Close on escape (add to existing keydown listener)
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') { closeDiff(); closePicker(); closePatchModal(); closeSmartFix(); }

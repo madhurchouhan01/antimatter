@@ -15,7 +15,8 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict
 import winpty
 import asyncio
-
+import docker
+import uuid
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from ai_engine.rag import CodebaseIndex, build_context
 from ai_engine.agents import MemoryManager, run_agent_pipeline
@@ -234,58 +235,162 @@ def patch(req: PatchRequest):
         "results": patch_results,
     }
  
-# ─── /terminal ───────────────────────────────────────────────────────────────
-active_terminals = {}  # session_id → pty process
+import asyncio
+import uuid
+import json
+import subprocess
+import threading
+import queue
+import docker
+from fastapi import WebSocket, WebSocketDisconnect
+
+docker_client = docker.from_env()
+sandbox_sessions = {}
 
 @app.websocket("/terminal")
 async def terminal_ws(websocket: WebSocket):
     await websocket.accept()
-
-    import threading
-    loop = asyncio.get_event_loop()
-
-    # Spawn shell
-    pty_process = winpty.PtyProcess.spawn("powershell.exe")
-    session_id = id(websocket)
-    active_terminals[session_id] = pty_process
-    stop_event = threading.Event()
-
-    def read_pty_thread():
-        """Run in a dedicated thread — blocks on pty read without stalling asyncio."""
-        while not stop_event.is_set():
-            try:
-                output = pty_process.read(4096)
-                if output:
-                    asyncio.run_coroutine_threadsafe(
-                        websocket.send_text(output), loop
-                    )
-            except EOFError:
-                break
-            except Exception:
-                break
-
-    reader_thread = threading.Thread(target=read_pty_thread, daemon=True)
-    reader_thread.start()
+    session_id = str(uuid.uuid4())
+    container = None
 
     try:
-        while True:
-            data = await websocket.receive_text()
-            msg = json.loads(data)
+        # ── 1. Spin up fresh container ────────────────────────────
+        container = docker_client.containers.run(
+            image="antimatter-sandbox",
+            name=f"antimatter-{session_id[:8]}",
+            detach=True,
+            tty=True,
+            stdin_open=True,
+            mem_limit="256m",
+            cpu_period=100000,
+            cpu_quota=50000,
+            network_mode="none",
+            remove=False,
+        )
+        sandbox_sessions[session_id] = container
+        container_id = container.id
 
-            if msg["type"] == "input":
-                # write is blocking — run in executor so we don't stall event loop
-                await loop.run_in_executor(None, pty_process.write, msg["data"])
-            elif msg["type"] == "resize":
-                pty_process.setwinsize(msg["rows"], msg["cols"])
-    except (WebSocketDisconnect, Exception):
+        # ── 2. Receive init message with files ────────────────────
+        init_msg = await websocket.receive_text()
+        init_data = json.loads(init_msg)
+        if init_data.get("type") == "init" and init_data.get("files"):
+            await inject_files(container, init_data["files"])
+
+        await websocket.send_text(
+            f"\r\n\x1b[32m⚡ Sandbox ready [{session_id[:8]}]\x1b[0m\r\n"
+        )
+
+        # ── 3. Launch docker exec via subprocess (Windows-safe) ───
+        proc = subprocess.Popen(
+            ["docker", "exec", "-it", container_id, "/bin/bash"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            bufsize=0,          # unbuffered — critical for terminal feel
+        )
+
+        # ── 4. Thread reads container output → asyncio queue ──────
+        output_queue = queue.Queue()
+        stop_event = threading.Event()
+
+        def read_output():
+            while not stop_event.is_set():
+                try:
+                    data = proc.stdout.read(1024)
+                    if not data:
+                        break
+                    output_queue.put(data)
+                except Exception:
+                    break
+
+        reader_thread = threading.Thread(target=read_output, daemon=True)
+        reader_thread.start()
+
+        # ── 5. Async loop: drain queue → ws, receive ws → stdin ───
+        loop = asyncio.get_event_loop()
+
+        async def drain_output():
+            while True:
+                try:
+                    data = await loop.run_in_executor(
+                        None, lambda: output_queue.get(timeout=0.05)
+                    )
+                    text = data.decode("utf-8", errors="replace")
+                    await websocket.send_text(text)
+                except queue.Empty:
+                    if proc.poll() is not None:
+                        break
+                    await asyncio.sleep(0.01)
+                except Exception:
+                    break
+
+        drainer = asyncio.create_task(drain_output())
+
+        while True:
+            try:
+                msg = await asyncio.wait_for(
+                    websocket.receive_text(), timeout=0.1
+                )
+                data = json.loads(msg)
+
+                if data["type"] == "input":
+                    if proc.stdin and not proc.stdin.closed:
+                        proc.stdin.write(data["data"].encode())
+                        proc.stdin.flush()
+
+                elif data["type"] == "resize":
+                    # Send resize via docker exec separately
+                    subprocess.run([
+                        "docker", "exec", container_id,
+                        "stty", "rows", str(data["rows"]),
+                        "cols", str(data["cols"])
+                    ], capture_output=True)
+
+            except asyncio.TimeoutError:
+                if proc.poll() is not None:
+                    break
+                continue
+            except WebSocketDisconnect:
+                break
+
+    except WebSocketDisconnect:
         pass
-    finally:
-        stop_event.set()
+    except Exception as e:
+        print(f"[terminal] error: {e}")
         try:
-            pty_process.close()
+            await websocket.send_text(f"\r\n\x1b[31m[error: {e}]\x1b[0m\r\n")
         except Exception:
             pass
-        active_terminals.pop(session_id, None)
+
+    finally:
+        # ── 6. Cleanup ────────────────────────────────────────────
+        stop_event.set()
+        try:
+            proc.terminate()
+        except Exception:
+            pass
+        if container:
+            try:
+                container.kill()
+                container.remove(force=True)
+                sandbox_sessions.pop(session_id, None)
+                print(f"[sandbox] cleaned up antimatter-{session_id[:8]}")
+            except Exception as e:
+                print(f"[sandbox] cleanup error: {e}")
+
+
+async def inject_files(container, files: dict):
+    import tarfile, io
+    tar_buffer = io.BytesIO()
+    with tarfile.open(fileobj=tar_buffer, mode='w') as tar:
+        for filename, content in files.items():
+            encoded = content.encode("utf-8")
+            info = tarfile.TarInfo(name=filename)
+            info.size = len(encoded)
+            tar.addfile(info, io.BytesIO(encoded))
+    tar_buffer.seek(0)
+    container.put_archive("/home/sandboxuser/workspace", tar_buffer)
+    
 # ─── /health ──────────────────────────────────────────────────────────────────
 
 @app.get("/health")
@@ -297,3 +402,19 @@ def health():
         "index_chunks": index.stats()["total_chunks"],
         "memory": memory.stats(),
     }
+
+
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+import os
+
+# Add right after app = FastAPI()
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+FRONTEND_DIR = os.path.join(BASE_DIR, "../frontend")
+
+@app.get("/")
+async def serve_frontend():
+    return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
+
+# Serve static assets (CSS, JS, images if any)
+app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
