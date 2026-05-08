@@ -2868,12 +2868,17 @@ function applyAcceptedPatches() {
 
       term.writeln('\x1b[32m⚡ ANTIMATTER Sandbox initializing...\x1b[0m');
 
-      // Send initial size
-      termSocket.send(JSON.stringify({
-        type: 'resize',
-        rows: term.rows,
-        cols: term.cols,
-      }));
+      // Send resize AFTER init is processed — backend awaits init first
+      // so we must not race the two messages in the same tick
+      setTimeout(() => {
+        if (termSocket?.readyState === WebSocket.OPEN) {
+          termSocket.send(JSON.stringify({
+            type: 'resize',
+            rows: term.rows,
+            cols: term.cols,
+          }));
+        }
+      }, 400);
     };
 
     termSocket.onmessage = (e) => term.write(e.data);

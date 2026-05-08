@@ -26,9 +26,14 @@ load_dotenv()
 app = FastAPI(title="ANTIMATTER", version="4.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-client     = Groq(api_key=os.getenv("GROQ_API_KEY"))
-index      = CodebaseIndex(persist_dir="./memory/chromadb")
-memory     = MemoryManager(db_path="./memory/antimatter.db")
+# Anchor memory paths to project root (one level above backend/)
+# so they resolve correctly regardless of where uvicorn is launched from.
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_MEMORY_DIR   = os.path.join(_PROJECT_ROOT, "memory")
+
+client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+index  = CodebaseIndex(persist_dir=os.path.join(_MEMORY_DIR, "chromadb"))
+memory = MemoryManager(db_path=os.path.join(_MEMORY_DIR, "antimatter.db"))
 
 # ─── MODELS ───────────────────────────────────────────────────────────────────
 
@@ -251,7 +256,8 @@ sandbox_sessions = {}
 async def terminal_ws(websocket: WebSocket):
     await websocket.accept()
     session_id = str(uuid.uuid4())
-    container = None
+    container  = None
+    exec_sock  = None
 
     try:
         # ── 1. Spin up fresh container ────────────────────────────
@@ -264,14 +270,14 @@ async def terminal_ws(websocket: WebSocket):
             mem_limit="256m",
             cpu_period=100000,
             cpu_quota=50000,
-            network_mode="none",
+            # network_mode="none",
             remove=False,
         )
         sandbox_sessions[session_id] = container
         container_id = container.id
 
         # ── 2. Receive init message with files ────────────────────
-        init_msg = await websocket.receive_text()
+        init_msg  = await websocket.receive_text()
         init_data = json.loads(init_msg)
         if init_data.get("type") == "init" and init_data.get("files"):
             await inject_files(container, init_data["files"])
@@ -280,33 +286,45 @@ async def terminal_ws(websocket: WebSocket):
             f"\r\n\x1b[32m⚡ Sandbox ready [{session_id[:8]}]\x1b[0m\r\n"
         )
 
-        # ── 3. Launch docker exec via subprocess (Windows-safe) ───
-        proc = subprocess.Popen(
-            ["docker", "exec", "-it", container_id, "/bin/bash"],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            bufsize=0,          # unbuffered — critical for terminal feel
+        # ── 3. Open exec via Docker SDK raw socket ────────────────
+        # This gives a direct TCP socket to bash — no subprocess,
+        # no winpty, no Windows console routing issues.
+        await asyncio.sleep(0.3)
+
+        exec_id  = docker_client.api.exec_create(
+            container_id, ["/bin/bash"],
+            stdin=True, tty=True, stdout=True, stderr=True,
+        )
+        exec_sock = docker_client.api.exec_start(
+            exec_id["Id"], detach=False, tty=True, socket=True,
         )
 
-        # ── 4. Thread reads container output → asyncio queue ──────
+        # Unwrap to the raw socket (works across docker-py versions)
+        import socket as _socket
+        raw_sock = getattr(exec_sock, "_sock", exec_sock)
+        raw_sock.settimeout(0.05)     # 50 ms read timeout — non-blocking feel
+
+        print(f"[terminal] raw socket exec opened for {container_id[:8]}")
+
+        # ── 4. Thread reads socket output → asyncio queue ─────────
         output_queue = queue.Queue()
-        stop_event = threading.Event()
+        stop_event   = threading.Event()
 
         def read_output():
             while not stop_event.is_set():
                 try:
-                    data = proc.stdout.read(1024)
-                    if not data:
-                        break
-                    output_queue.put(data)
+                    data = raw_sock.recv(4096)
+                    if data:
+                        output_queue.put(data)
+                except _socket.timeout:
+                    continue          # no data yet — keep waiting
                 except Exception:
                     break
 
         reader_thread = threading.Thread(target=read_output, daemon=True)
         reader_thread.start()
 
-        # ── 5. Async loop: drain queue → ws, receive ws → stdin ───
+        # ── 5. Async loop: drain queue → ws, receive ws → socket ──
         loop = asyncio.get_event_loop()
 
         async def drain_output():
@@ -315,10 +333,9 @@ async def terminal_ws(websocket: WebSocket):
                     data = await loop.run_in_executor(
                         None, lambda: output_queue.get(timeout=0.05)
                     )
-                    text = data.decode("utf-8", errors="replace")
-                    await websocket.send_text(text)
+                    await websocket.send_text(data.decode("utf-8", errors="replace"))
                 except queue.Empty:
-                    if proc.poll() is not None:
+                    if stop_event.is_set():
                         break
                     await asyncio.sleep(0.01)
                 except Exception:
@@ -328,27 +345,31 @@ async def terminal_ws(websocket: WebSocket):
 
         while True:
             try:
-                msg = await asyncio.wait_for(
-                    websocket.receive_text(), timeout=0.1
-                )
+                msg  = await asyncio.wait_for(websocket.receive_text(), timeout=0.1)
                 data = json.loads(msg)
 
                 if data["type"] == "input":
-                    if proc.stdin and not proc.stdin.closed:
-                        proc.stdin.write(data["data"].encode())
-                        proc.stdin.flush()
+                    raw_sock.sendall(data["data"].encode("utf-8"))
 
                 elif data["type"] == "resize":
-                    # Send resize via docker exec separately
-                    subprocess.run([
-                        "docker", "exec", container_id,
-                        "stty", "rows", str(data["rows"]),
-                        "cols", str(data["cols"])
-                    ], capture_output=True)
+                    try:
+                        docker_client.api.exec_resize(
+                            exec_id["Id"],
+                            height=data["rows"],
+                            width=data["cols"],
+                        )
+                    except Exception:
+                        pass
 
             except asyncio.TimeoutError:
-                if proc.poll() is not None:
-                    break
+                # Check if bash exited
+                try:
+                    info = docker_client.api.exec_inspect(exec_id["Id"])
+                    if not info.get("Running", True):
+                        print(f"[terminal] exec finished for {container_id[:8]}")
+                        break
+                except Exception:
+                    pass
                 continue
             except WebSocketDisconnect:
                 break
@@ -366,7 +387,8 @@ async def terminal_ws(websocket: WebSocket):
         # ── 6. Cleanup ────────────────────────────────────────────
         stop_event.set()
         try:
-            proc.terminate()
+            if exec_sock:
+                exec_sock.close()
         except Exception:
             pass
         if container:
