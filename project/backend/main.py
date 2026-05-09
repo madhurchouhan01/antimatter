@@ -35,7 +35,21 @@ client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 index  = CodebaseIndex(persist_dir=os.path.join(_MEMORY_DIR, "chromadb"))
 memory = MemoryManager(db_path=os.path.join(_MEMORY_DIR, "antimatter.db"))
 
+active_containers = {}  # { short_id: container }
 # ─── MODELS ───────────────────────────────────────────────────────────────────
+
+class FSReadRequest(BaseModel):
+    session_id: str
+    path: str
+
+class FSWriteRequest(BaseModel):
+    session_id: str
+    path: str
+    content: str
+
+class FSDeleteRequest(BaseModel):
+    session_id: str
+    path: str
 
 class HistoryMessage(BaseModel):
     role: str
@@ -270,7 +284,7 @@ async def terminal_ws(websocket: WebSocket):
             mem_limit="256m",
             cpu_period=100000,
             cpu_quota=50000,
-            # network_mode="none",
+            dns=["8.8.8.8", "1.1.1.1"],  # explicit DNS — fixes "Could not resolve host" on Windows
             remove=False,
         )
         sandbox_sessions[session_id] = container
@@ -343,6 +357,16 @@ async def terminal_ws(websocket: WebSocket):
 
         drainer = asyncio.create_task(drain_output())
 
+        # Register session so /fs/* endpoints can reach this container
+        short_id = session_id[:8]
+        active_containers[short_id] = container
+
+        # Send short_id to frontend so it can reference this session
+        await websocket.send_text(json.dumps({
+            "type": "session_ready",
+            "session_id": short_id
+        }))
+
         while True:
             try:
                 msg  = await asyncio.wait_for(websocket.receive_text(), timeout=0.1)
@@ -360,7 +384,7 @@ async def terminal_ws(websocket: WebSocket):
                         )
                     except Exception:
                         pass
-
+                
             except asyncio.TimeoutError:
                 # Check if bash exited
                 try:
@@ -386,6 +410,7 @@ async def terminal_ws(websocket: WebSocket):
     finally:
         # ── 6. Cleanup ────────────────────────────────────────────
         stop_event.set()
+        drainer.cancel()
         try:
             if exec_sock:
                 exec_sock.close()
@@ -396,6 +421,7 @@ async def terminal_ws(websocket: WebSocket):
                 container.kill()
                 container.remove(force=True)
                 sandbox_sessions.pop(session_id, None)
+                active_containers.pop(short_id, None)   # ← remove FS session
                 print(f"[sandbox] cleaned up antimatter-{session_id[:8]}")
             except Exception as e:
                 print(f"[sandbox] cleanup error: {e}")
@@ -413,6 +439,129 @@ async def inject_files(container, files: dict):
     tar_buffer.seek(0)
     container.put_archive("/home/sandboxuser/workspace", tar_buffer)
     
+# Store mapping of session → container_id
+# (add container_id to sandbox_sessions when container starts)
+# Change sandbox_sessions to store container object
+# sandbox_sessions[session_id] = container  ← already doing this
+
+# We need a separate map: a stable ID the frontend can reference
+# Use a short session tag sent to frontend on connect
+
+def docker_exec_output(container, cmd: list[str]) -> str:
+    """Run a command in container and return stdout."""
+    result = container.exec_run(
+        cmd,
+        user="sandboxuser",
+        workdir="/home/sandboxuser/workspace"
+    )
+    return result.output.decode("utf-8", errors="replace")
+
+
+@app.get("/fs/list")
+async def fs_list(session_id: str, path: str = "."):
+    container = active_containers.get(session_id)
+    if not container:
+        return {"error": "session not found"}
+
+    # Single find call returns paths + type in one shot (much faster)
+    # -printf "%y\t%p\n" prints type (f/d/l) and path, tab-separated
+    output = docker_exec_output(container, [
+        "find", path,
+        "-not", "-path", "*/.git/*",
+        "-not", "-name", ".git",
+        "-printf", "%y\t%P\n"
+    ])
+
+    entries = []
+    for line in output.strip().split("\n"):
+        line = line.strip()
+        if not line:
+            continue
+        parts = line.split("\t", 1)
+        if len(parts) != 2:
+            continue
+        ftype_char, fpath = parts
+        if not fpath:          # skip the root entry itself
+            continue
+        ftype = "dir" if ftype_char == "d" else "file"
+        entries.append({
+            "path": fpath,
+            "name": fpath.split("/")[-1],
+            "type": ftype,
+            "depth": fpath.count("/"),
+        })
+
+    return {"session_id": session_id, "entries": entries}
+
+
+@app.get("/fs/read")
+async def fs_read(session_id: str, path: str):
+    container = active_containers.get(session_id)
+    if not container:
+        return {"error": "session not found"}
+
+    content = docker_exec_output(container, ["cat", path])
+    return {"path": path, "content": content}
+
+
+@app.post("/fs/write")
+async def fs_write(req: FSWriteRequest):
+    container = active_containers.get(req.session_id)
+    if not container:
+        return {"error": "session not found"}
+
+    # Write file via tar inject (same as inject_files)
+    import tarfile, io
+    tar_buffer = io.BytesIO()
+    with tarfile.open(fileobj=tar_buffer, mode='w') as tar:
+        encoded = req.content.encode("utf-8")
+        info = tarfile.TarInfo(name=req.path)
+        info.size = len(encoded)
+        tar.addfile(info, io.BytesIO(encoded))
+    tar_buffer.seek(0)
+    container.put_archive("/home/sandboxuser/workspace", tar_buffer)
+    return {"status": "ok"}
+
+
+@app.get("/fs/watch")
+async def fs_watch(session_id: str):
+    """SSE endpoint — pushes file tree updates to browser."""
+    container = active_containers.get(session_id)
+    if not container:
+        # Must return SSE stream even for errors — plain JSON will cause
+        # "MIME type not text/event-stream" error in the browser EventSource.
+        async def error_stream():
+            data = json.dumps({"type": "error", "message": "session not found"})
+            yield f"data: {data}\n\n"
+        return StreamingResponse(
+            error_stream(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache"},
+        )
+
+    async def event_stream():
+        last_tree = ""
+        while session_id in active_containers:
+            # Run blocking docker call in a thread so we don't stall the event loop
+            output = await asyncio.to_thread(
+                docker_exec_output, container, [
+                    "find", ".",
+                    "-not", "-path", "*/.git/*",
+                    "-not", "-name", ".git",
+                    "-print",
+                ]
+            )
+            if output != last_tree:
+                last_tree = output
+                data = json.dumps({"type": "tree_change", "raw": output})
+                yield f"data: {data}\n\n"
+            await asyncio.sleep(2)   # poll every 2 seconds
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache"}
+    )
 # ─── /health ──────────────────────────────────────────────────────────────────
 
 @app.get("/health")

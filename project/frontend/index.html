@@ -1256,7 +1256,11 @@
       <p>Drop files or <span>browse</span><br>to open in editor</p>
     </label>
 
+    <!-- Uploaded files -->
     <div class="file-list" id="file-list"></div>
+
+    <!-- Sandbox / Docker file tree — lives OUTSIDE file-list so renderFileList() can't nuke it -->
+    <div id="docker-file-tree"></div>
 
     <div class="sidebar-bottom">
       <button class="btn" style="width:100%;justify-content:center;" onclick="document.getElementById('file-upload').click()">+ Open file</button>
@@ -1578,10 +1582,13 @@ let pendingDiffCode = '';
     Object.keys(files).forEach(name => {
       const item = document.createElement('div');
       item.className = 'file-item' + (name === activeFile ? ' active' : '');
-      item.innerHTML = `<span class="file-icon">${getFileIcon(name)}</span>${name}`;
+      item.innerHTML = `<span class="file-icon">${getFileIcon(name)}</span>${name.split('/').pop()}`;
       item.onclick = () => openFile(name);
       list.appendChild(item);
     });
+    // Always re-render docker tree from cache — it's a sibling div, not inside file-list,
+    // but the active highlight needs refreshing after the uploaded-files section updates.
+    renderDockerFileTree(lastDockerEntries);
   }
 
   function openFile(name) {
@@ -2881,7 +2888,19 @@ function applyAcceptedPatches() {
       }, 400);
     };
 
-    termSocket.onmessage = (e) => term.write(e.data);
+    termSocket.onmessage = (e) => {
+    try {
+        // Check if it's a control message (JSON)
+        const msg = JSON.parse(e.data);
+        if (msg.type === "session_ready") {
+            onSandboxReady(msg.session_id);
+            return;
+        }
+    } catch (_) {
+        // Not JSON — it's terminal output, write to xterm
+    }
+    term.write(e.data);
+};
     termSocket.onclose   = () => {
       term.writeln('\r\n\x1b[31m[sandbox terminated]\x1b[0m');
     };
@@ -2914,6 +2933,132 @@ function toggleTerminal() {
 
 function clearTerminal() {
   term?.clear();
+}
+
+// ── Docker FS State ─────────────────────────────────────────
+let dockerSessionId = null;
+let fsWatchSource = null;
+let lastDockerEntries = [];   // cache — lets renderFileList() restore tree without an API call
+
+// ── Called when terminal connects and sends session_ready ────
+function onSandboxReady(sessionId) {
+    dockerSessionId = sessionId;
+    console.log('[sandbox] session ready:', sessionId);
+
+    // Immediately load file tree
+    refreshDockerFileTree();
+
+    // Start watching for changes (git clone, new files, etc.)
+    startFSWatch(sessionId);
+}
+
+// ── Poll/watch Docker filesystem ────────────────────────────
+function startFSWatch(sessionId) {
+    if (fsWatchSource) fsWatchSource.close();
+
+    fsWatchSource = new EventSource(
+        `${BACKEND}/fs/watch?session_id=${sessionId}`
+    );
+
+    fsWatchSource.onmessage = (e) => {
+        const data = JSON.parse(e.data);
+        if (data.type === "tree_change") {
+            refreshDockerFileTree();
+        }
+    };
+
+    fsWatchSource.onerror = () => {
+        // Reconnect after 3s if connection drops
+        setTimeout(() => startFSWatch(sessionId), 3000);
+    };
+}
+
+// ── Fetch and render file tree from Docker ──────────────────
+async function refreshDockerFileTree() {
+    if (!dockerSessionId) return;
+
+    const res = await fetch(
+        `${BACKEND}/fs/list?session_id=${dockerSessionId}&path=.`
+    );
+    const data = await res.json();
+    if (data.error) return;
+
+    lastDockerEntries = data.entries;   // cache so renderFileList() can re-draw without API call
+    renderDockerFileTree(lastDockerEntries);
+}
+
+// ── Render file tree into your sidebar ──────────────────────
+function renderDockerFileTree(entries) {
+    // #docker-file-tree is a static div in the HTML — sibling of #file-list, never inside it.
+    // This means renderFileList()'s innerHTML='' can NEVER wipe this section.
+    const dockerSection = document.getElementById('docker-file-tree');
+    if (!dockerSection) return;
+
+    if (!entries || entries.length === 0) {
+        dockerSection.innerHTML = dockerSessionId
+            ? `<div style="color:#555;font-size:11px;padding:8px 12px;">Sandbox empty — clone a repo or create files</div>`
+            : '';
+        return;
+    }
+
+    // Section header
+    let html = `<div style="color:var(--text3);font-size:10px;padding:6px 14px 4px;letter-spacing:0.1em;font-weight:600;text-transform:uppercase;border-top:1px solid var(--border);margin-top:4px;">Sandbox</div>`;
+
+    for (const entry of entries) {
+        const indent = entry.depth * 10;
+        const icon = entry.type === 'dir' ? '📁' : getFileIcon(entry.name);
+        const isActive = entry.type === 'file' && files[entry.path] !== undefined;
+        const clickHandler = entry.type === 'file'
+            ? `onclick="openDockerFile('${entry.path}')"` : '';
+
+        html += `<div ${clickHandler}
+            class="file-item${isActive ? ' active' : ''}"
+            style="padding-left:${14 + indent}px;color:${entry.type === 'dir' ? 'var(--text3)' : 'var(--text2)'};cursor:${entry.type === 'file' ? 'pointer' : 'default'};">
+            <span class="file-icon">${icon}</span>${entry.name}
+        </div>`;
+    }
+
+    dockerSection.innerHTML = html;
+}
+
+// ── Open a file from Docker into Monaco ─────────────────────
+async function openDockerFile(path) {
+    if (!dockerSessionId) return;
+
+    const res = await fetch(
+        `${BACKEND}/fs/read?session_id=${dockerSessionId}&path=${encodeURIComponent(path)}`
+    );
+    const data = await res.json();
+    if (data.error) return;
+
+    // Use the FULL path as the key (not just basename) to avoid
+    // collisions when two files in different dirs share the same name.
+    files[path] = data.content;
+    openFile(path);   // openFile already uses the key to look up content
+}
+
+// ── Save Monaco edits back to Docker ────────────────────────
+async function saveToDocker(filename, content) {
+    if (!dockerSessionId) return;
+    await fetch(`${BACKEND}/fs/write`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            session_id: dockerSessionId,
+            path: filename,
+            content: content
+        })
+    });
+}
+
+function getFileIcon(name) {
+    const ext = name.split('.').pop();
+    const icons = {
+        py: '🐍', js: '📜', ts: '📘', html: '🌐',
+        css: '🎨', json: '📋', md: '📝', sh: '⚙️',
+        txt: '📄', yml: '⚙️', yaml: '⚙️', env: '🔐'
+    };
+    return icons[ext] || '📄';
 }
 
 // Close on escape (add to existing keydown listener)
