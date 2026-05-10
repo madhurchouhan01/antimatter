@@ -19,7 +19,7 @@ import docker
 import uuid
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from ai_engine.rag import CodebaseIndex, build_context
-from ai_engine.agents import MemoryManager, run_agent_pipeline
+from ai_engine.agents import MemoryManager, run_agent_pipeline, oracle_agent, planner_agent
 
 load_dotenv()
 
@@ -79,7 +79,33 @@ class PatchRequest(BaseModel):
     open_file_content: str = ""
     all_files: Dict[str, str] = {}   # { filename: content } for all open files
     model: str = "llama-3.3-70b-versatile"
- 
+
+class OracleRequest(BaseModel):
+    message: str
+    file_content: str = ""
+    filename: str = ""
+    model: str = "llama-3.3-70b-versatile"
+    history: Optional[List[HistoryMessage]] = []
+    use_rag: bool = True
+    use_web_search: bool = False
+
+class CortexPlanRequest(BaseModel):
+    goal: str
+    file_content: str = ""
+    filename: str = ""
+    available_files: List[str] = []
+    model: str = "llama-3.3-70b-versatile"
+
+class CortexExecuteRequest(BaseModel):
+    goal: str
+    step: str                         # description of this step
+    step_index: int = 0
+    total_steps: int = 1
+    file_content: str = ""
+    filename: str = ""
+    all_files: Dict[str, str] = {}
+    model: str = "llama-3.3-70b-versatile"
+
 
 # ─── /chat ────────────────────────────────────────────────────────────────────
 
@@ -157,6 +183,127 @@ def stream_agent(req: AgentRequest):
 @app.post("/agent")
 def agent(req: AgentRequest):
     return StreamingResponse(stream_agent(req), media_type="text/plain")
+
+# ─── /oracle ──────────────────────────────────────────────────────────────────
+
+def stream_oracle(req: OracleRequest):
+    rag_context = ""
+    rag_sources = []
+    if req.use_rag:
+        context_str, retrieved = build_context(
+            query=req.message,
+            open_file_content=req.file_content,
+            open_filename=req.filename,
+            index=index,
+        )
+        rag_context = context_str
+        rag_sources = list(set(
+            c["metadata"]["filename"] for c in retrieved
+        ))[:4]
+    else:
+        rag_context = f"## {req.filename}\n```\n{req.file_content[:8000]}\n```" if req.file_content else ""
+
+    # Emit sources prefix so frontend can display RAG chips
+    if rag_sources:
+        import json as _json
+        yield f"[RAG_SOURCES]{_json.dumps(rag_sources)}[/RAG_SOURCES]\n"
+
+    stream = oracle_agent(
+        query=req.message,
+        open_file=req.file_content,
+        open_filename=req.filename,
+        rag_context=rag_context,
+        model=req.model,
+        use_web_search=req.use_web_search,
+        stream=True,
+    )
+    for chunk in stream:
+        delta = chunk.choices[0].delta.content
+        if delta:
+            yield delta
+
+@app.post("/oracle")
+def oracle_endpoint(req: OracleRequest):
+    return StreamingResponse(stream_oracle(req), media_type="text/plain")
+
+# ─── /cortex/plan ─────────────────────────────────────────────────────────────
+
+@app.post("/cortex/plan")
+def cortex_plan(req: CortexPlanRequest):
+    """
+    Generates an editable multi-step plan from a high-level goal.
+    Returns JSON: { understanding, complexity, approach, steps, warnings }
+    Steps have a 'type' field: understand | execute | verify | summarize
+    """
+    memory_summary = memory.get_memory_summary()
+    plan = planner_agent(
+        task=req.goal,
+        open_file=req.file_content,
+        open_filename=req.filename,
+        available_files=req.available_files,
+        memory_summary=memory_summary,
+        model=req.model,
+    )
+    return plan
+
+# ─── /cortex/execute ──────────────────────────────────────────────────────────
+
+@app.post("/cortex/execute")
+def cortex_execute(req: CortexExecuteRequest):
+    """
+    Executes a single EXECUTE-type step from CORTEX.
+    Runs the patch engine on the step description and returns patch results.
+    """
+    from ai_engine.patch_engine import identify_target_files, generate_surgical_patches
+
+    # RAG search for relevant context
+    rag_context, rag_chunks = build_context(
+        query=req.step,
+        open_file_content=req.file_content,
+        open_filename=req.filename,
+        index=index,
+    )
+
+    planner_files = [req.filename] if req.filename else []
+    target_files = identify_target_files(
+        task=req.step,
+        rag_chunks=rag_chunks,
+        available_files=list(req.all_files.keys()),
+        planner_files=planner_files,
+        model=req.model,
+    )
+
+    if not target_files:
+        return {
+            "success": False,
+            "step": req.step,
+            "step_index": req.step_index,
+            "error": "Could not identify target files for this step.",
+            "patches": [],
+        }
+
+    rag_str = "\n\n".join(
+        f"## {c['metadata']['filename']} — `{c['metadata']['name']}`\n```\n{c['text'][:400]}\n```"
+        for c in rag_chunks[:3]
+        if c["metadata"].get("filename") not in target_files
+    )
+
+    patch_results = generate_surgical_patches(
+        task=req.step,
+        target_files=target_files,
+        file_contents=req.all_files,
+        rag_context=rag_str,
+        model=req.model,
+    )
+
+    return {
+        "success": True,
+        "step": req.step,
+        "step_index": req.step_index,
+        "total_steps": req.total_steps,
+        "target_files": target_files,
+        "results": patch_results,
+    }
 
 # ─── /index ───────────────────────────────────────────────────────────────────
 

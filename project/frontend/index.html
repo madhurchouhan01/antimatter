@@ -549,20 +549,371 @@
   border: 1px solid var(--border2);
   border-radius: 6px;
   overflow: hidden;
+  flex-shrink: 0;
 }
 .mode-btn {
   flex: 1;
-  padding: 6px;
-  font-size: 11px;
+  padding: 6px 4px;
+  font-size: 10px;
   font-family: var(--font-mono);
-  font-weight: 500;
+  font-weight: 600;
   background: var(--bg3);
   color: var(--text2);
   border: none;
   cursor: pointer;
   transition: all 0.15s;
+  letter-spacing: 0.04em;
 }
-.mode-btn.active { background: var(--accent2); color: #fff; }
+.mode-btn:hover { background: var(--bg4); color: var(--text); }
+.mode-btn.active.forge  { background: var(--accent2); color: #fff; }
+.mode-btn.active.oracle { background: var(--purple);  color: #fff; }
+.mode-btn.active.cortex { background: var(--amber);   color: #0d0f12; }
+
+/* ── MODE PANELS ─────────────────────────────────────── */
+.mode-panel { display: none; flex-direction: column; flex: 1; min-height: 0; }
+.mode-panel.active { display: flex; }
+
+/* Per-mode model selector row */
+.mode-model-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.mode-model-label {
+  font-size: 10px;
+  color: var(--text3);
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+.mode-model-select {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text2);
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  padding: 3px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  flex: 1;
+}
+
+/* ── ORACLE WEB SEARCH TOGGLE ────────────────────────── */
+.oracle-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+.web-search-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text2);
+  font-family: var(--font-mono);
+  cursor: pointer;
+  user-select: none;
+}
+.web-search-toggle input[type=checkbox] { display:none; }
+.ws-pill {
+  width: 32px; height: 16px;
+  border-radius: 8px;
+  background: var(--bg4);
+  border: 1px solid var(--border2);
+  position: relative;
+  transition: background 0.2s, border-color 0.2s;
+  flex-shrink: 0;
+}
+.ws-pill::after {
+  content: '';
+  position: absolute;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--text3);
+  top: 2px; left: 2px;
+  transition: transform 0.2s, background 0.2s;
+}
+.web-search-toggle input:checked + .ws-pill {
+  background: rgba(167,139,250,0.2);
+  border-color: var(--purple);
+}
+.web-search-toggle input:checked + .ws-pill::after {
+  transform: translateX(16px);
+  background: var(--purple);
+}
+.oracle-source-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px 0;
+}
+.oracle-source-chip {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--purple);
+  background: rgba(167,139,250,0.08);
+  border: 1px solid rgba(167,139,250,0.2);
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+.send-to-forge-btn {
+  margin-top: 6px;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  padding: 3px 10px;
+  border-radius: 4px;
+  border: 1px solid rgba(79,156,249,0.4);
+  background: rgba(79,156,249,0.06);
+  color: var(--accent);
+  cursor: pointer;
+  transition: all 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.send-to-forge-btn:hover { background: rgba(79,156,249,0.14); }
+
+/* ── CORTEX PANEL ────────────────────────────────────── */
+.cortex-goal-wrap {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.cortex-goal-input {
+  width: 100%;
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  outline: none;
+  resize: none;
+  padding: 8px 10px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--text);
+  line-height: 1.5;
+  min-height: 60px;
+  max-height: 100px;
+  transition: border-color 0.15s;
+}
+.cortex-goal-input:focus { border-color: var(--amber); }
+.cortex-goal-input::placeholder { color: var(--text3); }
+.cortex-plan-btn {
+  margin-top: 6px;
+  width: 100%;
+  padding: 7px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(251,191,36,0.12);
+  border: 1px solid rgba(251,191,36,0.4);
+  color: var(--amber);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.cortex-plan-btn:hover { background: rgba(251,191,36,0.2); }
+.cortex-plan-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.cortex-body {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-height: 0;
+}
+.cortex-body::-webkit-scrollbar { width: 4px; }
+.cortex-body::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+/* CORTEX overview card */
+.cortex-overview {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.cortex-understanding {
+  font-size: 12px;
+  color: var(--text);
+  line-height: 1.5;
+}
+.cortex-approach {
+  font-size: 11px;
+  color: var(--text2);
+  font-family: var(--font-mono);
+}
+
+/* CORTEX step list */
+.cortex-steps {
+  display: flex;
+  flex-direction: column;
+  padding: 10px 12px;
+  gap: 6px;
+  flex: 1;
+}
+.cortex-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg3);
+  transition: border-color 0.2s, background 0.2s;
+}
+.cortex-step.active  { border-color: var(--amber);  background: rgba(251,191,36,0.04); }
+.cortex-step.done    { border-color: var(--green);  background: rgba(52,211,153,0.03); }
+.cortex-step.error   { border-color: var(--red);    background: rgba(248,113,113,0.04); }
+.cortex-step-icon {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+  margin-top: 1px;
+  background: var(--bg4);
+  border: 1px solid var(--border2);
+  color: var(--text3);
+}
+.cortex-step.active  .cortex-step-icon { border-color: var(--amber); color: var(--amber); background: rgba(251,191,36,0.1); }
+.cortex-step.done    .cortex-step-icon { border-color: var(--green); color: var(--green); background: rgba(52,211,153,0.1); }
+.cortex-step.error   .cortex-step-icon { border-color: var(--red);   color: var(--red);   background: rgba(248,113,113,0.1); }
+.cortex-step-content { flex: 1; min-width: 0; }
+.cortex-step-type {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-family: var(--font-mono);
+  margin-bottom: 2px;
+}
+.cortex-step-type.understand { color: var(--accent); }
+.cortex-step-type.execute    { color: var(--amber); }
+.cortex-step-type.verify     { color: var(--green); }
+.cortex-step-type.summarize  { color: var(--purple); }
+.cortex-step-desc {
+  font-size: 11px;
+  color: var(--text2);
+  line-height: 1.4;
+  outline: none;
+}
+.cortex-step-desc[contenteditable]:focus {
+  color: var(--text);
+  border-bottom: 1px dashed var(--border2);
+}
+.cortex-step-del {
+  width: 18px; height: 18px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text3);
+  cursor: pointer;
+  font-size: 10px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s;
+  opacity: 0;
+}
+.cortex-step:hover .cortex-step-del { opacity: 1; }
+.cortex-step-del:hover { border-color: var(--red); color: var(--red); background: rgba(248,113,113,0.1); }
+
+/* CORTEX progress bar */
+.cortex-progress {
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+  display: none;
+}
+.cortex-progress.visible { display: block; }
+.cortex-progress-bar {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--border);
+  overflow: hidden;
+  margin-bottom: 5px;
+}
+.cortex-progress-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--amber);
+  transition: width 0.4s ease;
+}
+.cortex-progress-text {
+  font-size: 10px;
+  color: var(--text3);
+  font-family: var(--font-mono);
+  text-align: center;
+}
+
+/* CORTEX execute + verify result note */
+.cortex-verify-result {
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  margin-top: 6px;
+  display: none;
+}
+.cortex-verify-result.pass { background: rgba(52,211,153,0.1); color: var(--green); border: 1px solid rgba(52,211,153,0.3); }
+.cortex-verify-result.fail { background: rgba(248,113,113,0.1); color: var(--red);   border: 1px solid rgba(248,113,113,0.3); }
+
+/* CORTEX execute button */
+.cortex-execute-btn {
+  margin: 6px 12px 10px;
+  padding: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--amber);
+  border: none;
+  color: #0d0f12;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.cortex-execute-btn.visible { display: flex; }
+.cortex-execute-btn:hover { background: #fcd34d; transform: translateY(-1px); }
+.cortex-execute-btn:disabled { background: var(--bg4); color: var(--text3); transform: none; cursor: not-allowed; }
+
+/* FORGE RAG sources strip */
+.forge-rag-strip {
+  display: none;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 8px 20px;
+  border-top: 1px solid var(--border);
+  background: rgba(79,156,249,0.03);
+}
+.forge-rag-strip.visible { display: flex; }
+.forge-rag-chip {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--accent);
+  background: rgba(79,156,249,0.08);
+  border: 1px solid rgba(79,156,249,0.2);
+  padding: 2px 8px;
+  border-radius: 10px;
+}
  
 /* ai-body: scrollable container holding agent panel + messages */
 .ai-body {
@@ -1233,7 +1584,7 @@
     </div>
   </div>
   <div class="topbar-actions">
-    <button class="btn smart-fix" onclick="openSmartFix()">⟐ Smart Fix</button>
+    <button class="btn smart-fix" id="forge-btn" onclick="openSmartFix()">⚡ FORGE</button>
     <button class="btn" id="index-btn" onclick="indexProject()">⬡ Index project</button>
     <button class="btn" onclick="clearChat()">↺ Clear chat</button>
     <button class="btn success" id="run-btn" onclick="runCode()" style="display:none">▶ Run</button>
@@ -1290,11 +1641,6 @@
         ⚛ ANTIMATTER
         <span class="ai-badge">Groq</span>
       </div>
-      <select class="model-selector" id="model-select">
-        <option value="llama-3.3-70b-versatile">llama-3.3-70b</option>
-        <option value="deepseek-r1-distill-llama-70b">deepseek-r1</option>
-        <option value="mixtral-8x7b-32768">mixtral-8x7b</option>
-      </select>
     </div>
     <!-- Add after your main editor/AI panel split -->
     <div id="terminal-panel" style="
@@ -1327,96 +1673,118 @@
       <span id="context-text">Using file context</span>
     </div>
 
-    <!-- QUICK COMMANDS -->
-    <div class="quick-cmds">
+    <!-- QUICK COMMANDS (shared) -->
+    <div class="quick-cmds" id="shared-quick-cmds">
       <div class="cmd-chip" onclick="quickCmd('/explain')">/explain</div>
       <div class="cmd-chip" onclick="quickCmd('/refactor')">/refactor</div>
-      <div class="cmd-chip" onclick="quickCmd('/tests')">/tests</div>
       <div class="cmd-chip" onclick="quickCmd('/fix')">/fix</div>
-      <div class="cmd-chip" onclick="quickCmd('/docs')">/docs</div>
     </div>
 
     <!-- MODE TOGGLE -->
-    <div class="mode-toggle" style="margin: 10px 12px 0;">
-      <button class="mode-btn active" id="mode-chat" onclick="setMode('chat')">💬 Chat</button>
-      <button class="mode-btn" id="mode-agent" onclick="setMode('agent')">⚡ Agent</button>
+    <div class="mode-toggle" style="margin: 8px 12px 0;">
+      <button class="mode-btn active forge" id="mode-forge" onclick="setMode('forge')">⚡ FORGE</button>
+      <button class="mode-btn oracle"       id="mode-oracle" onclick="setMode('oracle')">🔮 ORACLE</button>
+      <button class="mode-btn cortex"       id="mode-cortex" onclick="setMode('cortex')">🧠 CORTEX</button>
     </div>
-    
-    <!-- SCROLLABLE BODY: agent cards + messages share one scroll container -->
-    <div class="ai-body" id="ai-body">
 
-      <!-- AGENT PANEL (shown in agent mode) -->
-      <div class="agent-panel" id="agent-panel">
-        <!-- Planner Card -->
-        <div class="agent-card" id="card-planner">
-          <div class="agent-card-header" onclick="toggleCard('planner')">
-            <div class="agent-card-header-left">
-              <div class="agent-name">🧠 <span>Planner</span></div>
-              <span class="agent-status status-waiting" id="status-planner">waiting</span>
-            </div>
-            <span class="card-chevron close" id="chevron-planner">▼</span>
-          </div>
-          <div class="agent-card-body close" id="body-planner"></div>
-        </div>
-        <!-- Executor Card -->
-        <div class="agent-card" id="card-executor">
-          <div class="agent-card-header" onclick="toggleCard('executor')">
-            <div class="agent-card-header-left">
-              <div class="agent-name">⚙️ <span>Executor</span></div>
-              <span class="agent-status status-waiting" id="status-executor">waiting</span>
-            </div>
-            <span class="card-chevron open" id="chevron-executor">▼</span>
-          </div>
-          <div class="agent-card-body open" id="body-executor"></div>
-        </div>
-        <!-- Critic Card -->
-        <div class="agent-card" id="card-critic">
-          <div class="agent-card-header" onclick="toggleCard('critic')">
-            <div class="agent-card-header-left">
-              <div class="agent-name">🔍 <span>Critic</span></div>
-              <span class="agent-status status-waiting" id="status-critic">waiting</span>
-            </div>
-            <span class="card-chevron open" id="chevron-critic">▼</span>
-          </div>
-          <div class="agent-card-body open" id="body-critic"></div>
-        </div>
-        <!-- Memory Card -->
-        <div class="agent-card" id="card-memory">
-          <div class="agent-card-header" onclick="toggleCard('memory')">
-            <div class="agent-card-header-left">
-              <div class="agent-name">💾 <span>Memory</span></div>
-              <span class="agent-status status-waiting" id="status-memory">waiting</span>
-            </div>
-            <span class="card-chevron open" id="chevron-memory">▼</span>
-          </div>
-          <div class="agent-card-body open" id="body-memory"></div>
-        </div>
+    <!-- ══ FORGE PANEL ══════════════════════════════════════════ -->
+    <div class="mode-panel active" id="panel-forge">
+      <!-- Model selector -->
+      <div class="mode-model-row">
+        <span class="mode-model-label">Model</span>
+        <select class="mode-model-select" id="forge-model-select">
+          <option value="llama-3.3-70b-versatile">llama-3.3-70b</option>
+          <option value="deepseek-r1-distill-llama-70b">deepseek-r1</option>
+          <option value="mixtral-8x7b-32768">mixtral-8x7b</option>
+        </select>
       </div>
-
-      <!-- MESSAGES -->
-      <div class="messages" id="messages">
-        <div class="empty-state" id="empty-state">
-          <div class="empty-icon">⚛</div>
-          <div class="empty-title">AntiMatter AI</div>
-          <div class="empty-sub">Open a file and ask anything about your code. Use /explain, /refactor, /fix and more.</div>
-        </div>
-      </div>
-
-    </div><!-- /ai-body -->
-
-    <!-- INPUT -->
-    <div class="input-area">
-      <div class="input-wrap">
-        <textarea id="chat-input" placeholder="Ask about your code..." rows="1"
-          onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
-        <div class="input-footer">
-          <span class="input-hint">↵ send · shift+↵ newline</span>
-          <button class="send-btn" id="send-btn" onclick="sendMessage()">↑</button>
+      <!-- Messages (Forge shows summary after patch apply) -->
+      <div class="messages" id="forge-messages">
+        <div class="empty-state" id="forge-empty">
+          <div class="empty-icon">⚡</div>
+          <div class="empty-title">FORGE</div>
+          <div class="empty-sub">Click ⚡ FORGE in the toolbar to describe a code change.<br>FORGE identifies files via RAG and generates surgical patches.</div>
         </div>
       </div>
     </div>
-  </div>
-</div>
+
+    <!-- ══ ORACLE PANEL ═════════════════════════════════════════ -->
+    <div class="mode-panel" id="panel-oracle">
+      <!-- Model + web search -->
+      <div class="mode-model-row">
+        <span class="mode-model-label">Model</span>
+        <select class="mode-model-select" id="oracle-model-select">
+          <option value="llama-3.3-70b-versatile">llama-3.3-70b</option>
+          <option value="deepseek-r1-distill-llama-70b">deepseek-r1</option>
+          <option value="mixtral-8x7b-32768">mixtral-8x7b</option>
+        </select>
+      </div>
+      <div class="oracle-toolbar">
+        <label class="web-search-toggle">
+          <input type="checkbox" id="oracle-web-search">
+          <span class="ws-pill"></span>
+          Web search
+        </label>
+        <div class="cmd-chip" onclick="oracleQuickCmd('/scan')">/scan</div>
+        <div class="cmd-chip" onclick="oracleQuickCmd('/complexity')">/complexity</div>
+        <div class="cmd-chip" onclick="oracleQuickCmd('/deps')">/deps</div>
+      </div>
+      <!-- Messages -->
+      <div class="messages" id="oracle-messages">
+        <div class="empty-state" id="oracle-empty">
+          <div class="empty-icon">🔮</div>
+          <div class="empty-title">ORACLE</div>
+          <div class="empty-sub">Ask anything. ORACLE reads your codebase, explains, warns, and audits — but never changes code.</div>
+        </div>
+      </div>
+      <!-- Oracle input -->
+      <div class="input-area">
+        <div class="input-wrap">
+          <textarea id="oracle-input" placeholder="Ask ORACLE anything about your code..." rows="1"
+            onkeydown="handleOracleKey(event)" oninput="autoResize(this)"></textarea>
+          <div class="input-footer">
+            <span class="input-hint">↵ send · shift+↵ newline</span>
+            <button class="send-btn" id="oracle-send-btn" onclick="sendOracleMessage()">↑</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ CORTEX PANEL ══════════════════════════════════════════ -->
+    <div class="mode-panel" id="panel-cortex">
+      <!-- Model selector -->
+      <div class="mode-model-row">
+        <span class="mode-model-label">Model</span>
+        <select class="mode-model-select" id="cortex-model-select">
+          <option value="llama-3.3-70b-versatile">llama-3.3-70b</option>
+          <option value="deepseek-r1-distill-llama-70b">deepseek-r1</option>
+          <option value="mixtral-8x7b-32768">mixtral-8x7b</option>
+        </select>
+      </div>
+      <!-- Goal input -->
+      <div class="cortex-goal-wrap">
+        <textarea class="cortex-goal-input" id="cortex-goal"
+          placeholder="High-level goal... e.g. 'Refactor the entire auth system to use JWT tokens'"
+        ></textarea>
+        <button class="cortex-plan-btn" id="cortex-plan-btn" onclick="runCortexPlan()">🧠 Generate Plan</button>
+      </div>
+      <!-- Scrollable body: overview + step list -->
+      <div class="cortex-body" id="cortex-body">
+        <div class="empty-state" id="cortex-empty">
+          <div class="empty-icon">🧠</div>
+          <div class="empty-title">CORTEX</div>
+          <div class="empty-sub">Describe a high-level goal. CORTEX plans multi-step execution — you review and confirm before anything runs.</div>
+        </div>
+      </div>
+      <!-- Execute button (shown after plan is confirmed) -->
+      <button class="cortex-execute-btn" id="cortex-execute-btn" onclick="executeCortex()">▶ Execute Plan</button>
+      <!-- Progress bar -->
+      <div class="cortex-progress" id="cortex-progress">
+        <div class="cortex-progress-bar"><div class="cortex-progress-fill" id="cortex-progress-fill" style="width:0%"></div></div>
+        <div class="cortex-progress-text" id="cortex-progress-text">Initializing...</div>
+      </div>
+    </div>
+
 <div class="picker-modal" id="picker-modal">
   <div class="picker-box">
     <div class="picker-header">
@@ -1675,32 +2043,26 @@ let pendingDiffCode = '';
   }
 
 
-  let currentMode = 'chat';
- 
+  let currentMode = 'forge';
+
 function setMode(mode) {
   currentMode = mode;
-  document.getElementById('mode-chat').classList.toggle('active', mode === 'chat');
-  document.getElementById('mode-agent').classList.toggle('active', mode === 'agent');
- 
-  // Show/hide agent panel vs messages
-  const agentPanel = document.getElementById('agent-panel');
-  const messages   = document.getElementById('messages');
-  if (mode === 'agent') {
-    agentPanel.classList.add('visible');
-    document.getElementById('chat-input').placeholder = 'Describe a task for the agent pipeline...';
-  } else {
-    agentPanel.classList.remove('visible');
-    document.getElementById('chat-input').placeholder = 'Ask about your code...';
-  }
+  // Update buttons
+  ['forge','oracle','cortex'].forEach(m => {
+    const btn = document.getElementById('mode-' + m);
+    btn.classList.toggle('active', m === mode);
+    // Keep the mode-specific color class
+    btn.className = btn.className.replace(/\bactive\b/g, '').trim();
+    if (m === mode) btn.classList.add('active');
+  });
+  // Show/hide panels
+  ['forge','oracle','cortex'].forEach(m => {
+    document.getElementById('panel-' + m).classList.toggle('active', m === mode);
+  });
+  // Hide shared quick-cmds in ORACLE (it has its own toolbar)
+  const sharedCmds = document.getElementById('shared-quick-cmds');
+  if (sharedCmds) sharedCmds.style.display = mode === 'oracle' ? 'none' : 'flex';
 }
- 
-function toggleCard(name) {
-  const body = document.getElementById('body-' + name);
-  const chevron = document.getElementById('chevron-' + name);
-  const isOpen = body.classList.toggle('open');
-  if (chevron) chevron.classList.toggle('open', isOpen);
-}
-
 
 
 // ── DIFF ──────────────────────────────────────────────────────────────────────
@@ -1750,17 +2112,9 @@ function setAgentStatus(name, status) {
   }
 }
  
-function resetAgentCards() {
-  ['planner','executor','critic','memory'].forEach(name => {
-    setAgentStatus(name, 'waiting');
-    const body = document.getElementById('body-' + name);
-    const chevron = document.getElementById('chevron-' + name);
-    body.innerHTML = '';
-    body.classList.add('open');   // keep expanded after reset
-    if (chevron) chevron.classList.add('open');
-  });
-}
- 
+// (sendAgentTask removed — CORTEX handles multi-step execution)
+
+
 function renderPlan(plan) {
   const body = document.getElementById('body-planner');
   const steps = (plan.steps || []).map((s, i) =>
@@ -1994,88 +2348,182 @@ async function sendAgentTask(taskText) {
   document.getElementById('send-btn').disabled = false;
 }
  
-// ── Override sendMessage to route to agent pipeline if in agent mode ──────────
-// Replace your existing sendMessage function with this:
- 
-async function sendMessage() {
-  if (isStreaming) return;
-  const input = document.getElementById('chat-input');
+// ── ORACLE: Send message ───────────────────────────────────────────────────
+let oracleHistory = [];
+let oracleStreaming = false;
+
+function handleOracleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendOracleMessage(); }
+}
+
+function oracleQuickCmd(cmd) {
+  const cmds = {
+    '/scan':       'Scan this code for security vulnerabilities and list them by severity.',
+    '/complexity': 'Analyze the complexity of this code. Identify the worst functions.',
+    '/deps':       'Audit dependencies and flag any outdated or insecure packages.',
+    '/explain':    'Explain what this code does in clear, structured detail.',
+    '/refactor':   'Suggest refactoring improvements without changing behaviour.',
+  };
+  const input = document.getElementById('oracle-input');
+  input.value = cmds[cmd] || cmd + ' ';
+  input.focus();
+  autoResize(input);
+}
+
+function quickCmd(cmd) {
+  // Shared quick commands — route to FORGE's context bar for now
+  const cmds = {
+    '/explain':  'Explain what this code does in detail.',
+    '/refactor': 'Refactor this code to be cleaner and more efficient.',
+    '/fix':      'Find and fix any bugs or issues in this code.',
+  };
+  // If oracle panel is active, route there
+  const input = document.getElementById('oracle-input');
+  if (currentMode === 'oracle' && input) {
+    input.value = cmds[cmd] || cmd + ' ';
+    input.focus(); autoResize(input);
+  }
+}
+
+async function sendOracleMessage() {
+  if (oracleStreaming) return;
+  const input = document.getElementById('oracle-input');
   const text  = input.value.trim();
   if (!text) return;
   input.value = '';
   input.style.height = 'auto';
- 
-  if (currentMode === 'agent') {
-    await sendAgentTask(text);
-    return;
-  }
- 
-  // ── original chat mode below ─────────────────────────────────────────────
-  hideEmptyState();
-  addMessage('you', text);
-  conversationHistory.push({ role: 'user', content: text });
- 
-  isStreaming = true;
-  document.getElementById('send-btn').disabled = true;
-  const thinkingId = showThinking();
- 
-  const selectedModel = document.getElementById('model-select').value;
-  const fileContent   = activeFile ? files[activeFile] : '';
- 
+
+  const msgs = document.getElementById('oracle-messages');
+  const emptyState = document.getElementById('oracle-empty');
+  if (emptyState) emptyState.remove();
+
+  addOracleMsg('you', text);
+  oracleHistory.push({ role: 'user', content: text });
+
+  oracleStreaming = true;
+  document.getElementById('oracle-send-btn').disabled = true;
+  const thinkId = addOracleThinking();
+
+  const model       = document.getElementById('oracle-model-select').value;
+  const useWebSearch = document.getElementById('oracle-web-search').checked;
+  const fileContent  = activeFile ? files[activeFile] : '';
+
   try {
-    const response = await fetch('http://localhost:1842/chat', {
+    const response = await fetch(`${BACKEND}/oracle`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         message: text,
         file_content: fileContent,
         filename: activeFile || '',
-        model: selectedModel,
-        history: conversationHistory.slice(-10),
+        model,
+        history: oracleHistory.slice(-10),
         use_rag: true,
+        use_web_search: useWebSearch,
       })
     });
- 
-    removeThinking(thinkingId);
-    if (!response.ok) throw new Error(`Server error: ${response.status}`);
- 
-    const aiMsgEl = addMessage('ai', '');
-    const bubble  = aiMsgEl.querySelector('.msg-bubble');
-    const applyBtn = aiMsgEl.querySelector('.apply-btn');
-    const diffBtn = aiMsgEl.querySelector('.diff-btn');
+
+    removeOracleThinking(thinkId);
+    if (!response.ok) throw new Error(`Server ${response.status}`);
+
+    const msgEl  = addOracleMsg('ai', '');
+    const bubble = msgEl.querySelector('.msg-bubble');
 
     const reader  = response.body.getReader();
     const decoder = new TextDecoder();
     let fullText  = '';
- 
+    let ragSources = [];
+
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      fullText += decoder.decode(value);
-      bubble.innerHTML = formatMessage(fullText);
-      scrollMessages();
-    }
- 
-    conversationHistory.push({ role: 'assistant', content: fullText });
-    if (fullText.includes('```')) {
-      applyBtn.classList.add('visible');
-      applyBtn.onclick = () => applyToEditor(fullText);
-      diffBtn.classList.add('visible');                        // ← add
-      const code = extractCode(fullText);                      // ← add
-      diffBtn.onclick = () => showDiff(code);                  // ← add
+      const chunk = decoder.decode(value);
 
+      // Extract RAG sources prefix
+      const srcMatch = chunk.match(/\[RAG_SOURCES\]([\s\S]*?)\[\/RAG_SOURCES\]/);
+      if (srcMatch) {
+        try { ragSources = JSON.parse(srcMatch[1]); } catch(_) {}
+        fullText += chunk.replace(/\[RAG_SOURCES\][\s\S]*?\[\/RAG_SOURCES\]\n?/, '');
+      } else {
+        fullText += chunk;
+      }
+      bubble.innerHTML = formatMessage(fullText);
+      scrollOracleMessages();
     }
- 
+
+    oracleHistory.push({ role: 'assistant', content: fullText });
+
+    // Add "Send to FORGE" button + RAG source chips
+    const footer = document.createElement('div');
+    footer.style.cssText = 'display:flex;flex-direction:column;gap:4px;margin-top:4px;';
+
+    if (ragSources.length) {
+      const chips = document.createElement('div');
+      chips.className = 'oracle-source-chips';
+      chips.innerHTML = ragSources.map(s =>
+        `<span class="oracle-source-chip">⧡ ${s}</span>`
+      ).join('');
+      footer.appendChild(chips);
+    }
+
+    const sendToForge = document.createElement('button');
+    sendToForge.className = 'send-to-forge-btn';
+    sendToForge.innerHTML = '⚡ Send to FORGE';
+    sendToForge.onclick = () => {
+      setMode('forge');
+      openSmartFix();
+      setTimeout(() => {
+        document.getElementById('smart-fix-input').value = fullText.slice(0, 300);
+      }, 80);
+    };
+    footer.appendChild(sendToForge);
+    msgEl.appendChild(footer);
+
   } catch(err) {
-    removeThinking(thinkingId);
-    addMessage('ai', `⚠ Error: ${err.message}`);
+    removeOracleThinking(thinkId);
+    addOracleMsg('ai', `⚠ Error: ${err.message}`);
   }
- 
-  isStreaming = false;
-  document.getElementById('send-btn').disabled = false;
-  document.getElementById('chat-input').focus();
+
+  oracleStreaming = false;
+  document.getElementById('oracle-send-btn').disabled = false;
+  document.getElementById('oracle-input').focus();
 }
- 
+
+function addOracleMsg(role, text) {
+  const msgs = document.getElementById('oracle-messages');
+  const div  = document.createElement('div');
+  div.className = 'msg';
+  div.innerHTML = `
+    <div class="msg-label ${role}">${role === 'you' ? '● You' : '🔮 ORACLE'}</div>
+    <div class="msg-bubble ${role}">${role === 'you' ? escapeHtml(text).replace(/\n/g,'<br>') : formatMessage(text)}</div>
+  `;
+  msgs.appendChild(div);
+  scrollOracleMessages();
+  return div;
+}
+
+function addOracleThinking() {
+  const msgs = document.getElementById('oracle-messages');
+  const div  = document.createElement('div');
+  div.className = 'thinking';
+  div.id = 'oracle-thinking-' + Date.now();
+  div.innerHTML = `<div class="thinking-dots"><span></span><span></span><span></span></div><span>ORACLE is thinking</span>`;
+  msgs.appendChild(div);
+  scrollOracleMessages();
+  return div.id;
+}
+
+function removeOracleThinking(id) {
+  const el = document.getElementById(id);
+  if (el) el.remove();
+}
+
+function scrollOracleMessages() {
+  const msgs = document.getElementById('oracle-messages');
+  if (msgs) msgs.scrollTop = msgs.scrollHeight;
+}
+
+
   async function indexProject() {
     if (Object.keys(files).length === 0) {
         alert('Open some files first, then index them.');
@@ -2093,7 +2541,7 @@ async function sendMessage() {
         });
         const data = await res.json();
         btn.textContent = `✓ ${data.chunks_created} chunks`;
-        addMessage('ai', `Project indexed ✓\n\n- **Files:** ${data.files_indexed}\n- **Chunks:** ${data.chunks_created}\n\nI can now answer questions across your entire codebase.`);
+        addMessage('ai', `Project indexed ✓\n\n- **Files:** ${data.files_indexed}\n- **Chunks:** ${data.chunks_created}\n\nRAG is ready. You can now use FORGE and ORACLE with codebase context.`);
         hideEmptyState();
     } catch (e) {
         btn.textContent = '⬡ Index project';
@@ -2140,17 +2588,14 @@ async function sendMessage() {
   }
 
   function addMessage(role, text) {
-    const msgs = document.getElementById('messages');
+    // Routes to forge-messages panel (used by FORGE and legacy indexProject)
+    const msgs = document.getElementById('forge-messages');
+    if (!msgs) return document.createElement('div');
     const div = document.createElement('div');
     div.className = 'msg';
     div.innerHTML = `
-      <div class="msg-label ${role}">${role === 'you' ? '● You' : '⚛ AI'}</div>
+      <div class="msg-label ${role}">${role === 'you' ? '\u25cf You' : '\u26a1 FORGE'}</div>
       <div class="msg-bubble ${role}">${role === 'you' ? escapeHtml(text).replace(/\n/g,'<br>') : formatMessage(text)}</div>
-      ${role === 'ai' ? `
-        <div style="display:flex;gap:0;">
-          <button class="apply-btn">⤷ Apply to editor</button>
-          <button class="diff-btn">⟷ Diff</button>
-        </div>` : ''}
     `;
     msgs.appendChild(div);
     scrollMessages();
@@ -2158,7 +2603,8 @@ async function sendMessage() {
   }
 
   function showThinking() {
-    const msgs = document.getElementById('messages');
+    const msgs = document.getElementById('forge-messages');
+    if (!msgs) return 'noop';
     const div = document.createElement('div');
     div.className = 'thinking';
     div.id = 'thinking-' + Date.now();
@@ -2174,32 +2620,264 @@ async function sendMessage() {
   }
 
   function hideEmptyState() {
-    const es = document.getElementById('empty-state');
-    if (es) es.remove();
+    const fe = document.getElementById('forge-empty');
+    if (fe) fe.remove();
   }
 
   function scrollMessages() {
-    const aiBody = document.getElementById('ai-body');
-    if (aiBody) aiBody.scrollTop = aiBody.scrollHeight;
+    // Scroll forge messages panel
+    const forgeM = document.getElementById('forge-messages');
+    if (forgeM) forgeM.scrollTop = forgeM.scrollHeight;
   }
 
   function clearChat() {
-    const msgs = document.getElementById('messages');
-    msgs.innerHTML = `<div class="empty-state" id="empty-state">
-      <div class="empty-icon">⚛</div>
-      <div class="empty-title">AntiMatter AI</div>
-      <div class="empty-sub">Open a file and ask anything about your code.</div>
+    // Clear FORGE messages
+    const forgeM = document.getElementById('forge-messages');
+    if (forgeM) forgeM.innerHTML = `<div class="empty-state" id="forge-empty">
+      <div class="empty-icon">⚡</div>
+      <div class="empty-title">FORGE</div>
+      <div class="empty-sub">Click ⚡ FORGE in the toolbar to describe a code change.</div>
     </div>`;
+    // Clear ORACLE messages
+    const oracleM = document.getElementById('oracle-messages');
+    if (oracleM) oracleM.innerHTML = `<div class="empty-state" id="oracle-empty">
+      <div class="empty-icon">🔮</div>
+      <div class="empty-title">ORACLE</div>
+      <div class="empty-sub">Ask anything about your code.</div>
+    </div>`;
+    // Clear CORTEX
+    const cortexB = document.getElementById('cortex-body');
+    if (cortexB) cortexB.innerHTML = `<div class="empty-state" id="cortex-empty">
+      <div class="empty-icon">🧠</div>
+      <div class="empty-title">CORTEX</div>
+      <div class="empty-sub">Describe a high-level goal to start planning.</div>
+    </div>`;
+    const execBtn = document.getElementById('cortex-execute-btn');
+    if (execBtn) execBtn.classList.remove('visible');
+    oracleHistory = [];
     conversationHistory = [];
-    resetAgentCards();
+    cortexPlan = null;
   }
 
-  // FIX — set input value and let sendMessage handle it
   function runCode() {
-    const input = document.getElementById('chat-input');
-    input.value = 'Run this code and show me the output.';
-    sendMessage();
+    // Run via FORGE: open the smart fix overlay with a run prompt
+    setMode('forge');
+    openSmartFix();
+    setTimeout(() => {
+      document.getElementById('smart-fix-input').value = 'Run this code and show the output in the sandbox.';
+    }, 60);
   }
+
+// ── CORTEX JS ────────────────────────────────────────────────────────────────
+let cortexPlan = null;         // { understanding, approach, steps[], warnings[] }
+let cortexRunning = false;
+
+async function runCortexPlan() {
+  const goalInput = document.getElementById('cortex-goal');
+  const goal = goalInput.value.trim();
+  if (!goal) return;
+
+  const btn = document.getElementById('cortex-plan-btn');
+  btn.disabled = true;
+  btn.innerHTML = '🧠 Thinking...';
+
+  const body = document.getElementById('cortex-body');
+  body.innerHTML = `<div class="thinking" style="padding:20px 14px;">
+    <div class="thinking-dots"><span></span><span></span><span></span></div>
+    <span>Building plan...</span>
+  </div>`;
+
+  const model = document.getElementById('cortex-model-select').value;
+
+  try {
+    const res = await fetch(`${BACKEND}/cortex/plan`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        goal,
+        file_content: activeFile ? files[activeFile] : '',
+        filename: activeFile || '',
+        available_files: Object.keys(files),
+        model,
+      })
+    });
+    const plan = await res.json();
+    cortexPlan = plan;
+    renderCortexPlan(plan);
+  } catch(err) {
+    body.innerHTML = `<div style="padding:14px;color:var(--red);font-size:12px;font-family:var(--font-mono);">⚠ ${err.message}</div>`;
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = '🧠 Re-plan';
+}
+
+function renderCortexPlan(plan) {
+  const body = document.getElementById('cortex-body');
+  body.innerHTML = '';
+
+  // Overview card
+  const overview = document.createElement('div');
+  overview.className = 'cortex-overview';
+  overview.innerHTML = `
+    <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:2px;">Understanding</div>
+    <div class="cortex-understanding">${escapeHtml(plan.understanding || '')}</div>
+    <div class="cortex-approach">${escapeHtml(plan.approach || '')}</div>
+    ${(plan.warnings||[]).filter(Boolean).map(w =>
+      `<div style="font-size:10px;color:var(--amber);margin-top:2px">⚠ ${escapeHtml(w)}</div>`
+    ).join('')}
+  `;
+  body.appendChild(overview);
+
+  // Step list
+  const stepList = document.createElement('div');
+  stepList.className = 'cortex-steps';
+  stepList.id = 'cortex-step-list';
+
+  const steps = plan.steps || [];
+  steps.forEach((step, i) => {
+    const s = typeof step === 'string' ? { type: 'execute', description: step } : step;
+    const stepEl = document.createElement('div');
+    stepEl.className = 'cortex-step';
+    stepEl.id = `cortex-step-${i}`;
+
+    const typeIcon = { understand:'🔍', execute:'⚡', verify:'✔', summarize:'📝' }[s.type] || '○';
+
+    stepEl.innerHTML = `
+      <div class="cortex-step-icon">${typeIcon}</div>
+      <div class="cortex-step-content">
+        <div class="cortex-step-type ${s.type}">${s.type}</div>
+        <div class="cortex-step-desc" contenteditable="true" id="cortex-desc-${i}">${escapeHtml(s.description)}</div>
+      </div>
+      <button class="cortex-step-del" onclick="deleteCortexStep(${i})" title="Remove step">×</button>
+    `;
+    stepList.appendChild(stepEl);
+  });
+
+  body.appendChild(stepList);
+
+  // Show execute button
+  const execBtn = document.getElementById('cortex-execute-btn');
+  if (execBtn) execBtn.classList.add('visible');
+}
+
+function deleteCortexStep(idx) {
+  const el = document.getElementById(`cortex-step-${idx}`);
+  if (el) el.remove();
+}
+
+async function executeCortex() {
+  if (cortexRunning) return;
+  cortexRunning = true;
+
+  const execBtn = document.getElementById('cortex-execute-btn');
+  execBtn.disabled = true;
+  execBtn.textContent = '⏳ Executing...';
+
+  // Collect visible steps (user may have deleted some)
+  const stepEls = document.querySelectorAll('#cortex-step-list .cortex-step');
+  const steps = Array.from(stepEls).map(el => {
+    const typeEl = el.querySelector('.cortex-step-type');
+    const descEl = el.querySelector('.cortex-step-desc');
+    return {
+      type: typeEl ? typeEl.textContent.trim() : 'execute',
+      description: descEl ? descEl.textContent.trim() : '',
+      el,
+    };
+  });
+
+  const total = steps.length;
+  const progressEl = document.getElementById('cortex-progress');
+  const fillEl     = document.getElementById('cortex-progress-fill');
+  const textEl     = document.getElementById('cortex-progress-text');
+  progressEl.classList.add('visible');
+
+  const model = document.getElementById('cortex-model-select').value;
+  const goal  = document.getElementById('cortex-goal').value.trim();
+
+  for (let i = 0; i < steps.length; i++) {
+    const step = steps[i];
+    step.el.classList.add('active');
+    step.el.querySelector('.cortex-step-icon').textContent = '►';
+
+    const pct = Math.round(((i) / total) * 100);
+    fillEl.style.width = pct + '%';
+    textEl.textContent = `Step ${i + 1}/${total} — ${step.type}: ${step.description.slice(0,40)}`;
+
+    if (step.type === 'execute') {
+      // Call /cortex/execute — returns patch results — show in FORGE patch modal
+      try {
+        const res = await fetch(`${BACKEND}/cortex/execute`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            goal,
+            step: step.description,
+            step_index: i,
+            total_steps: total,
+            file_content: activeFile ? files[activeFile] : '',
+            filename: activeFile || '',
+            all_files: files,
+            model,
+          })
+        });
+        const data = await res.json();
+
+        if (data.success && data.results?.length) {
+          // Re-use the FORGE patch modal to show the diff
+          patchState.task    = `[CORTEX Step ${i+1}] ${step.description}`;
+          patchState.results = data.results;
+          document.getElementById('patch-task-preview').textContent = patchState.task;
+          document.getElementById('patch-loading').style.display = 'none';
+          document.getElementById('patch-action-bar').style.display = 'flex';
+          renderPatchReview(data);
+          document.getElementById('patch-modal').classList.add('open');
+          // Pause execution until modal closes
+          await new Promise(resolve => {
+            const orig = window.closePatchModal;
+            window.closePatchModal = function() {
+              orig();
+              window.closePatchModal = orig;
+              resolve();
+            };
+          });
+        }
+        step.el.classList.remove('active');
+        step.el.classList.add('done');
+        step.el.querySelector('.cortex-step-icon').textContent = '✓';
+      } catch(err) {
+        step.el.classList.remove('active');
+        step.el.classList.add('error');
+        step.el.querySelector('.cortex-step-icon').textContent = '×';
+      }
+    } else if (step.type === 'verify') {
+      // Run active file in sandbox if connected
+      if (dockerSessionId && activeFile && termSocket?.readyState === WebSocket.OPEN) {
+        const cmd = activeFile.endsWith('.py') ? `python3 "${activeFile}"\n`
+                  : activeFile.endsWith('.js') ? `node "${activeFile}"\n`
+                  : `bash "${activeFile}"\n`;
+        termSocket.send(JSON.stringify({ type: 'input', data: cmd }));
+        if (!terminalOpen) toggleTerminal();
+        await new Promise(r => setTimeout(r, 1500));
+      }
+      step.el.classList.remove('active');
+      step.el.classList.add('done');
+      step.el.querySelector('.cortex-step-icon').textContent = '✔';
+    } else {
+      // understand / summarize: just mark done after brief delay
+      await new Promise(r => setTimeout(r, 600));
+      step.el.classList.remove('active');
+      step.el.classList.add('done');
+      step.el.querySelector('.cortex-step-icon').textContent = '✓';
+    }
+  }
+
+  fillEl.style.width = '100%';
+  textEl.textContent = '✓ Plan complete';
+  execBtn.textContent = '✓ Done';
+  execBtn.disabled = false;
+  cortexRunning = false;
+}
 
   // ─── RESIZER ──────────────────────────────────────────
   const resizer = document.getElementById('resizer');
@@ -2502,7 +3180,7 @@ async function runSmartFix() {
         open_filename: activeFile || '',
         open_file_content: activeFile ? files[activeFile] : '',
         all_files: files,
-        model: document.getElementById('model-select').value,
+        model: (document.getElementById('forge-model-select') || document.getElementById('model-select') || {value:'llama-3.3-70b-versatile'}).value,
       })
     });
  
@@ -2828,14 +3506,38 @@ function applyAcceptedPatches() {
   document.getElementById('editor-status').textContent = `⟐ ${appliedCount} patch${appliedCount !== 1 ? 'es' : ''} applied ✓`;
   setTimeout(() => document.getElementById('editor-status').textContent = 'Editing', 3000);
  
-  // Show summary in chat messages
-  hideEmptyState();
-  addMessage('ai',
-    `**Smart Fix applied** ✓\n\n` +
-    `- ${appliedCount} patch${appliedCount !== 1 ? 'es' : ''} applied\n` +
-    `- Files modified: ${Object.keys(byFile).join(', ')}\n\n` +
-    `Task: *${patchState.task}*`
-  );
+  // Show summary in FORGE messages panel
+  const forgeMessages = document.getElementById('forge-messages');
+  const forgeEmpty = document.getElementById('forge-empty');
+  if (forgeEmpty) forgeEmpty.remove();
+  if (forgeMessages) {
+    const div = document.createElement('div');
+    div.className = 'msg';
+    div.innerHTML = `
+      <div class="msg-label ai">⚡ FORGE</div>
+      <div class="msg-bubble ai">${formatMessage(
+        `**FORGE applied** ✓\n\n` +
+        `- ${appliedCount} patch${appliedCount !== 1 ? 'es' : ''} applied\n` +
+        `- Files: ${Object.keys(byFile).join(', ')}\n\n` +
+        `Task: *${patchState.task}*`
+      )}</div>
+    `;
+    forgeMessages.appendChild(div);
+    forgeMessages.scrollTop = forgeMessages.scrollHeight;
+  }
+
+  // Auto-run in sandbox if connected and active file is runnable
+  if (typeof dockerSessionId !== 'undefined' && dockerSessionId && activeFile && typeof termSocket !== 'undefined' && termSocket?.readyState === WebSocket.OPEN) {
+    const runnable = ['.py','.js','.ts','.sh'].some(ext => activeFile.endsWith(ext));
+    if (runnable) {
+      const cmd = activeFile.endsWith('.py')  ? `python3 "${activeFile}"\n`
+                : activeFile.endsWith('.js')  ? `node "${activeFile}"\n`
+                : activeFile.endsWith('.ts')  ? `npx ts-node "${activeFile}"\n`
+                : `bash "${activeFile}"\n`;
+      if (!terminalOpen) toggleTerminal();
+      setTimeout(() => termSocket.send(JSON.stringify({ type: 'input', data: cmd })), 400);
+    }
+  }
 }
 
   // ── Terminal State ──────────────────────────────────────────
