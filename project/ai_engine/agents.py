@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-DEFAULT_MODEL = "llama-3.3-70b-versatile"
+DEFAULT_MODEL = "llama-3.1-8b-instant"
 
 # ─── MEMORY MANAGER (SQLite) ──────────────────────────────────────────────────
 

@@ -10,7 +10,7 @@
 **Type:** AI-powered web-based code editor (browser frontend + Python backend)  
 **Port:** `1842`  
 **Stack:** Vanilla JS + Monaco Editor (frontend) · FastAPI + Groq SDK (backend) · ChromaDB + SQLite (memory)  
-**LLM provider:** Groq API (not Anthropic) — models: `llama-3.3-70b-versatile`, `deepseek-r1-distill-llama-70b`, `mixtral-8x7b-32768`  
+**LLM provider:** Groq API (not Anthropic) — models: `llama-3.1-8b-instant`, `deepseek-r1-distill-llama-70b`, `mixtral-8x7b-32768`  
 **Developer:** Madhur — Data Scientist transitioning to GenAI/Agentic AI Engineering  
 **Goal:** Portfolio-grade project demonstrating RAG pipelines, multi-agent orchestration, and agentic code editing  
 
@@ -188,7 +188,7 @@ class ChatRequest(BaseModel):
     message: str
     file_content: str = ""
     filename: str = ""
-    model: str = "llama-3.3-70b-versatile"
+    model: str = "llama-3.1-8b-instant"
     history: Optional[List[HistoryMessage]] = []
     use_rag: bool = True
     cursor_line: int = None          # Monaco cursor line for surgical context
@@ -198,7 +198,7 @@ class AgentRequest(BaseModel):
     file_content: str = ""
     filename: str = ""
     available_files: List[str] = []
-    model: str = "llama-3.3-70b-versatile"
+    model: str = "llama-3.1-8b-instant"
     cursor_line: int = None
 
 class PatchRequest(BaseModel):
@@ -206,7 +206,7 @@ class PatchRequest(BaseModel):
     open_filename: str = ""
     open_file_content: str = ""
     all_files: Dict[str, str] = {}   # all open files { filename: content }
-    model: str = "llama-3.3-70b-versatile"
+    model: str = "llama-3.1-8b-instant"
 
 class IndexRequest(BaseModel):
     files: dict                       # { filename: content }

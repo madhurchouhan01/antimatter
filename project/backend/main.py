@@ -59,7 +59,7 @@ class ChatRequest(BaseModel):
     message: str
     file_content: str = ""
     filename: str = ""
-    model: str = "llama-3.3-70b-versatile"
+    model: str = "llama-3.1-8b-instant"
     history: Optional[List[HistoryMessage]] = []
     use_rag: bool = True
 
@@ -68,7 +68,7 @@ class AgentRequest(BaseModel):
     file_content: str = ""
     filename: str = ""
     available_files: List[str] = []
-    model: str = "llama-3.3-70b-versatile"
+    model: str = "llama-3.1-8b-instant"
 
 class IndexRequest(BaseModel):
     files: dict
@@ -78,13 +78,13 @@ class PatchRequest(BaseModel):
     open_filename: str = ""
     open_file_content: str = ""
     all_files: Dict[str, str] = {}   # { filename: content } for all open files
-    model: str = "llama-3.3-70b-versatile"
+    model: str = "llama-3.1-8b-instant"
 
 class OracleRequest(BaseModel):
     message: str
     file_content: str = ""
     filename: str = ""
-    model: str = "llama-3.3-70b-versatile"
+    model: str = "llama-3.1-8b-instant"
     history: Optional[List[HistoryMessage]] = []
     use_rag: bool = True
     use_web_search: bool = False
@@ -94,7 +94,7 @@ class CortexPlanRequest(BaseModel):
     file_content: str = ""
     filename: str = ""
     available_files: List[str] = []
-    model: str = "llama-3.3-70b-versatile"
+    model: str = "llama-3.1-8b-instant"
 
 class CortexExecuteRequest(BaseModel):
     goal: str
@@ -104,7 +104,7 @@ class CortexExecuteRequest(BaseModel):
     file_content: str = ""
     filename: str = ""
     all_files: Dict[str, str] = {}
-    model: str = "llama-3.3-70b-versatile"
+    model: str = "llama-3.1-8b-instant"
 
 
 # ─── /chat ────────────────────────────────────────────────────────────────────
