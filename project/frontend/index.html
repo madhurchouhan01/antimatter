@@ -6557,6 +6557,8 @@
               });
             }
           }
+        }); // <-- Close the keydown event listener here!
+
         // ── Expose onclick-called functions to global scope ──────────
         // (All defined inside require() callback — must be on window to be
         //  reachable from inline HTML onclick="..." attributes)
@@ -6589,7 +6591,7 @@
 
         // Open terminal on startup
         toggleTerminal();
-        });
+        // });
       </script>
 
 
