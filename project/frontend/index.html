@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -864,6 +864,14 @@
 
     .context-bar.visible {
       display: flex;
+    }
+
+    .resizer {
+      width: 4px;
+      cursor: col-resize;
+      background: transparent;
+      transition: background 0.2s ease;
+      z-index: 10;
     }
 
     .resizer:hover {
@@ -3220,11 +3228,13 @@
       </div>
     </div>
     <div class="topbar-actions">
-      <button class="btn smart-fix" id="forge-btn" onclick="openSmartFix()">⚡ FORGE</button>
+      <button class="btn" onclick="toggleSidebar()" title="Toggle Sidebar (Ctrl+B)">🗂️ Files</button>
+      <button class="btn smart-fix" id="forge-btn" onclick="openSmartFix()" title="Open Smart Fix (Ctrl+I)">⚡ FORGE</button>
       <button class="btn" id="index-btn" onclick="indexProject()">⬡ Index project</button>
       <button class="btn" onclick="clearChat()">↺ Clear chat</button>
-      <button class="btn success" id="run-btn" onclick="runCode()" style="display:none">▶ Run</button>
-      <button onclick="toggleTerminal()" title="Toggle Terminal">⌨ Terminal</button>
+      <button class="btn success" id="run-btn" onclick="runCode()" style="display:none" title="Run Code (Ctrl+Enter)">▶ Run</button>
+      <button class="btn" onclick="toggleTerminal()" title="Toggle Terminal (Ctrl+J)">⌨ Terminal</button>
+      <button class="btn" onclick="toggleAIPanel()" title="Toggle AI Panel (Ctrl+L)">🤖 AI</button>
     </div>
   </div>
 
@@ -3254,7 +3264,7 @@
 
       <div class="sidebar-bottom">
         <button class="btn" style="width:100%;justify-content:center;"
-          onclick="document.getElementById('file-upload').click()">+ Open file</button>
+          onclick="document.getElementById('file-upload').click()" title="Open File (Ctrl+O)">+ Open file</button>
       </div>
     </div>
     <div class="resizer" id="sidebar-resizer"></div>
@@ -3426,9 +3436,9 @@
             <span class="ws-pill"></span>
             Web search
           </label>
-          <div class="cmd-chip" onclick="oracleQuickCmd('/scan')">/scan</div>
+          <!-- <div class="cmd-chip" onclick="oracleQuickCmd('/scan')">/scan</div>
           <div class="cmd-chip" onclick="oracleQuickCmd('/complexity')">/complexity</div>
-          <div class="cmd-chip" onclick="oracleQuickCmd('/deps')">/deps</div>
+          <div class="cmd-chip" onclick="oracleQuickCmd('/deps')">/deps</div> -->
         </div>
         <!-- Messages -->
         <div class="messages" id="oracle-messages">
@@ -6555,6 +6565,33 @@
                 document.body.appendChild(btn);
                 setTimeout(() => btn.remove(), 2000);
               });
+            }
+          }
+          if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+            e.preventDefault();
+            toggleSidebar();
+          }
+          if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'j') {
+            e.preventDefault();
+            toggleTerminal();
+          }
+          if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'l') {
+            e.preventDefault();
+            toggleAIPanel();
+          }
+          if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'i') {
+            e.preventDefault();
+            openSmartFix();
+          }
+          if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'o') {
+            e.preventDefault();
+            document.getElementById('file-upload').click();
+          }
+          if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+            const runBtn = document.getElementById('run-btn');
+            if (runBtn && runBtn.style.display !== 'none') {
+              e.preventDefault();
+              runCode();
             }
           }
         }); // <-- Close the keydown event listener here!
