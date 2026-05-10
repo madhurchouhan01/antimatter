@@ -51,6 +51,15 @@ class FSDeleteRequest(BaseModel):
     session_id: str
     path: str
 
+class FSMkdirRequest(BaseModel):
+    session_id: str
+    path: str
+
+class FSRenameRequest(BaseModel):
+    session_id: str
+    old_path: str
+    new_path: str
+
 class HistoryMessage(BaseModel):
     role: str
     content: str
@@ -668,6 +677,55 @@ async def fs_write(req: FSWriteRequest):
     tar_buffer.seek(0)
     container.put_archive("/home/sandboxuser/workspace", tar_buffer)
     return {"status": "ok"}
+
+
+@app.post("/fs/mkdir")
+async def fs_mkdir(req: FSMkdirRequest):
+    """Create a directory in the sandbox container."""
+    container = active_containers.get(req.session_id)
+    if not container:
+        return {"error": "session not found"}
+    # Use exec_run to mkdir -p
+    result = container.exec_run(
+        ["mkdir", "-p", req.path],
+        user="sandboxuser",
+        workdir="/home/sandboxuser/workspace"
+    )
+    if result.exit_code != 0:
+        return {"error": result.output.decode("utf-8", errors="replace")}
+    return {"status": "ok", "path": req.path}
+
+
+@app.post("/fs/rename")
+async def fs_rename(req: FSRenameRequest):
+    """Rename or move a file/folder in the sandbox container."""
+    container = active_containers.get(req.session_id)
+    if not container:
+        return {"error": "session not found"}
+    result = container.exec_run(
+        ["mv", req.old_path, req.new_path],
+        user="sandboxuser",
+        workdir="/home/sandboxuser/workspace"
+    )
+    if result.exit_code != 0:
+        return {"error": result.output.decode("utf-8", errors="replace")}
+    return {"status": "ok", "old_path": req.old_path, "new_path": req.new_path}
+
+
+@app.delete("/fs/delete")
+async def fs_delete(req: FSDeleteRequest):
+    """Delete a file or folder in the sandbox container."""
+    container = active_containers.get(req.session_id)
+    if not container:
+        return {"error": "session not found"}
+    result = container.exec_run(
+        ["rm", "-rf", req.path],
+        user="sandboxuser",
+        workdir="/home/sandboxuser/workspace"
+    )
+    if result.exit_code != 0:
+        return {"error": result.output.decode("utf-8", errors="replace")}
+    return {"status": "ok", "path": req.path}
 
 
 @app.get("/fs/watch")

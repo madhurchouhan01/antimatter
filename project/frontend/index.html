@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -186,6 +186,11 @@
       display: flex;
       flex-direction: column;
       flex-shrink: 0;
+      transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      overflow: hidden;
+    }
+    .sidebar.collapsed {
+      border-right: none;
     }
 
     .sidebar-header {
@@ -210,6 +215,8 @@
       cursor: pointer;
       transition: all 0.2s;
     }
+
+    .upload-zone.hidden { display: none; }
 
     .upload-zone:hover {
       border-color: var(--accent);
@@ -254,6 +261,40 @@
       border-left: 2px solid transparent;
     }
 
+    .context-menu {
+      position: fixed;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 4px 0;
+      z-index: 9999;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+      font-size: 11px;
+      font-family: var(--font-ui);
+      color: var(--text);
+    }
+    .context-menu-item {
+      padding: 6px 16px;
+      cursor: pointer;
+    }
+    .context-menu-item:hover {
+      background: var(--accent);
+      color: #fff;
+    }
+    .file-tree-summary::-webkit-details-marker {
+      display: none;
+    }
+    .file-tree-summary::marker {
+      display: none;
+    }
+    .tree-caret {
+      font-size: 8px;
+      transition: transform 0.15s;
+    }
+    details[open] > .file-tree-summary .tree-caret {
+      transform: rotate(90deg);
+    }
+
     .file-item:hover {
       background: var(--bg3);
       color: var(--text);
@@ -283,17 +324,30 @@
       position: relative;
     }
 
-    .editor-tabs {
-      height: 36px;
+    .editor-tabs-container {
+      display: flex;
       background: var(--bg2);
       border-bottom: 1px solid var(--border);
+      position: relative;
+    }
+
+    .editor-tabs {
+      height: 36px;
       display: flex;
       align-items: flex-end;
       padding: 0 12px;
       gap: 2px;
+      flex: 1;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    
+    .editor-tabs::-webkit-scrollbar {
+      display: none;
     }
 
     .tab {
+      flex-shrink: 0;
       font-family: var(--font-mono);
       font-size: 11px;
       padding: 6px 14px;
@@ -356,6 +410,11 @@
       display: flex;
       flex-direction: column;
       flex-shrink: 0;
+      transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      overflow: hidden;
+    }
+    .ai-panel.collapsed {
+      border-left: none;
     }
 
     .ai-header {
@@ -650,6 +709,7 @@
       color: var(--text);
       padding: 12px;
       font: inherit;
+      font-size: 13px;
     }
 
     #chat-input {
@@ -738,6 +798,55 @@
       font-size: 12px;
       color: var(--text3);
       line-height: 1.5;
+    }
+
+    .editor-empty-state {
+      position: absolute;
+      inset: 0;
+      bottom: 24px; /* leave footer visible */
+      top: 36px; /* leave tabs bar visible */
+      background: var(--bg);
+      z-index: 50;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    .clone-modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .clone-modal {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      width: 400px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.8);
+    }
+    .clone-modal input {
+      width: 100%;
+      background: var(--bg3);
+      border: 1px solid var(--border2);
+      border-radius: 6px;
+      padding: 10px;
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 12px;
+    }
+    .clone-modal input:focus {
+      outline: none;
+      border-color: var(--accent);
     }
 
     /* CONTEXT INDICATOR */
@@ -849,12 +958,12 @@
       color: var(--green);
     }
 
-    .forge-diff-bar-exit {
+    .forge-accept-file-btn {
       margin-left: auto;
       font-size: 10px;
       font-family: var(--font-mono);
-      color: var(--text3);
-      border: 1px solid var(--border);
+      color: var(--green);
+      border: 1px solid var(--green);
       background: transparent;
       padding: 2px 8px;
       border-radius: 4px;
@@ -863,9 +972,57 @@
       transition: all 0.15s;
     }
 
-    .forge-diff-bar-exit:hover {
+    .forge-accept-file-btn:hover {
+      background: rgba(52, 211, 153, 0.1);
+    }
+
+    .forge-discard-file-btn {
+      font-size: 10px;
+      font-family: var(--font-mono);
       color: var(--red);
-      border-color: var(--red);
+      border: 1px solid var(--red);
+      background: transparent;
+      padding: 2px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.15s;
+    }
+
+    .forge-discard-file-btn:hover {
+      background: rgba(248, 113, 113, 0.1);
+    }
+
+    .forge-global-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+    }
+    .forge-global-actions button {
+      flex: 1;
+      padding: 6px;
+      border-radius: 4px;
+      font-family: var(--font-ui);
+      font-size: 11px;
+      cursor: pointer;
+      background: transparent;
+      transition: all 0.15s;
+    }
+    .forge-global-actions button:first-child {
+      color: var(--green);
+      border: 1px solid var(--green);
+    }
+    .forge-global-actions button:first-child:hover {
+      background: rgba(52, 211, 153, 0.1);
+    }
+    .forge-global-actions button:last-child {
+      color: var(--red);
+      border: 1px solid var(--red);
+    }
+    .forge-global-actions button:last-child:hover {
+      background: rgba(248, 113, 113, 0.1);
     }
 
     /* ── Monaco inline decorations ───────────────────────────────── */
@@ -2516,6 +2673,53 @@
       background: rgba(251, 191, 36, 0.1);
       color: var(--amber);
     }
+    
+    .tabs-dropdown-btn {
+      background: none;
+      border: none;
+      color: var(--text3);
+      cursor: pointer;
+      padding: 0 12px;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      transition: color 0.15s;
+    }
+    .tabs-dropdown-btn:hover {
+      color: var(--text);
+    }
+    .tabs-dropdown-menu {
+      position: absolute;
+      top: 36px;
+      right: 0;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+      z-index: 1000;
+      display: none;
+      flex-direction: column;
+      max-height: 400px;
+      overflow-y: auto;
+      min-width: 150px;
+    }
+    .tabs-dropdown-item {
+      padding: 8px 16px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text2);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .tabs-dropdown-item:hover {
+      background: var(--bg3);
+      color: var(--text);
+    }
+    .tabs-dropdown-item.active {
+      color: var(--accent);
+    }
 
     .patch-close {
       width: 28px;
@@ -2960,6 +3164,9 @@
     .patch-loading-step .step-icon {
       font-size: 12px;
     }
+    #terminal-resize-handle { height: 4px; cursor: ns-resize; background: var(--border2); margin-top: -2px; }
+    #terminal-panel.fullscreen { position: fixed !important; inset: 0 !important; 
+      height: 100vh !important; left: 0 !important; right: 0 !important; z-index: 9000 !important; }
   </style>
 </head>
 
@@ -2984,6 +3191,18 @@
           <div class="diff-pane-header new">+ AI suggestion</div>
           <div class="diff-code new" id="diff-new"></div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="clone-modal-overlay" class="clone-modal-overlay" style="display:none;">
+    <div class="clone-modal">
+      <div style="font-size:14px;font-weight:600;">Clone Repository</div>
+      <input type="text" id="clone-url" placeholder="https://github.com/user/repo.git" />
+      <input type="text" id="clone-branch" placeholder="Branch (optional)" />
+      <div style="display:flex;gap:10px;justify-content:flex-end;">
+        <button class="btn" onclick="closeCloneModal()">Cancel</button>
+        <button class="btn primary" onclick="submitCloneModal()">Clone</button>
       </div>
     </div>
   </div>
@@ -3013,9 +3232,10 @@
   <div class="main">
 
     <!-- SIDEBAR -->
-    <div class="sidebar">
+    <div class="sidebar" id="sidebar">
       <div class="sidebar-header">
         <span>Explorer</span>
+        <button id="sidebar-collapse-btn" onclick="toggleSidebar()" style="margin-left:auto; background:none; border:none; color:var(--text3); cursor:pointer; font-size:16px;">‹</button>
       </div>
 
       <label class="upload-zone">
@@ -3025,10 +3245,8 @@
         <p>Drop files or <span>browse</span><br>to open in editor</p>
       </label>
 
-      <!-- Scrollable wrapper for both file lists -->
+      <!-- Scrollable wrapper for file tree -->
       <div style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; min-height: 0;">
-        <!-- Uploaded files -->
-        <div class="file-list" id="file-list" style="flex: none; overflow: visible; padding-bottom: 0;"></div>
 
         <!-- Sandbox / Docker file tree — lives OUTSIDE file-list so renderFileList() can't nuke it -->
         <div id="docker-file-tree" style="flex: none; padding-bottom: 8px;"></div>
@@ -3039,20 +3257,37 @@
           onclick="document.getElementById('file-upload').click()">+ Open file</button>
       </div>
     </div>
+    <div class="resizer" id="sidebar-resizer"></div>
 
     <!-- EDITOR PANE -->
     <div class="editor-pane">
-      <div class="editor-tabs" id="editor-tabs">
-        <div style="font-size:11px;color:var(--text3);padding:0 4px;align-self:center;font-family:var(--font-mono)"
-          id="editor-tabs-empty">no file open</div>
+      <div class="editor-tabs-container" style="display: flex; overflow: hidden; position: relative;">
+        <div class="editor-tabs" id="editor-tabs" style="display: flex; overflow-x: auto; flex: 1; scrollbar-width: none;">
+          <div style="font-size:11px;color:var(--text3);padding:0 4px;align-self:center;font-family:var(--font-mono)"
+            id="editor-tabs-empty">no file open</div>
+        </div>
+        <button class="tabs-dropdown-btn" id="tabs-dropdown-btn" onclick="toggleTabsDropdown(event)">⋮</button>
+        <div id="tabs-dropdown-menu" class="tabs-dropdown-menu"></div>
       </div>
       <!-- FORGE inline diff bar (shown during active FORGE session) -->
       <div class="forge-diff-bar" id="forge-diff-bar">
         <span class="forge-diff-bar-label">⚡ Forge</span>
         <!-- tabs injected by JS -->
-        <button class="forge-diff-bar-exit" onclick="clearForgeSession()">Discard all ×</button>
+        <button class="forge-accept-file-btn" onclick="acceptActiveFile()">✓ Accept File</button>
+        <button class="forge-discard-file-btn" onclick="discardActiveFile()">✕ Discard File</button>
       </div>
       <div id="monaco-container"></div>
+      
+      <!-- EMPTY STATE OVERLAY -->
+      <div id="editor-empty-state" class="editor-empty-state">
+        <div class="empty-icon" style="opacity:1;color:var(--accent);font-size:48px;">⚛</div>
+        <div class="empty-title" style="font-size:24px;color:var(--text);font-weight:600;">AntiMatter</div>
+        <div style="display:flex;gap:12px;margin-top:20px;">
+          <button class="btn primary" onclick="document.getElementById('file-upload').click()">📂 Open File</button>
+          <button class="btn" onclick="openCloneModal()">⎇ Clone Repository</button>
+        </div>
+      </div>
+
       <div class="editor-footer">
         <span class="status" id="editor-status">Ready</span>
         <span id="cursor-pos">Ln 1, Col 1</span>
@@ -3070,6 +3305,7 @@
           ⚛ ANTIMATTER
           <span class="ai-badge">Groq</span>
         </div>
+        <button id="ai-collapse-btn" onclick="toggleAIPanel()" style="background:none; border:none; color:var(--text3); cursor:pointer; font-size:16px;">›</button>
       </div>
       <!-- Add after your main editor/AI panel split -->
       <div id="terminal-panel" style="
@@ -3078,12 +3314,17 @@
       border-top: 2px solid #2a2a2a;
       display: none; flex-direction: column; z-index: 500;
     ">
+        <div id="terminal-resize-handle"></div>
         <div style="display:flex; align-items:center; padding: 6px 12px;
                   background:#141414; border-bottom:1px solid #2a2a2a;">
           <span style="color:#888; font-size:12px; font-family:'JetBrains Mono'">
             TERMINAL
           </span>
-          <button onclick="clearTerminal()" style="margin-left:auto; background:none; border:none; 
+          <button onclick="toggleTerminalFullscreen()" style="margin-left:auto; background:none; border:none; 
+                color:#555; cursor:pointer; font-size:14px; margin-right:8px;" title="Fullscreen">
+            ⛶
+          </button>
+          <button onclick="clearTerminal()" style="background:none; border:none; 
                 color:#555; cursor:pointer; font-size:11px;">
             clear
           </button>
@@ -3139,6 +3380,10 @@
         <!-- Phase 2: File chips (shown when patches arrive) -->
         <div class="forge-file-list" id="forge-panel-files" style="display:none">
           <!-- file chips injected by JS -->
+          <div class="forge-global-actions">
+            <button onclick="acceptAllForgeFiles()">✓ Accept All Files</button>
+            <button onclick="clearForgeSession()">✕ Discard All Files</button>
+          </div>
         </div>
 
         <!-- Summary card (shown after all resolved) -->
@@ -3218,12 +3463,6 @@
             <option value="mixtral-8x7b-32768">mixtral-8x7b</option>
           </select>
         </div>
-        <!-- Goal input -->
-        <div class="cortex-goal-wrap">
-          <textarea class="cortex-goal-input" id="cortex-goal"
-            placeholder="High-level goal... e.g. 'Refactor the entire auth system to use JWT tokens'"></textarea>
-          <button class="cortex-plan-btn" id="cortex-plan-btn" onclick="runCortexPlan()">🧠 Generate Plan</button>
-        </div>
         <!-- Scrollable body: overview + step list -->
         <div class="cortex-body" id="cortex-body">
           <div class="empty-state" id="cortex-empty">
@@ -3241,6 +3480,12 @@
             <div class="cortex-progress-fill" id="cortex-progress-fill" style="width:0%"></div>
           </div>
           <div class="cortex-progress-text" id="cortex-progress-text">Initializing...</div>
+        </div>
+        <!-- Goal input -->
+        <div class="cortex-goal-wrap">
+          <textarea class="cortex-goal-input" id="cortex-goal"
+            placeholder="High-level goal... e.g. 'Refactor the entire auth system to use JWT tokens'"></textarea>
+          <button class="cortex-plan-btn" id="cortex-plan-btn" onclick="runCortexPlan()">🧠 Generate Plan</button>
         </div>
       </div>
 
@@ -3386,6 +3631,9 @@
 
           // Handle resize
           window.addEventListener('resize', () => editor.layout());
+          
+          initTerminalResize();
+          initSidebarResize();
         });
 
         // ─── FILE HANDLING ────────────────────────────────────
@@ -3395,7 +3643,6 @@
             const reader = new FileReader();
             reader.onload = async e => {
               files[file.name] = e.target.result;
-              renderFileList();
               if (!activeFile) openFile(file.name);
               if (typeof dockerSessionId !== 'undefined' && dockerSessionId) {
                 await saveToDocker(file.name, e.target.result);
@@ -3405,20 +3652,14 @@
             reader.readAsText(file);
           });
         }
-
-        function renderFileList() {
-          const list = document.getElementById('file-list');
-          list.innerHTML = '';
-          Object.keys(files).forEach(name => {
-            const item = document.createElement('div');
-            item.className = 'file-item' + (name === activeFile ? ' active' : '');
-            item.innerHTML = `<span class="file-icon">${getFileIcon(name)}</span>${name.split('/').pop()}`;
-            item.onclick = () => openFile(name);
-            list.appendChild(item);
-          });
-          // Always re-render docker tree from cache — it's a sibling div, not inside file-list,
-          // but the active highlight needs refreshing after the uploaded-files section updates.
-          renderDockerFileTree(lastDockerEntries);
+        
+        function updateUploadZoneVisibility() {
+          const zone = document.querySelector('.upload-zone');
+          if (lastDockerEntries && lastDockerEntries.length > 0) {
+            zone.classList.add('hidden');
+          } else {
+            zone.classList.remove('hidden');
+          }
         }
 
         let openTabs = [];
@@ -3448,28 +3689,85 @@
           _renderEditorTabs();
 
           // Update context bar
-          const contextBar = document.getElementById('context-bar');
-          if (contextBar) {
-            contextBar.className = 'context-bar visible';
-            const contentStr = fileModels[name].getValue();
-            document.getElementById('context-text').textContent = `Context: ${name} (${contentStr.split('\n').length} lines)`;
-          }
+          // const contextBar = document.getElementById('context-bar');
+          // if (contextBar) {
+          //   contextBar.className = 'context-bar visible';
+          //   const contentStr = fileModels[name].getValue();
+          //   document.getElementById('context-text').textContent = `Context: ${name} (${contentStr.split('\n').length} lines)`;
+          // }
 
-          renderFileList();
+          refreshDockerFileTree();
         }
 
         function _renderEditorTabs() {
           const tabs = document.getElementById('editor-tabs');
+          const emptyState = document.getElementById('editor-empty-state');
+          const monacoContainer = document.getElementById('monaco-container');
+          
           if (openTabs.length === 0) {
-            tabs.innerHTML = `<div style="font-size:11px;color:var(--text3);padding:0 4px;align-self:center;font-family:var(--font-mono)">no file open</div>`;
+            tabs.innerHTML = `<div style="font-size:11px;color:var(--text3);padding:0 4px;align-self:center;font-family:var(--font-mono)" id="editor-tabs-empty">no file open</div>`;
+            if (emptyState) emptyState.style.display = 'flex';
+            if (monacoContainer) monacoContainer.style.display = 'none';
             return;
           }
+          
+          if (emptyState) emptyState.style.display = 'none';
+          if (monacoContainer) monacoContainer.style.display = 'block';
+          
           tabs.innerHTML = openTabs.map(name => `
       <div class="tab ${name === activeFile ? 'active' : ''}" onclick="openFile('${CSS.escape(name)}')">
         <span>${getFileIcon(name)}</span>${name.split('/').pop().split('\\').pop()}
         <span class="close" onclick="closeTab('${CSS.escape(name)}', event)">✕</span>
       </div>
     `).join('');
+        }
+        
+        function toggleTabsDropdown(event) {
+          event.stopPropagation();
+          const menu = document.getElementById('tabs-dropdown-menu');
+          if (menu.style.display === 'flex') {
+            menu.style.display = 'none';
+          } else {
+            if (openTabs.length === 0) return;
+            menu.innerHTML = openTabs.map(name => `
+              <div class="tabs-dropdown-item ${name === activeFile ? 'active' : ''}" onclick="openFile('${CSS.escape(name)}'); document.getElementById('tabs-dropdown-menu').style.display='none';">
+                <span>${getFileIcon(name)}</span>${name.split('/').pop().split('\\').pop()}
+              </div>
+            `).join('');
+            menu.style.display = 'flex';
+          }
+        }
+        
+        document.addEventListener('click', () => {
+          const menu = document.getElementById('tabs-dropdown-menu');
+          if (menu) menu.style.display = 'none';
+        });
+
+        function openCloneModal() {
+          document.getElementById('clone-modal-overlay').style.display = 'flex';
+        }
+        
+        function closeCloneModal() {
+          document.getElementById('clone-modal-overlay').style.display = 'none';
+        }
+        
+        function submitCloneModal() {
+          const url = document.getElementById('clone-url').value.trim();
+          const branch = document.getElementById('clone-branch').value.trim();
+          if (!url) return;
+          closeCloneModal();
+          cloneRepository(url, branch);
+        }
+        
+        function cloneRepository(url, branch) {
+          if (!terminalOpen) toggleTerminal();
+          let cmd = `git clone "${url}"`;
+          if (branch) cmd += ` -b "${branch}"`;
+          setTimeout(() => {
+             if (typeof termSocket !== 'undefined' && termSocket && termSocket.readyState === WebSocket.OPEN) {
+               termSocket.send(JSON.stringify({ type: 'input', data: cmd + '\n' }));
+             }
+          }, 500);
         }
 
         function closeTab(name, event) {
@@ -3493,7 +3791,7 @@
           } else {
             _renderEditorTabs();
           }
-          renderFileList();
+          refreshDockerFileTree();
         }
 
         // Legacy closeFile removed file from workspace, let's keep it for the trash can icon in sidebar
@@ -3522,17 +3820,31 @@
 
         // ─── CHAT ─────────────────────────────────────────────
         function quickCmd(cmd) {
-          const input = document.getElementById('chat-input');
           const cmds = {
             '/explain': 'Explain what this code does in detail.',
             '/refactor': 'Refactor this code to be cleaner and more efficient.',
-            '/tests': 'Write unit tests for this code.',
             '/fix': 'Find and fix any bugs or issues in this code.',
-            '/docs': 'Add docstrings and comments to this code.',
+            '/tests': 'Write unit tests for this code.',
+            '/docs': 'Add docstrings and comments to this code.'
           };
-          input.value = cmds[cmd] || cmd + ' ';
-          input.focus();
-          autoResize(input);
+
+          const text = cmds[cmd] || cmd + ' ';
+          let input;
+
+          // Route to the correct input based on current mode
+          if (currentMode === 'forge') {
+            input = document.getElementById('forge-inline-input');
+          } else if (currentMode === 'cortex') {
+            input = document.getElementById('cortex-goal');
+          } else {
+            input = document.getElementById('oracle-input');
+          }
+
+          if (input) {
+            input.value = text;
+            input.focus();
+            autoResize(input);
+          }
         }
 
         function handleKey(e) {
@@ -3566,7 +3878,7 @@
           });
           // Hide shared quick-cmds in ORACLE (it has its own toolbar)
           const sharedCmds = document.getElementById('shared-quick-cmds');
-          if (sharedCmds) sharedCmds.style.display = mode === 'oracle' ? 'none' : 'flex';
+          if (sharedCmds) sharedCmds.style.display = 'flex';
         }
 
 
@@ -3875,20 +4187,20 @@
           autoResize(input);
         }
 
-        function quickCmd(cmd) {
-          // Shared quick commands — route to FORGE's context bar for now
-          const cmds = {
-            '/explain': 'Explain what this code does in detail.',
-            '/refactor': 'Refactor this code to be cleaner and more efficient.',
-            '/fix': 'Find and fix any bugs or issues in this code.',
-          };
-          // If oracle panel is active, route there
-          const input = document.getElementById('oracle-input');
-          if (currentMode === 'oracle' && input) {
-            input.value = cmds[cmd] || cmd + ' ';
-            input.focus(); autoResize(input);
-          }
-        }
+        // function quickCmd(cmd) {
+        //   // Shared quick commands — route to FORGE's context bar for now
+        //   const cmds = {
+        //     '/explain': 'Explain what this code does in detail.',
+        //     '/refactor': 'Refactor this code to be cleaner and more efficient.',
+        //     '/fix': 'Find and fix any bugs or issues in this code.',
+        //   };
+        //   // If oracle panel is active, route there
+        //   const input = document.getElementById('oracle-input');
+        //   if (currentMode === 'oracle' && input) {
+        //     input.value = cmds[cmd] || cmd + ' ';
+        //     input.focus(); autoResize(input);
+        //   }
+        // }
 
         async function sendOracleMessage() {
           if (oracleStreaming) return;
@@ -4164,13 +4476,25 @@
           cortexPlan = null;
         }
 
+        function detectRunCommand(filename) {
+          if (!filename) return '';
+          const ext = filename.split('.').pop();
+          if (ext === 'py') return `python ${filename}`;
+          if (ext === 'js') return `node ${filename}`;
+          if (ext === 'sh') return `bash ${filename}`;
+          if (ext === 'ts') return `npx ts-node ${filename}`;
+          return `cat ${filename}`;
+        }
+
         function runCode() {
-          // Run via FORGE: open the smart fix overlay with a run prompt
-          setMode('forge');
-          openSmartFix();
+          if (!activeFile) return;
+          const cmd = detectRunCommand(activeFile);
+          if (!terminalOpen) toggleTerminal();
           setTimeout(() => {
-            document.getElementById('smart-fix-input').value = 'Run this code and show the output in the sandbox.';
-          }, 60);
+             if (typeof termSocket !== 'undefined' && termSocket && termSocket.readyState === WebSocket.OPEN) {
+               termSocket.send(JSON.stringify({ type: 'input', data: cmd + '\n' }));
+             }
+          }, 500);
         }
 
         // \u2500\u2500 INLINE FORGE JS \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
@@ -4598,6 +4922,55 @@
           fObj.widgets = fObj.patches.map(() => null);
         }
 
+        // ── Accept / Reject Actions ──────────────────────────────────
+        function acceptActiveFile() {
+          if (!forgeSession || !forgeSession.activeFile) return;
+          const fname = forgeSession.activeFile;
+          const fObj = forgeSession.files[fname];
+          if (!fObj) return;
+          fObj.patches.forEach((p, idx) => {
+            if (fObj.patchStates[idx] === 'pending') {
+              acceptChange(CSS.escape(fname), fname, idx);
+            }
+          });
+          _forgeAdvanceToNextFile();
+        }
+
+        function discardActiveFile() {
+          if (!forgeSession || !forgeSession.activeFile) return;
+          const fname = forgeSession.activeFile;
+          const fObj = forgeSession.files[fname];
+          if (!fObj) return;
+          fObj.patches.forEach((p, idx) => {
+            if (fObj.patchStates[idx] === 'pending') {
+              rejectChange(CSS.escape(fname), fname, idx);
+            }
+          });
+          _forgeAdvanceToNextFile();
+        }
+
+        function acceptAllForgeFiles() {
+          if (!forgeSession) return;
+          Object.keys(forgeSession.files).forEach(fname => {
+            const fObj = forgeSession.files[fname];
+            fObj.patches.forEach((p, idx) => {
+              if (fObj.patchStates[idx] === 'pending') {
+                acceptChange(CSS.escape(fname), fname, idx);
+              }
+            });
+          });
+        }
+        
+        function _forgeAdvanceToNextFile() {
+          if (!forgeSession) return;
+          const remainingFiles = Object.keys(forgeSession.files).filter(f => 
+            forgeSession.files[f].patchStates.includes('pending')
+          );
+          if (remainingFiles.length > 0) {
+            switchForgeFile(remainingFiles[0]);
+          }
+        }
+
         // ── Accept / Reject individual changes ───────────────────────
         function acceptChange(escapedFname, fname, idx) {
           if (!forgeSession) return;
@@ -4680,6 +5053,10 @@
         // ── Summary ────────────────────────────────────────────────
         function showForgeSummary() {
           if (!forgeSession) return;
+          
+          const session = forgeSession;
+          forgeSession = null;
+          _forgeUnlock();
 
           // Hide diff bar
           document.getElementById('forge-diff-bar').classList.remove('visible');
@@ -4688,14 +5065,14 @@
           if (editor) editor.updateOptions({ readOnly: false });
           if (activeFile && files[activeFile]) {
             // If active file was in the session, its model is already up-to-date
-            const fObj = forgeSession.files[activeFile];
+            const fObj = session.files[activeFile];
             if (fObj?.monacoModel) editor.setModel(fObj.monacoModel);
           }
 
           // Count stats
           let accepted = 0, rejected = 0;
           const fileStats = {};
-          Object.entries(forgeSession.files).forEach(([fname, fObj]) => {
+          Object.entries(session.files).forEach(([fname, fObj]) => {
             const a = fObj.patchStates.filter(s => s === 'accepted').length;
             const r = fObj.patchStates.filter(s => s === 'rejected').length;
             accepted += a; rejected += r;
@@ -4716,20 +5093,16 @@
           <span>+${a} line${a !== 1 ? 's' : ''}</span>
         </div>`).join('')}
       <div style="font-size:10px;color:var(--text3);margin-top:6px;font-family:var(--font-mono)">
-        Task: &ldquo;${escapeHtml(forgeSession.goal.slice(0, 80))}${forgeSession.goal.length > 80 ? '\u2026' : ''}&rdquo;
+        Task: &ldquo;${escapeHtml(session.goal.slice(0, 80))}${session.goal.length > 80 ? '\u2026' : ''}&rdquo;
       </div>
     </div>
     <button class="forge-summary-new-btn" onclick="clearForgeSession()">+ New task</button>
   `;
 
           // Save models back to files[] 
-          Object.entries(forgeSession.files).forEach(([fname, fObj]) => {
+          Object.entries(session.files).forEach(([fname, fObj]) => {
             if (fObj.monacoModel) files[fname] = fObj.monacoModel.getValue();
           });
-
-          // Dispose the session (but keep summary visible)
-          forgeSession = null;
-          _forgeUnlock();
         }
 
         // ── Discard / Clear ──────────────────────────────────────────
@@ -4986,12 +5359,13 @@
 
           fillEl.style.width = '100%';
           textEl.textContent = '✓ Plan complete';
-          execBtn.textContent = '✓ Done';
+          execBtn.classList.remove('visible');
           execBtn.disabled = false;
+          execBtn.textContent = '▶ Execute Plan';
           cortexRunning = false;
         }
 
-        // ─── RESIZER ──────────────────────────────────────────
+        // ─── AI PANEL RESIZER ─────────────────────────────────────────
         const resizer = document.getElementById('resizer');
         const aiPanel = document.getElementById('ai-panel');
         let isResizing = false;
@@ -5006,18 +5380,166 @@
           if (!isResizing) return;
           const container = document.querySelector('.main');
           const rect = container.getBoundingClientRect();
-          const newWidth = rect.right - e.clientX;
-          if (newWidth > 260 && newWidth < 600) {
-            aiPanel.style.width = newWidth + 'px';
-            if (editor) editor.layout();
+          let newWidth = rect.right - e.clientX;
+          if (newWidth < 50) newWidth = 0; // snap collapse
+          if (newWidth > 800) newWidth = 800;
+          
+          aiPanel.style.width = newWidth + 'px';
+          lastAIPanelWidth = newWidth > 0 ? newWidth : 360;
+          
+          if (newWidth === 0) {
+             aiPanel.classList.add('collapsed');
+          } else {
+             aiPanel.classList.remove('collapsed');
           }
+          updateTerminalRightOffset(newWidth);
+          if (editor) editor.layout();
         });
 
         document.addEventListener('mouseup', () => {
-          isResizing = false;
-          document.body.style.cursor = '';
-          document.body.style.userSelect = '';
+          if (isResizing) {
+            isResizing = false;
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            if (editor) editor.layout();
+          }
         });
+        
+        // ─── SIDEBAR RESIZER ─────────────────────────────────────────
+        let isResizingSidebar = false;
+        let lastSidebarWidth = 220;
+        
+        function initSidebarResize() {
+          const sResizer = document.getElementById('sidebar-resizer');
+          const sidebar = document.getElementById('sidebar');
+          if (!sResizer || !sidebar) return;
+
+          sResizer.addEventListener('mousedown', e => {
+            isResizingSidebar = true;
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+          });
+
+          document.addEventListener('mousemove', e => {
+            if (!isResizingSidebar) return;
+            let newWidth = e.clientX;
+            if (newWidth < 50) newWidth = 0; // snap collapse
+            if (newWidth > 600) newWidth = 600;
+            
+            sidebar.style.width = newWidth + 'px';
+            lastSidebarWidth = newWidth > 0 ? newWidth : 220;
+            
+            if (newWidth === 0) {
+               sidebar.classList.add('collapsed');
+            } else {
+               sidebar.classList.remove('collapsed');
+            }
+            updateTerminalLeftOffset(newWidth);
+            if (editor) editor.layout();
+          });
+
+          document.addEventListener('mouseup', () => {
+            if (isResizingSidebar) {
+              isResizingSidebar = false;
+              document.body.style.cursor = '';
+              document.body.style.userSelect = '';
+              if (editor) editor.layout();
+            }
+          });
+        }
+        
+        // ─── PANEL TOGGLES ───────────────────────────────────────────
+        function toggleSidebar() {
+          const sidebar = document.getElementById('sidebar');
+          if (!sidebar) return;
+          if (sidebar.classList.contains('collapsed')) {
+            sidebar.classList.remove('collapsed');
+            sidebar.style.width = lastSidebarWidth + 'px';
+            updateTerminalLeftOffset(lastSidebarWidth);
+          } else {
+            lastSidebarWidth = sidebar.offsetWidth || 220;
+            sidebar.classList.add('collapsed');
+            sidebar.style.width = '0px';
+            updateTerminalLeftOffset(0);
+          }
+          if (editor) setTimeout(() => editor.layout(), 250);
+        }
+        
+        function updateTerminalLeftOffset(width) {
+          const panel = document.getElementById('terminal-panel');
+          if (panel && !panel.classList.contains('fullscreen')) {
+             panel.style.left = width + 'px';
+          }
+        }
+        
+        let lastAIPanelWidth = 360;
+        function toggleAIPanel() {
+          const panel = document.getElementById('ai-panel');
+          if (!panel) return;
+          if (panel.classList.contains('collapsed')) {
+            panel.classList.remove('collapsed');
+            panel.style.width = lastAIPanelWidth + 'px';
+            updateTerminalRightOffset(lastAIPanelWidth);
+          } else {
+            lastAIPanelWidth = panel.offsetWidth || 360;
+            panel.classList.add('collapsed');
+            panel.style.width = '0px';
+            updateTerminalRightOffset(0);
+          }
+          if (editor) setTimeout(() => editor.layout(), 250);
+        }
+        
+        function updateTerminalRightOffset(width) {
+          const panel = document.getElementById('terminal-panel');
+          if (panel && !panel.classList.contains('fullscreen')) {
+             panel.style.right = width + 'px';
+          }
+        }
+
+        // ─── TERMINAL RESIZER ─────────────────────────────────────
+        let isResizingTerminal = false;
+        let lastTermY = 0;
+        let lastTermHeight = 260;
+
+        function initTerminalResize() {
+          const handle = document.getElementById('terminal-resize-handle');
+          const panel = document.getElementById('terminal-panel');
+          if (!handle || !panel) return;
+
+          handle.addEventListener('mousedown', e => {
+            isResizingTerminal = true;
+            lastTermY = e.clientY;
+            lastTermHeight = panel.offsetHeight;
+            document.body.style.cursor = 'ns-resize';
+            document.body.style.userSelect = 'none';
+          });
+
+          document.addEventListener('mousemove', e => {
+            if (!isResizingTerminal) return;
+            const deltaY = lastTermY - e.clientY;
+            let newHeight = lastTermHeight + deltaY;
+            if (newHeight < 100) newHeight = 100;
+            if (newHeight > window.innerHeight - 50) newHeight = window.innerHeight - 50;
+            panel.style.height = newHeight + 'px';
+            if (fitAddon) fitAddon.fit();
+          });
+
+          document.addEventListener('mouseup', () => {
+            if (isResizingTerminal) {
+              isResizingTerminal = false;
+              document.body.style.cursor = '';
+              document.body.style.userSelect = '';
+              if (fitAddon) fitAddon.fit();
+            }
+          });
+        }
+        
+        function toggleTerminalFullscreen() {
+          const panel = document.getElementById('terminal-panel');
+          if (!panel) return;
+          panel.classList.toggle('fullscreen');
+          if (fitAddon) setTimeout(() => fitAddon.fit(), 50);
+        }
 
         // ADD this function anywhere in the script block
         function extractCode(text) {
@@ -5091,7 +5613,7 @@
             card.id = `cbc-${i}`;
 
             const badgeHtml = `<span class="cbc-badge ${block.type}">${block.type === 'full-file' ? '● full file' :
-                block.type === 'test' ? '◈ tests' : '◎ snippet'
+              block.type === 'test' ? '◈ tests' : '◎ snippet'
               }</span>`;
 
             const previewLines = block.code.split('\n').slice(0, 6).join('\n');
@@ -5802,36 +6324,168 @@
 
         // ── Render file tree into your sidebar ──────────────────────
         function renderDockerFileTree(entries) {
-          // #docker-file-tree is a static div in the HTML — sibling of #file-list, never inside it.
-          // This means renderFileList()'s innerHTML='' can NEVER wipe this section.
           const dockerSection = document.getElementById('docker-file-tree');
           if (!dockerSection) return;
 
+          if (typeof updateUploadZoneVisibility === 'function') updateUploadZoneVisibility();
+
           if (!entries || entries.length === 0) {
             dockerSection.innerHTML = dockerSessionId
-              ? `<div style="color:#555;font-size:11px;padding:8px 12px;">Sandbox empty — clone a repo or create files</div>`
+              ? `<div style="color:#555;font-size:11px;padding:8px 12px;" oncontextmenu="showContextMenu(event, '.', true)">Sandbox empty — clone a repo or right-click to create files</div>`
               : '';
             return;
           }
 
-          // Section header
-          let html = `<div style="color:var(--text3);font-size:10px;padding:6px 14px 4px;letter-spacing:0.1em;font-weight:600;text-transform:uppercase;border-top:1px solid var(--border);margin-top:4px;">Sandbox</div>`;
-
+          // Build tree structure
+          const root = { children: {}, isDir: true, path: '.', name: 'root' };
           for (const entry of entries) {
-            const indent = entry.depth * 10;
-            const icon = entry.type === 'dir' ? '📁' : getFileIcon(entry.name);
-            const isActive = entry.type === 'file' && files[entry.path] !== undefined;
-            const clickHandler = entry.type === 'file'
-              ? `onclick="openDockerFile('${entry.path}')"` : '';
-
-            html += `<div ${clickHandler}
-            class="file-item${isActive ? ' active' : ''}"
-            style="padding-left:${14 + indent}px;color:${entry.type === 'dir' ? 'var(--text3)' : 'var(--text2)'};cursor:${entry.type === 'file' ? 'pointer' : 'default'};">
-            <span class="file-icon">${icon}</span>${entry.name}
-        </div>`;
+            // Some entries might start with "./", remove it if present
+            const cleanPath = entry.path.replace(/^\.\//, '');
+            if (!cleanPath) continue;
+            
+            const parts = cleanPath.split('/');
+            let current = root;
+            for (let i = 0; i < parts.length - 1; i++) {
+              if (!current.children[parts[i]]) {
+                current.children[parts[i]] = { children: {}, isDir: true, path: parts.slice(0, i+1).join('/'), name: parts[i] };
+              }
+              current = current.children[parts[i]];
+            }
+            const name = parts[parts.length - 1];
+            current.children[name] = { 
+              ...entry, 
+              children: entry.type === 'dir' ? {} : null,
+              isDir: entry.type === 'dir',
+              path: cleanPath
+            };
           }
 
+          function renderNode(node, depth) {
+            let html = '';
+            const sortedKeys = Object.keys(node.children).sort((a, b) => {
+              const nodeA = node.children[a];
+              const nodeB = node.children[b];
+              if (nodeA.isDir !== nodeB.isDir) return nodeA.isDir ? -1 : 1;
+              return a.localeCompare(b);
+            });
+
+            for (const key of sortedKeys) {
+              const child = node.children[key];
+              const indent = depth * 10 + 14;
+              const onContext = `oncontextmenu="showContextMenu(event, '${child.path}', ${child.isDir})"`;
+              
+              if (child.isDir) {
+                html += `
+                <details style="color:var(--text3); font-size:11px; cursor:pointer;" open>
+                  <summary class="file-tree-summary" style="padding:4px 0 4px ${indent}px; list-style:none; display:flex; align-items:center; gap:6px;" ${onContext}>
+                    <span class="tree-caret" style="display:inline-block;">▶</span> 📁 ${child.name}
+                  </summary>
+                  ${renderNode(child, depth + 1)}
+                </details>`;
+              } else {
+                const isActive = files[child.path] !== undefined;
+                const clickHandler = `onclick="openDockerFile('${child.path}')"`;
+                const icon = getFileIcon(child.name);
+                html += `
+                <div ${clickHandler} ${onContext}
+                  class="file-item${isActive ? ' active' : ''}"
+                  style="padding:4px 0 4px ${indent + 14}px; color:var(--text2); cursor:pointer;">
+                  <span class="file-icon">${icon}</span>${child.name}
+                </div>`;
+              }
+            }
+            return html;
+          }
+
+          let html = `<div oncontextmenu="showContextMenu(event, '.', true)" style="color:var(--text3);font-size:10px;padding:6px 14px 4px;letter-spacing:0.1em;font-weight:600;text-transform:uppercase;border-top:1px solid var(--border);margin-top:4px;">Sandbox</div>`;
+          html += renderNode(root, 0);
+
           dockerSection.innerHTML = html;
+        }
+
+        // ── FS Context Menu ──────────────────────────────────────────
+        let activeContextPath = '';
+        let activeContextIsDir = false;
+
+        function showContextMenu(e, path, isDir) {
+          e.preventDefault();
+          e.stopPropagation();
+          activeContextPath = path;
+          activeContextIsDir = isDir;
+          
+          let menu = document.getElementById('fs-context-menu');
+          if (!menu) {
+            menu = document.createElement('div');
+            menu.id = 'fs-context-menu';
+            menu.className = 'context-menu';
+            document.body.appendChild(menu);
+          }
+          
+          menu.innerHTML = `
+            <div class="context-menu-item" onclick="createNewFile()">New File</div>
+            <div class="context-menu-item" onclick="createNewFolder()">New Folder</div>
+            <div class="context-menu-item" onclick="renameEntry()">Rename</div>
+            <div class="context-menu-item" onclick="deleteEntry()" style="color:var(--red);">Delete</div>
+          `;
+          
+          menu.style.display = 'block';
+          menu.style.left = e.pageX + 'px';
+          menu.style.top = e.pageY + 'px';
+        }
+
+        document.addEventListener('click', () => {
+          const menu = document.getElementById('fs-context-menu');
+          if (menu) menu.style.display = 'none';
+        });
+
+      async function createNewFile() {
+        const name = prompt('New file name:');
+        if (!name) return;
+
+        const basePath =
+          activeContextPath === '.'
+            ? ''
+            : activeContextIsDir
+              ? activeContextPath + '/'
+              : activeContextPath.replace(/\/[^/]+$/, '') + '/';
+
+        const targetPath = (basePath + name).replace(/^\//, '');
+
+        await saveToDocker(targetPath, '');
+        refreshDockerFileTree();
+      }
+        async function createNewFolder() {
+          const name = prompt('New folder name:');
+          if (!name) return;
+          const basePath = (activeContextPath === '.') ? '' : (activeContextIsDir ? activeContextPath + '/' : activeContextPath.replace(/\/[^/]+$/, '') + '/');
+          const targetPath = (basePath + name).replace(/^\//, '');
+          await fetch(`${BACKEND}/fs/mkdir`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ session_id: dockerSessionId, path: targetPath })
+          });
+          refreshDockerFileTree();
+        }
+
+        async function renameEntry() {
+          const newName = prompt('Enter new path/name:', activeContextPath);
+          if (!newName || newName === activeContextPath) return;
+          await fetch(`${BACKEND}/fs/rename`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ session_id: dockerSessionId, old_path: activeContextPath, new_path: newName })
+          });
+          refreshDockerFileTree();
+        }
+
+        async function deleteEntry() {
+          if (!confirm(`Are you sure you want to delete ${activeContextPath}?`)) return;
+          await fetch(`${BACKEND}/fs/delete`, {
+            method: 'DELETE',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ session_id: dockerSessionId, path: activeContextPath })
+          });
+          refreshDockerFileTree();
         }
 
         // ── Open a file from Docker into Monaco ─────────────────────
@@ -5903,6 +6557,38 @@
               });
             }
           }
+        // ── Expose onclick-called functions to global scope ──────────
+        // (All defined inside require() callback — must be on window to be
+        //  reachable from inline HTML onclick="..." attributes)
+        Object.assign(window, {
+          // Clone modal
+          openCloneModal, closeCloneModal, submitCloneModal,
+          // Forge per-file actions
+          acceptActiveFile, discardActiveFile, acceptAllForgeFiles,
+          acceptChange, rejectChange,
+          // Panel toggles
+          toggleSidebar, toggleAIPanel, toggleTerminal,
+          toggleTerminalFullscreen, clearTerminal,
+          // Context menu
+          showContextMenu, createNewFile, createNewFolder,
+          renameEntry, deleteEntry,
+          // Tab dropdown
+          toggleTabsDropdown,
+          // File ops
+          openFile, closeTab, openDockerFile, loadFiles, runCode,
+          // AI / forge entry points
+          runInlineForge, handleForgeInlineKey, setMode,
+          openSmartFix, closeSmartFix, handleSmartFixKey, runSmartFix,
+          clearChat, closePicker, closeDiff,
+          indexProject, openCodePicker,
+          // Cortex
+          // runCortex, executeCortexPlan,
+          // Patches
+          closePatchModal,
+        });
+
+        // Open terminal on startup
+        toggleTerminal();
         });
       </script>
 
