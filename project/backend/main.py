@@ -17,6 +17,12 @@ import winpty
 import asyncio
 import docker
 import uuid
+import jwt
+import httpx
+import urllib.parse
+from fastapi import Request, Response, HTTPException
+from fastapi.responses import RedirectResponse
+from datetime import datetime, timedelta
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from ai_engine.rag import CodebaseIndex, build_context
 from ai_engine.agents import MemoryManager, run_agent_pipeline, oracle_agent, planner_agent
@@ -115,6 +121,107 @@ class CortexExecuteRequest(BaseModel):
     all_files: Dict[str, str] = {}
     model: str = "llama-3.1-8b-instant"
 
+
+# ─── AUTHENTICATION ───────────────────────────────────────────────────────────
+
+JWT_SECRET = os.getenv("JWT_SECRET", "super-secret-antimatter-key")
+GITHUB_CLIENT_ID = os.getenv("GITHUB_CLIENT_ID", "")
+GITHUB_CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET", "")
+
+@app.get("/auth/github/login")
+def github_login():
+    """Redirect to GitHub for OAuth login."""
+    if not GITHUB_CLIENT_ID:
+        return {"error": "GITHUB_CLIENT_ID not configured in backend"}
+    params = {
+        "client_id": GITHUB_CLIENT_ID,
+        "scope": "repo user",  # request access to private repos and user profile
+        "redirect_uri": "http://localhost:1842/auth/github/callback"
+    }
+    url = f"https://github.com/login/oauth/authorize?{urllib.parse.urlencode(params)}"
+    return RedirectResponse(url)
+
+@app.get("/auth/github/callback")
+async def github_callback(code: str):
+    """Handle GitHub callback and set HttpOnly JWT cookie."""
+    async with httpx.AsyncClient() as client:
+        # Exchange code for access token
+        token_res = await client.post(
+            "https://github.com/login/oauth/access_token",
+            headers={"Accept": "application/json"},
+            data={
+                "client_id": GITHUB_CLIENT_ID,
+                "client_secret": GITHUB_CLIENT_SECRET,
+                "code": code
+            }
+        )
+        token_data = token_res.json()
+        access_token = token_data.get("access_token")
+
+        if not access_token:
+            raise HTTPException(status_code=400, detail="Failed to get access token from GitHub")
+
+        # Get user profile
+        user_res = await client.get(
+            "https://api.github.com/user",
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Accept": "application/vnd.github.v3+json"
+            }
+        )
+        user_data = user_res.json()
+        username = user_data.get("login")
+        avatar_url = user_data.get("avatar_url")
+
+        if not username:
+            raise HTTPException(status_code=400, detail="Failed to fetch user data")
+
+        # Create JWT
+        payload = {
+            "sub": username,
+            "github_token": access_token,
+            "avatar_url": avatar_url,
+            "exp": datetime.utcnow() + timedelta(days=7)
+        }
+        token = jwt.encode(payload, JWT_SECRET, algorithm="HS256")
+
+        # Set HttpOnly cookie and redirect to frontend
+        response = RedirectResponse(url="/")
+        response.set_cookie(
+            key="antimatter_session",
+            value=token,
+            httponly=True,
+            secure=False,  # Set to True if using HTTPS
+            samesite="lax",
+            max_age=7 * 24 * 3600
+        )
+        return response
+
+@app.get("/auth/me")
+def get_current_user(request: Request):
+    """Get the currently logged in user from JWT cookie."""
+    token = request.cookies.get("antimatter_session")
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+        return {
+            "username": payload.get("sub"),
+            "avatar_url": payload.get("avatar_url"),
+            "has_github_token": bool(payload.get("github_token"))
+        }
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+@app.post("/auth/logout")
+def logout():
+    response = {"status": "logged_out"}
+    res = Response(content=json.dumps(response), media_type="application/json")
+    res.delete_cookie("antimatter_session")
+    return res
 
 # ─── /chat ────────────────────────────────────────────────────────────────────
 

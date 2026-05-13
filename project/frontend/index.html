@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -3228,6 +3228,18 @@
       </div>
     </div>
     <div class="topbar-actions">
+      <!-- Auth Actions -->
+      <div id="auth-container" style="display: flex; align-items: center; gap: 8px; margin-right: 12px; border-right: 1px solid var(--border); padding-right: 12px;">
+        <button class="btn primary" id="github-login-btn" onclick="window.location.href=`${BACKEND}/auth/github/login`" style="display: none;">
+          <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path></svg>
+          Login with GitHub
+        </button>
+        <div id="user-profile" style="display: none; align-items: center; gap: 8px;">
+          <img id="user-avatar" src="" style="width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--border);">
+          <span id="user-name" style="font-size: 11px; font-family: var(--font-mono); color: var(--text);"></span>
+          <button class="btn" id="logout-btn" onclick="logout()" style="padding: 3px 8px; font-size: 10px;">Logout</button>
+        </div>
+      </div>
       <button class="btn" onclick="toggleSidebar()" title="Toggle Sidebar (Ctrl+B)">🗂️ Files</button>
       <button class="btn smart-fix" id="forge-btn" onclick="openSmartFix()" title="Open Smart Fix (Ctrl+I)">⚡ FORGE</button>
       <button class="btn" id="index-btn" onclick="indexProject()">⬡ Index project</button>
@@ -3604,6 +3616,36 @@
         // let currentMode = 'chat';
         let pendingDiffCode = '';
 
+        // ─── AUTHENTICATION ───────────────────────────────────
+        let currentUser = null;
+        async function checkAuth() {
+          try {
+            const res = await fetch(`${BACKEND}/auth/me`);
+            if (res.ok) {
+              currentUser = await res.json();
+              document.getElementById('github-login-btn').style.display = 'none';
+              document.getElementById('user-profile').style.display = 'flex';
+              document.getElementById('user-name').textContent = currentUser.username;
+              document.getElementById('user-avatar').src = currentUser.avatar_url;
+            } else {
+              document.getElementById('github-login-btn').style.display = 'flex';
+              document.getElementById('user-profile').style.display = 'none';
+            }
+          } catch (e) {
+            console.error('Auth check failed:', e);
+            document.getElementById('github-login-btn').style.display = 'flex';
+            document.getElementById('user-profile').style.display = 'none';
+          }
+        }
+        
+        async function logout() {
+          await fetch(`${BACKEND}/auth/logout`, { method: 'POST' });
+          window.location.reload();
+        }
+
+        // Call immediately
+        checkAuth();
+
         // ─── MONACO INIT ─────────────────────────────────────
         require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' } });
 
@@ -3898,7 +3940,7 @@
           pendingDiffCode = newCode;
           document.getElementById('diff-filename').textContent = activeFile || '';
 
-          const oldLines = escapeHtml(oldCode). n');
+          const oldLines = escapeHtml(oldCode).split('\n');
           const newLines = escapeHtml(newCode).split('\n');
 
           document.getElementById('diff-old').innerHTML =
