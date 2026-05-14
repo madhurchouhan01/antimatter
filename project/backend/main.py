@@ -42,6 +42,33 @@ index  = CodebaseIndex(persist_dir=os.path.join(_MEMORY_DIR, "chromadb"))
 memory = MemoryManager(db_path=os.path.join(_MEMORY_DIR, "antimatter.db"))
 
 active_containers = {}  # { short_id: container }
+
+import sqlite3
+sandbox_db_path = os.path.join(_MEMORY_DIR, "sandbox.db")
+
+def init_sandbox_db():
+    with sqlite3.connect(sandbox_db_path) as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS user_sandboxes (
+                username TEXT PRIMARY KEY,
+                container_id TEXT
+            )
+        """)
+init_sandbox_db()
+
+def get_user_container(username: str):
+    with sqlite3.connect(sandbox_db_path) as conn:
+        cur = conn.execute("SELECT container_id FROM user_sandboxes WHERE username = ?", (username,))
+        row = cur.fetchone()
+        return row[0] if row else None
+
+def set_user_container(username: str, container_id: str):
+    with sqlite3.connect(sandbox_db_path) as conn:
+        conn.execute("""
+            INSERT INTO user_sandboxes (username, container_id) 
+            VALUES (?, ?)
+            ON CONFLICT(username) DO UPDATE SET container_id = excluded.container_id
+        """, (username, container_id))
 # ─── MODELS ───────────────────────────────────────────────────────────────────
 
 class FSReadRequest(BaseModel):
@@ -532,24 +559,74 @@ sandbox_sessions = {}
 @app.websocket("/terminal")
 async def terminal_ws(websocket: WebSocket):
     await websocket.accept()
-    session_id = str(uuid.uuid4())
-    container  = None
-    exec_sock  = None
+    
+    # ── Authenticate User via Cookie ──────────────────────
+    token = websocket.cookies.get("antimatter_session")
+    username = None
+    if token:
+        try:
+            payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+            username = payload.get("sub")
+        except:
+            pass
+
+    container = None
+    exec_sock = None
+    short_id = None
+    session_id = None
 
     try:
-        # ── 1. Spin up fresh container ────────────────────────────
-        container = docker_client.containers.run(
-            image="antimatter-sandbox",
-            name=f"antimatter-{session_id[:8]}",
-            detach=True,
-            tty=True,
-            stdin_open=True,
-            mem_limit="256m",
-            cpu_period=100000,
-            cpu_quota=50000,
-            dns=["8.8.8.8", "1.1.1.1"],  # explicit DNS — fixes "Could not resolve host" on Windows
-            remove=False,
-        )
+        # ── 1. Spin up or reconnect container ─────────────────────
+        if username:
+            session_id = username
+            short_id = session_id[:8]
+            existing_cid = get_user_container(username)
+            if existing_cid:
+                try:
+                    container = docker_client.containers.get(existing_cid)
+                    if container.status != "running":
+                        container.start()
+                except docker.errors.NotFound:
+                    container = None
+            
+            if not container:
+                # Persistent volume for user
+                vol_name = f"antimatter_workspace_{username.lower()}"
+                try:
+                    docker_client.volumes.get(vol_name)
+                except docker.errors.NotFound:
+                    docker_client.volumes.create(name=vol_name)
+
+                container = docker_client.containers.run(
+                    image="antimatter-sandbox",
+                    name=f"antimatter-{short_id}-{uuid.uuid4().hex[:4]}",
+                    detach=True,
+                    tty=True,
+                    stdin_open=True,
+                    mem_limit="256m",
+                    cpu_period=100000,
+                    cpu_quota=50000,
+                    dns=["8.8.8.8", "1.1.1.1"],
+                    remove=False,
+                    volumes={vol_name: {"bind": "/home/sandboxuser/workspace", "mode": "rw"}}
+                )
+                set_user_container(username, container.id)
+        else:
+            session_id = str(uuid.uuid4())
+            short_id = session_id[:8]
+            container = docker_client.containers.run(
+                image="antimatter-sandbox",
+                name=f"antimatter-{short_id}",
+                detach=True,
+                tty=True,
+                stdin_open=True,
+                mem_limit="256m",
+                cpu_period=100000,
+                cpu_quota=50000,
+                dns=["8.8.8.8", "1.1.1.1"],
+                remove=False,
+            )
+
         sandbox_sessions[session_id] = container
         container_id = container.id
 
@@ -557,10 +634,16 @@ async def terminal_ws(websocket: WebSocket):
         init_msg  = await websocket.receive_text()
         init_data = json.loads(init_msg)
         if init_data.get("type") == "init" and init_data.get("files"):
-            await inject_files(container, init_data["files"])
+            if not username:
+                await inject_files(container, init_data["files"])
+            else:
+                # Only inject files if the persistent workspace is empty
+                output = docker_exec_output(container, ["ls", "-A", "."])
+                if not output.strip():
+                    await inject_files(container, init_data["files"])
 
         await websocket.send_text(
-            f"\r\n\x1b[32m⚡ Sandbox ready [{session_id[:8]}]\x1b[0m\r\n"
+            f"\r\n\x1b[32m⚡ Sandbox ready [{short_id}]\x1b[0m\r\n"
         )
 
         # ── 3. Open exec via Docker SDK raw socket ────────────────
@@ -621,7 +704,6 @@ async def terminal_ws(websocket: WebSocket):
         drainer = asyncio.create_task(drain_output())
 
         # Register session so /fs/* endpoints can reach this container
-        short_id = session_id[:8]
         active_containers[short_id] = container
 
         # Send short_id to frontend so it can reference this session
@@ -680,14 +762,19 @@ async def terminal_ws(websocket: WebSocket):
         except Exception:
             pass
         if container:
-            try:
-                container.kill()
-                container.remove(force=True)
+            if username:
                 sandbox_sessions.pop(session_id, None)
-                active_containers.pop(short_id, None)   # ← remove FS session
-                print(f"[sandbox] cleaned up antimatter-{session_id[:8]}")
-            except Exception as e:
-                print(f"[sandbox] cleanup error: {e}")
+                active_containers.pop(short_id, None)
+                print(f"[sandbox] user {username} disconnected, container {container_id[:8]} left running")
+            else:
+                try:
+                    container.kill()
+                    container.remove(force=True)
+                    sandbox_sessions.pop(session_id, None)
+                    active_containers.pop(short_id, None)   # ← remove FS session
+                    print(f"[sandbox] cleaned up antimatter-{short_id}")
+                except Exception as e:
+                    print(f"[sandbox] cleanup error: {e}")
 
 
 async def inject_files(container, files: dict):

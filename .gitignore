@@ -12,3 +12,5 @@ __pycache__/
 # ChromaDB / memory
 project/memory/*
 # project/memory/chromadb/
+
+start-env.bat
