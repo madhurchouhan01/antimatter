@@ -9,8 +9,9 @@
 **Name:** ANTIMATTER  
 **Type:** AI-powered web-based code editor (browser frontend + Python backend)  
 **Port:** `1842`  
-**Stack:** Vanilla JS + Monaco Editor (frontend) · FastAPI + Groq SDK (backend) · ChromaDB + SQLite (memory)  
-**LLM provider:** Groq API (not Anthropic) — models: `llama-3.3-70b-versatile`, `deepseek-r1-distill-llama-70b`, `mixtral-8x7b-32768`  
+**Stack:** Vanilla JS + Monaco Editor (frontend) · FastAPI + Groq SDK + Docker (backend) · ChromaDB + SQLite (memory/sandboxes)  
+**Auth:** GitHub OAuth + JWT (HttpOnly Cookies)  
+**LLM provider:** Groq API (not Anthropic) — models: `llama-3.1-8b-instant`, `deepseek-r1-distill-llama-70b`, `mixtral-8x7b-32768`  
 **Developer:** Madhur — Data Scientist transitioning to GenAI/Agentic AI Engineering  
 **Goal:** Portfolio-grade project demonstrating RAG pipelines, multi-agent orchestration, and agentic code editing  
 
@@ -35,9 +36,10 @@ antimatter/
 │
 ├── memory/
 │   ├── chromadb/               # ChromaDB persistent vector store (auto-created)
-│   └── antimatter.db           # SQLite database for agent memory (auto-created)
+│   ├── antimatter.db           # SQLite database for agent memory (auto-created)
+│   └── sandbox.db              # SQLite database mapping Users to Docker Containers (auto-created)
 │
-└── .env                        # GROQ_API_KEY=your_key_here
+└── .env                        # GROQ_API_KEY, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, JWT_SECRET
 ```
 
 ---
@@ -179,6 +181,11 @@ memory  = MemoryManager(db_path="./memory/antimatter.db") # SQLite agent memory
 | `GET` | `/memory/stats` | SQLite run/decision counts | `{ total_runs, total_decisions }` |
 | `GET` | `/memory/runs` | Last 10 agent runs | Array of run objects |
 | `GET` | `/memory/file/{filename}` | Decisions for a specific file | Array of decision objects |
+| `GET` | `/auth/github/login` | Redirect to GitHub OAuth | Redirects |
+| `GET` | `/auth/github/callback` | OAuth exchange, issues JWT | Sets HttpOnly cookie |
+| `GET` | `/auth/me` | Validates JWT, returns user info | `{ username, avatar_url }` |
+| `POST` | `/auth/logout` | Clears JWT cookie | `{ status }` |
+| `WS` | `/terminal` | Docker sandbox connection (Persistent volume per user) | WebSocket stream |
 | `GET` | `/health` | Status + index stats + memory stats | JSON |
 
 ### 4.3 Request Models
@@ -188,7 +195,7 @@ class ChatRequest(BaseModel):
     message: str
     file_content: str = ""
     filename: str = ""
-    model: str = "llama-3.3-70b-versatile"
+    model: str = "llama-3.1-8b-instant"
     history: Optional[List[HistoryMessage]] = []
     use_rag: bool = True
     cursor_line: int = None          # Monaco cursor line for surgical context
@@ -198,7 +205,7 @@ class AgentRequest(BaseModel):
     file_content: str = ""
     filename: str = ""
     available_files: List[str] = []
-    model: str = "llama-3.3-70b-versatile"
+    model: str = "llama-3.1-8b-instant"
     cursor_line: int = None
 
 class PatchRequest(BaseModel):
@@ -206,7 +213,7 @@ class PatchRequest(BaseModel):
     open_filename: str = ""
     open_file_content: str = ""
     all_files: Dict[str, str] = {}   # all open files { filename: content }
-    model: str = "llama-3.3-70b-versatile"
+    model: str = "llama-3.1-8b-instant"
 
 class IndexRequest(BaseModel):
     files: dict                       # { filename: content }
@@ -493,10 +500,13 @@ uvicorn backend.main:app --reload --port 1842
 | `sentence-transformers` | ChromaDB default embeddings |
 | `python-dotenv` | `.env` file loading |
 | `tiktoken` | Token counting for context management |
-| `websockets` | WebSocket support (future use) |
+| `websockets` | WebSocket support for sandbox terminal |
+| `docker` | Docker SDK for Python (Sandbox orchestration) |
+| `PyJWT` | JWT token generation and validation |
+| `httpx` | Async HTTP client (OAuth token exchange) |
 | `difflib` | Built-in — fuzzy patch localization |
 | `ast` | Built-in — Python AST chunking |
-| `sqlite3` | Built-in — agent memory persistence |
+| `sqlite3` | Built-in — agent memory persistence and sandbox user mapping |
 
 **Frontend CDN dependencies** (no npm, no build):
 - Monaco Editor `0.44.0` via `cdnjs.cloudflare.com`
@@ -511,7 +521,6 @@ uvicorn backend.main:app --reload --port 1842
 - **Selection-based editing** — user selects lines in Monaco → AI edits only selection
 - **Multi-selection patches** — Ctrl+click multiple ranges → independent patch per range
 - **Inline comment intent markers** — `# ANTIMATTER: change this` → auto-detected and patched
-- **Code execution sandbox** — Docker container for running Python/JS safely
 - **Git integration** — show real git diff, commit accepted patches directly
 - **Project-wide refactor** — rename symbol across all files using AST + patch engine
 - **Test generation pipeline** — dedicated agent that writes + runs tests via Docker

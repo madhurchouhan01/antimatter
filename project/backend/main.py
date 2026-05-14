@@ -17,9 +17,15 @@ import winpty
 import asyncio
 import docker
 import uuid
+import jwt
+import httpx
+import urllib.parse
+from fastapi import Request, Response, HTTPException
+from fastapi.responses import RedirectResponse
+from datetime import datetime, timedelta
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from ai_engine.rag import CodebaseIndex, build_context
-from ai_engine.agents import MemoryManager, run_agent_pipeline
+from ai_engine.agents import MemoryManager, run_agent_pipeline, oracle_agent, planner_agent
 
 load_dotenv()
 
@@ -36,6 +42,33 @@ index  = CodebaseIndex(persist_dir=os.path.join(_MEMORY_DIR, "chromadb"))
 memory = MemoryManager(db_path=os.path.join(_MEMORY_DIR, "antimatter.db"))
 
 active_containers = {}  # { short_id: container }
+
+import sqlite3
+sandbox_db_path = os.path.join(_MEMORY_DIR, "sandbox.db")
+
+def init_sandbox_db():
+    with sqlite3.connect(sandbox_db_path) as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS user_sandboxes (
+                username TEXT PRIMARY KEY,
+                container_id TEXT
+            )
+        """)
+init_sandbox_db()
+
+def get_user_container(username: str):
+    with sqlite3.connect(sandbox_db_path) as conn:
+        cur = conn.execute("SELECT container_id FROM user_sandboxes WHERE username = ?", (username,))
+        row = cur.fetchone()
+        return row[0] if row else None
+
+def set_user_container(username: str, container_id: str):
+    with sqlite3.connect(sandbox_db_path) as conn:
+        conn.execute("""
+            INSERT INTO user_sandboxes (username, container_id) 
+            VALUES (?, ?)
+            ON CONFLICT(username) DO UPDATE SET container_id = excluded.container_id
+        """, (username, container_id))
 # ─── MODELS ───────────────────────────────────────────────────────────────────
 
 class FSReadRequest(BaseModel):
@@ -51,6 +84,15 @@ class FSDeleteRequest(BaseModel):
     session_id: str
     path: str
 
+class FSMkdirRequest(BaseModel):
+    session_id: str
+    path: str
+
+class FSRenameRequest(BaseModel):
+    session_id: str
+    old_path: str
+    new_path: str
+
 class HistoryMessage(BaseModel):
     role: str
     content: str
@@ -59,7 +101,7 @@ class ChatRequest(BaseModel):
     message: str
     file_content: str = ""
     filename: str = ""
-    model: str = "llama-3.3-70b-versatile"
+    model: str = "llama-3.1-8b-instant"
     history: Optional[List[HistoryMessage]] = []
     use_rag: bool = True
 
@@ -68,7 +110,7 @@ class AgentRequest(BaseModel):
     file_content: str = ""
     filename: str = ""
     available_files: List[str] = []
-    model: str = "llama-3.3-70b-versatile"
+    model: str = "llama-3.1-8b-instant"
 
 class IndexRequest(BaseModel):
     files: dict
@@ -78,8 +120,135 @@ class PatchRequest(BaseModel):
     open_filename: str = ""
     open_file_content: str = ""
     all_files: Dict[str, str] = {}   # { filename: content } for all open files
-    model: str = "llama-3.3-70b-versatile"
- 
+    model: str = "llama-3.1-8b-instant"
+
+class OracleRequest(BaseModel):
+    message: str
+    file_content: str = ""
+    filename: str = ""
+    model: str = "llama-3.1-8b-instant"
+    history: Optional[List[HistoryMessage]] = []
+    use_rag: bool = True
+    use_web_search: bool = False
+
+class CortexPlanRequest(BaseModel):
+    goal: str
+    file_content: str = ""
+    filename: str = ""
+    available_files: List[str] = []
+    model: str = "llama-3.1-8b-instant"
+
+class CortexExecuteRequest(BaseModel):
+    goal: str
+    step: str                         # description of this step
+    step_index: int = 0
+    total_steps: int = 1
+    file_content: str = ""
+    filename: str = ""
+    all_files: Dict[str, str] = {}
+    model: str = "llama-3.1-8b-instant"
+
+
+# ─── AUTHENTICATION ───────────────────────────────────────────────────────────
+
+JWT_SECRET = os.getenv("JWT_SECRET", "super-secret-antimatter-key")
+GITHUB_CLIENT_ID = os.getenv("GITHUB_CLIENT_ID", "")
+GITHUB_CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET", "")
+
+@app.get("/auth/github/login")
+def github_login():
+    """Redirect to GitHub for OAuth login."""
+    if not GITHUB_CLIENT_ID:
+        return {"error": "GITHUB_CLIENT_ID not configured in backend"}
+    params = {
+        "client_id": GITHUB_CLIENT_ID,
+        "scope": "repo user",  # request access to private repos and user profile
+        "redirect_uri": "http://localhost:1842/auth/github/callback"
+    }
+    url = f"https://github.com/login/oauth/authorize?{urllib.parse.urlencode(params)}"
+    return RedirectResponse(url)
+
+@app.get("/auth/github/callback")
+async def github_callback(code: str):
+    """Handle GitHub callback and set HttpOnly JWT cookie."""
+    async with httpx.AsyncClient() as client:
+        # Exchange code for access token
+        token_res = await client.post(
+            "https://github.com/login/oauth/access_token",
+            headers={"Accept": "application/json"},
+            data={
+                "client_id": GITHUB_CLIENT_ID,
+                "client_secret": GITHUB_CLIENT_SECRET,
+                "code": code
+            }
+        )
+        token_data = token_res.json()
+        access_token = token_data.get("access_token")
+
+        if not access_token:
+            raise HTTPException(status_code=400, detail="Failed to get access token from GitHub")
+
+        # Get user profile
+        user_res = await client.get(
+            "https://api.github.com/user",
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Accept": "application/vnd.github.v3+json"
+            }
+        )
+        user_data = user_res.json()
+        username = user_data.get("login")
+        avatar_url = user_data.get("avatar_url")
+
+        if not username:
+            raise HTTPException(status_code=400, detail="Failed to fetch user data")
+
+        # Create JWT
+        payload = {
+            "sub": username,
+            "github_token": access_token,
+            "avatar_url": avatar_url,
+            "exp": datetime.utcnow() + timedelta(days=7)
+        }
+        token = jwt.encode(payload, JWT_SECRET, algorithm="HS256")
+
+        # Set HttpOnly cookie and redirect to frontend
+        response = RedirectResponse(url="/")
+        response.set_cookie(
+            key="antimatter_session",
+            value=token,
+            httponly=True,
+            secure=False,  # Set to True if using HTTPS
+            samesite="lax",
+            max_age=7 * 24 * 3600
+        )
+        return response
+
+@app.get("/auth/me")
+def get_current_user(request: Request):
+    """Get the currently logged in user from JWT cookie."""
+    token = request.cookies.get("antimatter_session")
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+        return {
+            "username": payload.get("sub"),
+            "avatar_url": payload.get("avatar_url"),
+            "has_github_token": bool(payload.get("github_token"))
+        }
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+@app.post("/auth/logout")
+def logout():
+    response = {"status": "logged_out"}
+    res = Response(content=json.dumps(response), media_type="application/json")
+    res.delete_cookie("antimatter_session")
+    return res
 
 # ─── /chat ────────────────────────────────────────────────────────────────────
 
@@ -157,6 +326,127 @@ def stream_agent(req: AgentRequest):
 @app.post("/agent")
 def agent(req: AgentRequest):
     return StreamingResponse(stream_agent(req), media_type="text/plain")
+
+# ─── /oracle ──────────────────────────────────────────────────────────────────
+
+def stream_oracle(req: OracleRequest):
+    rag_context = ""
+    rag_sources = []
+    if req.use_rag:
+        context_str, retrieved = build_context(
+            query=req.message,
+            open_file_content=req.file_content,
+            open_filename=req.filename,
+            index=index,
+        )
+        rag_context = context_str
+        rag_sources = list(set(
+            c["metadata"]["filename"] for c in retrieved
+        ))[:4]
+    else:
+        rag_context = f"## {req.filename}\n```\n{req.file_content[:8000]}\n```" if req.file_content else ""
+
+    # Emit sources prefix so frontend can display RAG chips
+    if rag_sources:
+        import json as _json
+        yield f"[RAG_SOURCES]{_json.dumps(rag_sources)}[/RAG_SOURCES]\n"
+
+    stream = oracle_agent(
+        query=req.message,
+        open_file=req.file_content,
+        open_filename=req.filename,
+        rag_context=rag_context,
+        model=req.model,
+        use_web_search=req.use_web_search,
+        stream=True,
+    )
+    for chunk in stream:
+        delta = chunk.choices[0].delta.content
+        if delta:
+            yield delta
+
+@app.post("/oracle")
+def oracle_endpoint(req: OracleRequest):
+    return StreamingResponse(stream_oracle(req), media_type="text/plain")
+
+# ─── /cortex/plan ─────────────────────────────────────────────────────────────
+
+@app.post("/cortex/plan")
+def cortex_plan(req: CortexPlanRequest):
+    """
+    Generates an editable multi-step plan from a high-level goal.
+    Returns JSON: { understanding, complexity, approach, steps, warnings }
+    Steps have a 'type' field: understand | execute | verify | summarize
+    """
+    memory_summary = memory.get_memory_summary()
+    plan = planner_agent(
+        task=req.goal,
+        open_file=req.file_content,
+        open_filename=req.filename,
+        available_files=req.available_files,
+        memory_summary=memory_summary,
+        model=req.model,
+    )
+    return plan
+
+# ─── /cortex/execute ──────────────────────────────────────────────────────────
+
+@app.post("/cortex/execute")
+def cortex_execute(req: CortexExecuteRequest):
+    """
+    Executes a single EXECUTE-type step from CORTEX.
+    Runs the patch engine on the step description and returns patch results.
+    """
+    from ai_engine.patch_engine import identify_target_files, generate_surgical_patches
+
+    # RAG search for relevant context
+    rag_context, rag_chunks = build_context(
+        query=req.step,
+        open_file_content=req.file_content,
+        open_filename=req.filename,
+        index=index,
+    )
+
+    planner_files = [req.filename] if req.filename else []
+    target_files = identify_target_files(
+        task=req.step,
+        rag_chunks=rag_chunks,
+        available_files=list(req.all_files.keys()),
+        planner_files=planner_files,
+        model=req.model,
+    )
+
+    if not target_files:
+        return {
+            "success": False,
+            "step": req.step,
+            "step_index": req.step_index,
+            "error": "Could not identify target files for this step.",
+            "patches": [],
+        }
+
+    rag_str = "\n\n".join(
+        f"## {c['metadata']['filename']} — `{c['metadata']['name']}`\n```\n{c['text'][:400]}\n```"
+        for c in rag_chunks[:3]
+        if c["metadata"].get("filename") not in target_files
+    )
+
+    patch_results = generate_surgical_patches(
+        task=req.step,
+        target_files=target_files,
+        file_contents=req.all_files,
+        rag_context=rag_str,
+        model=req.model,
+    )
+
+    return {
+        "success": True,
+        "step": req.step,
+        "step_index": req.step_index,
+        "total_steps": req.total_steps,
+        "target_files": target_files,
+        "results": patch_results,
+    }
 
 # ─── /index ───────────────────────────────────────────────────────────────────
 
@@ -269,24 +559,74 @@ sandbox_sessions = {}
 @app.websocket("/terminal")
 async def terminal_ws(websocket: WebSocket):
     await websocket.accept()
-    session_id = str(uuid.uuid4())
-    container  = None
-    exec_sock  = None
+    
+    # ── Authenticate User via Cookie ──────────────────────
+    token = websocket.cookies.get("antimatter_session")
+    username = None
+    if token:
+        try:
+            payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+            username = payload.get("sub")
+        except:
+            pass
+
+    container = None
+    exec_sock = None
+    short_id = None
+    session_id = None
 
     try:
-        # ── 1. Spin up fresh container ────────────────────────────
-        container = docker_client.containers.run(
-            image="antimatter-sandbox",
-            name=f"antimatter-{session_id[:8]}",
-            detach=True,
-            tty=True,
-            stdin_open=True,
-            mem_limit="256m",
-            cpu_period=100000,
-            cpu_quota=50000,
-            dns=["8.8.8.8", "1.1.1.1"],  # explicit DNS — fixes "Could not resolve host" on Windows
-            remove=False,
-        )
+        # ── 1. Spin up or reconnect container ─────────────────────
+        if username:
+            session_id = username
+            short_id = session_id[:8]
+            existing_cid = get_user_container(username)
+            if existing_cid:
+                try:
+                    container = docker_client.containers.get(existing_cid)
+                    if container.status != "running":
+                        container.start()
+                except docker.errors.NotFound:
+                    container = None
+            
+            if not container:
+                # Persistent volume for user
+                vol_name = f"antimatter_workspace_{username.lower()}"
+                try:
+                    docker_client.volumes.get(vol_name)
+                except docker.errors.NotFound:
+                    docker_client.volumes.create(name=vol_name)
+
+                container = docker_client.containers.run(
+                    image="antimatter-sandbox",
+                    name=f"antimatter-{short_id}-{uuid.uuid4().hex[:4]}",
+                    detach=True,
+                    tty=True,
+                    stdin_open=True,
+                    mem_limit="256m",
+                    cpu_period=100000,
+                    cpu_quota=50000,
+                    dns=["8.8.8.8", "1.1.1.1"],
+                    remove=False,
+                    volumes={vol_name: {"bind": "/home/sandboxuser/workspace", "mode": "rw"}}
+                )
+                set_user_container(username, container.id)
+        else:
+            session_id = str(uuid.uuid4())
+            short_id = session_id[:8]
+            container = docker_client.containers.run(
+                image="antimatter-sandbox",
+                name=f"antimatter-{short_id}",
+                detach=True,
+                tty=True,
+                stdin_open=True,
+                mem_limit="256m",
+                cpu_period=100000,
+                cpu_quota=50000,
+                dns=["8.8.8.8", "1.1.1.1"],
+                remove=False,
+            )
+
         sandbox_sessions[session_id] = container
         container_id = container.id
 
@@ -294,10 +634,16 @@ async def terminal_ws(websocket: WebSocket):
         init_msg  = await websocket.receive_text()
         init_data = json.loads(init_msg)
         if init_data.get("type") == "init" and init_data.get("files"):
-            await inject_files(container, init_data["files"])
+            if not username:
+                await inject_files(container, init_data["files"])
+            else:
+                # Only inject files if the persistent workspace is empty
+                output = docker_exec_output(container, ["ls", "-A", "."])
+                if not output.strip():
+                    await inject_files(container, init_data["files"])
 
         await websocket.send_text(
-            f"\r\n\x1b[32m⚡ Sandbox ready [{session_id[:8]}]\x1b[0m\r\n"
+            f"\r\n\x1b[32m⚡ Sandbox ready [{short_id}]\x1b[0m\r\n"
         )
 
         # ── 3. Open exec via Docker SDK raw socket ────────────────
@@ -358,7 +704,6 @@ async def terminal_ws(websocket: WebSocket):
         drainer = asyncio.create_task(drain_output())
 
         # Register session so /fs/* endpoints can reach this container
-        short_id = session_id[:8]
         active_containers[short_id] = container
 
         # Send short_id to frontend so it can reference this session
@@ -417,14 +762,19 @@ async def terminal_ws(websocket: WebSocket):
         except Exception:
             pass
         if container:
-            try:
-                container.kill()
-                container.remove(force=True)
+            if username:
                 sandbox_sessions.pop(session_id, None)
-                active_containers.pop(short_id, None)   # ← remove FS session
-                print(f"[sandbox] cleaned up antimatter-{session_id[:8]}")
-            except Exception as e:
-                print(f"[sandbox] cleanup error: {e}")
+                active_containers.pop(short_id, None)
+                print(f"[sandbox] user {username} disconnected, container {container_id[:8]} left running")
+            else:
+                try:
+                    container.kill()
+                    container.remove(force=True)
+                    sandbox_sessions.pop(session_id, None)
+                    active_containers.pop(short_id, None)   # ← remove FS session
+                    print(f"[sandbox] cleaned up antimatter-{short_id}")
+                except Exception as e:
+                    print(f"[sandbox] cleanup error: {e}")
 
 
 async def inject_files(container, files: dict):
@@ -521,6 +871,55 @@ async def fs_write(req: FSWriteRequest):
     tar_buffer.seek(0)
     container.put_archive("/home/sandboxuser/workspace", tar_buffer)
     return {"status": "ok"}
+
+
+@app.post("/fs/mkdir")
+async def fs_mkdir(req: FSMkdirRequest):
+    """Create a directory in the sandbox container."""
+    container = active_containers.get(req.session_id)
+    if not container:
+        return {"error": "session not found"}
+    # Use exec_run to mkdir -p
+    result = container.exec_run(
+        ["mkdir", "-p", req.path],
+        user="sandboxuser",
+        workdir="/home/sandboxuser/workspace"
+    )
+    if result.exit_code != 0:
+        return {"error": result.output.decode("utf-8", errors="replace")}
+    return {"status": "ok", "path": req.path}
+
+
+@app.post("/fs/rename")
+async def fs_rename(req: FSRenameRequest):
+    """Rename or move a file/folder in the sandbox container."""
+    container = active_containers.get(req.session_id)
+    if not container:
+        return {"error": "session not found"}
+    result = container.exec_run(
+        ["mv", req.old_path, req.new_path],
+        user="sandboxuser",
+        workdir="/home/sandboxuser/workspace"
+    )
+    if result.exit_code != 0:
+        return {"error": result.output.decode("utf-8", errors="replace")}
+    return {"status": "ok", "old_path": req.old_path, "new_path": req.new_path}
+
+
+@app.delete("/fs/delete")
+async def fs_delete(req: FSDeleteRequest):
+    """Delete a file or folder in the sandbox container."""
+    container = active_containers.get(req.session_id)
+    if not container:
+        return {"error": "session not found"}
+    result = container.exec_run(
+        ["rm", "-rf", req.path],
+        user="sandboxuser",
+        workdir="/home/sandboxuser/workspace"
+    )
+    if result.exit_code != 0:
+        return {"error": result.output.decode("utf-8", errors="replace")}
+    return {"status": "ok", "path": req.path}
 
 
 @app.get("/fs/watch")
