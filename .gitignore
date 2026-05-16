@@ -4,6 +4,7 @@
 
 # Virtual env
 antimatter-env/
+venv-test/
 
 # Python
 __pycache__/
