@@ -13,7 +13,7 @@ from typing import List, Optional
 import os, sys, json
 from pydantic import BaseModel
 from typing import List, Optional, Dict
-import winpty
+import re
 import asyncio
 import docker
 import uuid
@@ -39,7 +39,6 @@ _MEMORY_DIR   = os.path.join(_PROJECT_ROOT, "memory")
 
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 index  = CodebaseIndex(persist_dir=os.path.join(_MEMORY_DIR, "chromadb"))
-memory = MemoryManager(db_path=os.path.join(_MEMORY_DIR, "antimatter.db"))
 
 active_containers = {}  # { short_id: container }
 
@@ -97,6 +96,18 @@ class HistoryMessage(BaseModel):
     role: str
     content: str
 
+class HistorySessionMeta(BaseModel):
+    id: str
+    title: str
+    created_at: str
+    updated_at: str
+    message_count: int = 0
+
+class SaveSessionRequest(BaseModel):
+    session_id: str
+    messages: List[HistoryMessage]
+    title: Optional[str] = ""
+
 class ChatRequest(BaseModel):
     message: str
     file_content: str = ""
@@ -130,6 +141,8 @@ class OracleRequest(BaseModel):
     history: Optional[List[HistoryMessage]] = []
     use_rag: bool = True
     use_web_search: bool = False
+    wants_diagram: bool = False   # ← add this
+
 
 class CortexPlanRequest(BaseModel):
     goal: str
@@ -154,6 +167,58 @@ class CortexExecuteRequest(BaseModel):
 JWT_SECRET = os.getenv("JWT_SECRET", "super-secret-antimatter-key")
 GITHUB_CLIENT_ID = os.getenv("GITHUB_CLIENT_ID", "")
 GITHUB_CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET", "")
+
+memory_managers = {}
+def get_memory(username: str):
+    if not username:
+        username = "anonymous"
+    if username not in memory_managers:
+        db_path = os.path.join(_MEMORY_DIR, "users", username, "antimatter.db")
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
+        memory_managers[username] = MemoryManager(db_path=db_path)
+    return memory_managers[username]
+
+# ─── HISTORY HELPERS ──────────────────────────────────────────────────────────
+
+def get_user_history_dir(username: str) -> str:
+    """Return (and create) the per-user history directory."""
+    if not username:
+        username = "anonymous"
+    hist_dir = os.path.join(_MEMORY_DIR, "users", username, "history")
+    os.makedirs(hist_dir, exist_ok=True)
+    return hist_dir
+
+def _sync_history_to_docker(username: str, session_id: str, data: dict):
+    """Push a single history JSON file into the user's Docker volume (best-effort)."""
+    try:
+        existing_cid = get_user_container(username)
+        if not existing_cid:
+            return
+        container = docker_client.containers.get(existing_cid)
+        if container.status != "running":
+            return
+        import tarfile, io
+        content = json.dumps(data, indent=2).encode("utf-8")
+        tar_buffer = io.BytesIO()
+        with tarfile.open(fileobj=tar_buffer, mode="w") as tar:
+            info = tarfile.TarInfo(name=f".antimatter/history/{session_id}.json")
+            info.size = len(content)
+            tar.addfile(info, io.BytesIO(content))
+        tar_buffer.seek(0)
+        container.put_archive("/home/sandboxuser", tar_buffer)
+    except Exception as e:
+        print(f"[history] docker sync skipped: {e}")
+
+def get_username_from_request(request: Request) -> str:
+    token = request.cookies.get("antimatter_session")
+    if token:
+        try:
+            payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+            return payload.get("sub", "anonymous")
+        except:
+            pass
+    return "anonymous"
+
 
 @app.get("/auth/github/login")
 def github_login():
@@ -252,13 +317,14 @@ def logout():
 
 # ─── /chat ────────────────────────────────────────────────────────────────────
 
-def stream_chat(req: ChatRequest):
+def stream_chat(req: ChatRequest, username: str):
     if req.use_rag:
         context, retrieved = build_context(
             query=req.message,
             open_file_content=req.file_content,
             open_filename=req.filename,
             index=index,
+            username=username,
         )
     else:
         context  = f"## {req.filename}\n```\n{req.file_content[:8000]}\n```" if req.file_content else ""
@@ -299,18 +365,20 @@ def stream_chat(req: ChatRequest):
             yield delta
 
 @app.post("/chat")
-def chat(req: ChatRequest):
-    return StreamingResponse(stream_chat(req), media_type="text/plain")
+def chat(req: ChatRequest, request: Request):
+    username = get_username_from_request(request)
+    return StreamingResponse(stream_chat(req, username), media_type="text/plain")
 
 # ─── /agent ───────────────────────────────────────────────────────────────────
 
-def stream_agent(req: AgentRequest):
+def stream_agent(req: AgentRequest, username: str):
     # Get RAG context for executor
     rag_context, _ = build_context(
         query=req.task,
         open_file_content=req.file_content,
         open_filename=req.filename,
         index=index,
+        username=username,
     )
 
     yield from run_agent_pipeline(
@@ -319,17 +387,18 @@ def stream_agent(req: AgentRequest):
         open_filename=req.filename,
         available_files=req.available_files,
         rag_context=rag_context,
-        memory=memory,
+        memory=get_memory(username),
         model=req.model,
     )
 
 @app.post("/agent")
-def agent(req: AgentRequest):
-    return StreamingResponse(stream_agent(req), media_type="text/plain")
+def agent(req: AgentRequest, request: Request):
+    username = get_username_from_request(request)
+    return StreamingResponse(stream_agent(req, username), media_type="text/plain")
 
 # ─── /oracle ──────────────────────────────────────────────────────────────────
 
-def stream_oracle(req: OracleRequest):
+def stream_oracle(req: OracleRequest, username: str):
     rag_context = ""
     rag_sources = []
     if req.use_rag:
@@ -338,6 +407,7 @@ def stream_oracle(req: OracleRequest):
             open_file_content=req.file_content,
             open_filename=req.filename,
             index=index,
+            username=username,
         )
         rag_context = context_str
         rag_sources = list(set(
@@ -346,11 +416,12 @@ def stream_oracle(req: OracleRequest):
     else:
         rag_context = f"## {req.filename}\n```\n{req.file_content[:8000]}\n```" if req.file_content else ""
 
-    # Emit sources prefix so frontend can display RAG chips
     if rag_sources:
         import json as _json
         yield f"[RAG_SOURCES]{_json.dumps(rag_sources)}[/RAG_SOURCES]\n"
 
+    # ── Main oracle stream ──────────────────────────────────────
+    full_response = ""
     stream = oracle_agent(
         query=req.message,
         open_file=req.file_content,
@@ -363,21 +434,64 @@ def stream_oracle(req: OracleRequest):
     for chunk in stream:
         delta = chunk.choices[0].delta.content
         if delta:
+            full_response += delta
             yield delta
 
+    # ── Diagram generation ──────────────────────────────────────
+    ARCH_KEYWORDS = {"architecture","data flow","pipeline","flow","structure",
+                     "overview","describe project","how does","system","diagram"}
+    auto_trigger = any(k in req.message.lower() for k in ARCH_KEYWORDS)
+
+    if req.wants_diagram or auto_trigger:
+        context_snippet = rag_context[:3000] if rag_context else full_response[:3000]
+        diagram_prompt = f"""You are a software architect. Based on the codebase context below, generate a Mermaid diagram showing the data flow and architecture.
+
+Rules:
+- Use `flowchart LR` or `graph TD` syntax
+- Show components, data flow arrows, and key relationships
+- Keep it concise — max 20 nodes
+- Output ONLY the raw Mermaid code. No explanation. No markdown fences. No preamble.
+Valid Example:
+graph TD
+    A["User Input"] --> B["API Gateway"]
+    B --> C["Authentication Service"]
+    B --> D["Processing Engine"]
+    D --> E["Database"]
+    D --> F["Cache Layer"]
+    E --> G["Analytics Module"]
+    G --> H["Dashboard"]
+
+Context:
+{context_snippet}"""
+
+        diagram_resp = client.chat.completions.create(
+            model=req.model,
+            messages=[{"role": "user", "content": diagram_prompt}],
+            temperature=0.1,
+            max_tokens=600,
+        )
+        raw = diagram_resp.choices[0].message.content.strip()
+        # Strip fences if model disobeys
+        raw = re.sub(r"^```(?:mermaid)?\n?", "", raw)
+        raw = re.sub(r"\n?```$", "", raw)
+        yield f"\n\n[MERMAID]{raw.strip()}[/MERMAID]"
+        
 @app.post("/oracle")
-def oracle_endpoint(req: OracleRequest):
-    return StreamingResponse(stream_oracle(req), media_type="text/plain")
+def oracle_endpoint(req: OracleRequest, request: Request):
+    username = get_username_from_request(request)
+    return StreamingResponse(stream_oracle(req, username), media_type="text/plain")
 
 # ─── /cortex/plan ─────────────────────────────────────────────────────────────
 
 @app.post("/cortex/plan")
-def cortex_plan(req: CortexPlanRequest):
+def cortex_plan(req: CortexPlanRequest, request: Request):
     """
     Generates an editable multi-step plan from a high-level goal.
     Returns JSON: { understanding, complexity, approach, steps, warnings }
     Steps have a 'type' field: understand | execute | verify | summarize
     """
+    username = get_username_from_request(request)
+    memory = get_memory(username)
     memory_summary = memory.get_memory_summary()
     plan = planner_agent(
         task=req.goal,
@@ -392,11 +506,12 @@ def cortex_plan(req: CortexPlanRequest):
 # ─── /cortex/execute ──────────────────────────────────────────────────────────
 
 @app.post("/cortex/execute")
-def cortex_execute(req: CortexExecuteRequest):
+def cortex_execute(req: CortexExecuteRequest, request: Request):
     """
     Executes a single EXECUTE-type step from CORTEX.
     Runs the patch engine on the step description and returns patch results.
     """
+    username = get_username_from_request(request)
     from ai_engine.patch_engine import identify_target_files, generate_surgical_patches
 
     # RAG search for relevant context
@@ -405,6 +520,7 @@ def cortex_execute(req: CortexExecuteRequest):
         open_file_content=req.file_content,
         open_filename=req.filename,
         index=index,
+            username=username,
     )
 
     planner_files = [req.filename] if req.filename else []
@@ -451,41 +567,158 @@ def cortex_execute(req: CortexExecuteRequest):
 # ─── /index ───────────────────────────────────────────────────────────────────
 
 @app.post("/index-project")
-def index_project(req: IndexRequest):
-    stats = index.index_files(req.files)
+def index_project(req: IndexRequest, request: Request):
+    username = get_username_from_request(request)
+    stats = index.index_files(req.files, username)
     return {
         "status": "indexed",
-        "files_indexed": stats["files"],
+        "files_jindexed": stats["files"],
         "chunks_created": stats["chunks"],
         "skipped": stats["skipped"],
-        "total_chunks": index.stats()["total_chunks"],
+        "total_chunks": index.stats(username)["total_chunks"],
     }
 
 @app.post("/index-clear")
-def index_clear():
-    index.clear()
+def index_clear(request: Request):
+    username = get_username_from_request(request)
+    index.clear(username)
     return {"status": "cleared"}
 
 @app.get("/index-stats")
-def index_stats():
-    return index.stats()
+def index_stats(request: Request):
+    username = get_username_from_request(request)
+    return index.stats(username)
 
 # ─── /memory ──────────────────────────────────────────────────────────────────
 
 @app.get("/memory/stats")
-def memory_stats():
+def memory_stats(request: Request):
+    username = get_username_from_request(request)
+    memory = get_memory(username)
     return memory.stats()
 
 @app.get("/memory/runs")
-def memory_runs():
+def memory_runs(request: Request):
+    username = get_username_from_request(request)
+    memory = get_memory(username)
     return memory.get_recent_runs(10)
 
 @app.get("/memory/file/{filename}")
-def memory_file(filename: str):
+def memory_file(filename: str, request: Request):
+    username = get_username_from_request(request)
+    memory = get_memory(username)
     return memory.get_file_decisions(filename)
 
+# ─── /history ─────────────────────────────────────────────────────────────────
+
+@app.get("/history/sessions")
+def history_list(request: Request):
+    """Return all session metadata for the current user (sorted newest first)."""
+    username = get_username_from_request(request)
+    hist_dir = get_user_history_dir(username)
+    sessions = []
+    for fname in os.listdir(hist_dir):
+        if not fname.endswith(".json"):
+            continue
+        fpath = os.path.join(hist_dir, fname)
+        try:
+            with open(fpath, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            sessions.append({
+                "id": data.get("id", fname[:-5]),
+                "title": data.get("title", "Untitled"),
+                "created_at": data.get("created_at", ""),
+                "updated_at": data.get("updated_at", ""),
+                "message_count": len(data.get("messages", [])),
+            })
+        except Exception:
+            pass
+    sessions.sort(key=lambda s: s.get("updated_at", ""), reverse=True)
+    return {"sessions": sessions}
+
+
+@app.get("/history/sessions/{session_id}")
+def history_get(session_id: str, request: Request):
+    """Return the full message list for a session."""
+    username = get_username_from_request(request)
+    hist_dir = get_user_history_dir(username)
+    fpath = os.path.join(hist_dir, f"{session_id}.json")
+    if not os.path.exists(fpath):
+        raise HTTPException(status_code=404, detail="Session not found")
+    with open(fpath, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    return data
+
+
+@app.post("/history/sessions")
+def history_create(request: Request):
+    """Create a new empty session and return its ID."""
+    username = get_username_from_request(request)
+    hist_dir = get_user_history_dir(username)
+    session_id = str(uuid.uuid4())
+    now = datetime.utcnow().isoformat() + "Z"
+    data = {
+        "id": session_id,
+        "title": "New conversation",
+        "created_at": now,
+        "updated_at": now,
+        "messages": [],
+    }
+    fpath = os.path.join(hist_dir, f"{session_id}.json")
+    with open(fpath, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+    return {"session_id": session_id, "created_at": now}
+
+
+@app.put("/history/sessions/{session_id}")
+def history_save(session_id: str, req: SaveSessionRequest, request: Request):
+    """Overwrite a session's messages and update its title + timestamp."""
+    username = get_username_from_request(request)
+    hist_dir = get_user_history_dir(username)
+    fpath = os.path.join(hist_dir, f"{session_id}.json")
+
+    # Load existing or start fresh (handles race at creation)
+    if os.path.exists(fpath):
+        with open(fpath, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    else:
+        now = datetime.utcnow().isoformat() + "Z"
+        data = {"id": session_id, "title": "New conversation", "created_at": now, "messages": []}
+
+    # Derive title from first user message if not provided
+    title = req.title
+    if not title:
+        for msg in req.messages:
+            if msg.role == "user":
+                title = msg.content[:60] + ("…" if len(msg.content) > 60 else "")
+                break
+    data["title"] = title or data.get("title", "Untitled")
+    data["messages"] = [{"role": m.role, "content": m.content} for m in req.messages]
+    data["updated_at"] = datetime.utcnow().isoformat() + "Z"
+
+    with open(fpath, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+
+    # Best-effort sync to Docker volume for authenticated users
+    if username != "anonymous":
+        _sync_history_to_docker(username, session_id, data)
+
+    return {"status": "saved", "session_id": session_id, "title": data["title"]}
+
+
+@app.delete("/history/sessions/{session_id}")
+def history_delete(session_id: str, request: Request):
+    """Delete a session from disk."""
+    username = get_username_from_request(request)
+    hist_dir = get_user_history_dir(username)
+    fpath = os.path.join(hist_dir, f"{session_id}.json")
+    if not os.path.exists(fpath):
+        raise HTTPException(status_code=404, detail="Session not found")
+    os.remove(fpath)
+    return {"status": "deleted", "session_id": session_id}
+
 @app.post("/patch")
-def patch(req: PatchRequest):
+def patch(req: PatchRequest, request: Request):
     """
     Full surgical patch pipeline:
     1. RAG search to find relevant chunks
@@ -494,6 +727,7 @@ def patch(req: PatchRequest):
     4. Resolve patches to exact line numbers
     5. Return resolved patch list to frontend
     """
+    username = get_username_from_request(request)
     from ai_engine.patch_engine import identify_target_files, generate_surgical_patches
  
     # Step 1 — RAG search
@@ -502,6 +736,7 @@ def patch(req: PatchRequest):
         open_file_content=req.open_file_content,
         open_filename=req.open_filename,
         index=index,
+            username=username,
     )
  
     # Step 2 — File identification
@@ -969,7 +1204,7 @@ def health():
         "status": "ok",
         "app": "ANTIMATTER",
         "version": "4.0.0",
-        "index_chunks": index.stats()["total_chunks"],
+        "index_chunks": index.stats(username)["total_chunks"],
         "memory": memory.stats(),
     }
 

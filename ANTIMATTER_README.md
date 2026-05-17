@@ -11,7 +11,7 @@
 **Port:** `1842`  
 **Stack:** Vanilla JS + Monaco Editor (frontend) · FastAPI + Groq SDK + Docker (backend) · ChromaDB + SQLite (memory/sandboxes)  
 **Auth:** GitHub OAuth + JWT (HttpOnly Cookies)  
-**LLM provider:** Groq API (not Anthropic) — models: `llama-3.1-8b-instant`, `deepseek-r1-distill-llama-70b`, `mixtral-8x7b-32768`  
+**LLM provider:** Groq API (not Anthropic) — models: `llama-3.1-8b-instant`, `openai/gpt-oss-120b`, `qwen/qwen3-32b`  
 **Developer:** Madhur — Data Scientist transitioning to GenAI/Agentic AI Engineering  
 **Goal:** Portfolio-grade project demonstrating RAG pipelines, multi-agent orchestration, and agentic code editing  
 
@@ -444,7 +444,7 @@ User clicks ⟐ Smart Fix → types task → submits
 
 **Problem:** LLM paraphrases `original` text instead of copying verbatim.  
 **Fixes applied:** 4-level fallback chain in `localize_patch()`. Stricter prompt language. Fuzzy threshold lowered to 0.65.  
-**Remaining failure rate:** ~5% on complex multiline originals with deepseek-r1.  
+**Remaining failure rate:** ~5% on complex multiline originals with openai/gpt-oss-120b.  
 **Workaround:** `manualSearch()` opens Monaco find widget with first line of failed patch.
 
 ### 9.3 Agent Panel Apply/Diff Buttons

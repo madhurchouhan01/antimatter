@@ -100,17 +100,22 @@ class CodebaseIndex:
         # Use Chroma's built-in sentence transformer (no API key needed)
         self.ef = embedding_functions.DefaultEmbeddingFunction()
 
-        self.collection = self.client.get_or_create_collection(
-            name="antimatter_codebase",
+    def _get_collection(self, username: str):
+        # Clean username to meet ChromaDB collection name rules
+        safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in username).strip("_")
+        name = f"codebase_{safe_name}"[:63]
+        return self.client.get_or_create_collection(
+            name=name,
             embedding_function=self.ef,
             metadata={"hnsw:space": "cosine"}
         )
 
-    def index_files(self, files: Dict[str, str]) -> Dict:
+    def index_files(self, files: Dict[str, str], username: str) -> Dict:
         """
-        Index a dict of {filename: content} into ChromaDB.
+        Index a dict of {filename: content} into ChromaDB for a specific user.
         Returns a summary of what was indexed.
         """
+        collection = self._get_collection(username)
         all_chunks = []
         stats = {"files": 0, "chunks": 0, "skipped": []}
 
@@ -130,7 +135,7 @@ class CodebaseIndex:
         batch_size = 50
         for i in range(0, len(all_chunks), batch_size):
             batch = all_chunks[i: i + batch_size]
-            self.collection.upsert(
+            collection.upsert(
                 ids=[c["id"] for c in batch],
                 documents=[c["text"] for c in batch],
                 metadatas=[c["metadata"] for c in batch],
@@ -139,27 +144,28 @@ class CodebaseIndex:
         stats["chunks"] = len(all_chunks)
         return stats
 
-    def search(self, query: str, n_results: int = 5, filename_filter: str = None) -> List[Dict]:
+    def search(self, query: str, username: str, n_results: int = 5, filename_filter: str = None) -> List[Dict]:
         """
-        Semantic search over the indexed codebase.
+        Semantic search over the user's indexed codebase.
         Optionally filter by filename.
         Returns list of relevant chunks with metadata.
         """
-        if self.collection.count() == 0:
+        collection = self._get_collection(username)
+        if collection.count() == 0:
             return []
 
         where = {"filename": filename_filter} if filename_filter else None
 
         try:
-            results = self.collection.query(
+            results = collection.query(
                 query_texts=[query],
-                n_results=min(n_results, self.collection.count()),
+                n_results=min(n_results, collection.count()),
                 where=where,
             )
         except Exception:
-            results = self.collection.query(
+            results = collection.query(
                 query_texts=[query],
-                n_results=min(n_results, self.collection.count()),
+                n_results=min(n_results, collection.count()),
             )
 
         chunks = []
@@ -177,19 +183,16 @@ class CodebaseIndex:
 
         return chunks
 
-    def clear(self):
-        """Wipe the index."""
-        self.client.delete_collection("antimatter_codebase")
-        self.collection = self.client.get_or_create_collection(
-            name="antimatter_codebase",
-            embedding_function=self.ef,
-            metadata={"hnsw:space": "cosine"}
-        )
+    def clear(self, username: str):
+        """Wipe the user's index."""
+        collection = self._get_collection(username)
+        self.client.delete_collection(collection.name)
 
-    def stats(self) -> Dict:
+    def stats(self, username: str) -> Dict:
+        collection = self._get_collection(username)
         return {
-            "total_chunks": self.collection.count(),
-            "collection": "antimatter_codebase"
+            "total_chunks": collection.count(),
+            "collection": collection.name
         }
 
 
@@ -209,6 +212,7 @@ def build_context(
     open_file_content: str,
     open_filename: str,
     index: CodebaseIndex,
+    username: str,
     max_tokens: int = 6000,
 ) -> Tuple[str, List[Dict]]:
     """
@@ -241,7 +245,7 @@ def build_context(
     # 2. RAG retrieval for relevant chunks from other files
     remaining_tokens = max_tokens - used_tokens
     if remaining_tokens > 500:
-        chunks = index.search(query, n_results=6)
+        chunks = index.search(query, username, n_results=6)
         retrieved = chunks
 
         rag_parts = []

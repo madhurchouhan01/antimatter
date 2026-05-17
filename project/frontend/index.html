@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -11,6 +11,8 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css" />
   <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>mermaid.initialize({ startOnLoad: false, theme: 'dark' });</script>
   <style>
     *,
     *::before,
@@ -3175,7 +3177,265 @@
     #terminal-resize-handle { height: 4px; cursor: ns-resize; background: var(--border2); margin-top: -2px; }
     #terminal-panel.fullscreen { position: fixed !important; inset: 0 !important; 
       height: 100vh !important; left: 0 !important; right: 0 !important; z-index: 9000 !important; }
+
+    .mermaid-block {
+      background: var(--bg2);
+      border: 1px solid var(--border2);
+      border-radius: 6px;
+      padding: 16px 12px;
+      margin: 10px 0 4px;
+      overflow-x: auto;
+    }
+    .mermaid-block svg { max-width: 100%; height: auto; display: block; }
+    .mermaid-loading {
+      color: var(--purple);
+      font-size: 11px;
+      font-family: var(--font-mono);
+      opacity: 0.7;
+    }
+    .msg-bubble h1, .msg-bubble h2, .msg-bubble h3, .msg-bubble h4 {
+  font-family: var(--font-mono);
+  color: var(--text);
+  margin: 10px 0 4px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.msg-bubble h1 { font-size: 15px; }
+.msg-bubble h2 { font-size: 14px; }
+.msg-bubble h3 { font-size: 13px; color: var(--purple); }
+.msg-bubble h4 { font-size: 12px; color: var(--text2); }
+
+.msg-bubble ul, .msg-bubble ol {
+  margin: 6px 0;
+  padding-left: 18px;
+}
+.msg-bubble li { margin: 3px 0; line-height: 1.5; }
+
+.msg-bubble blockquote {
+  border-left: 2px solid var(--purple);
+  margin: 6px 0;
+  padding: 4px 10px;
+  color: var(--text2);
+  font-style: italic;
+}
+
+.msg-bubble table {
+  border-collapse: collapse;
+  font-size: 12px;
+  margin: 8px 0;
+  width: 100%;
+}
+.msg-bubble th, .msg-bubble td {
+  border: 1px solid var(--border);
+  padding: 5px 10px;
+  text-align: left;
+}
+.msg-bubble th {
+  background: var(--bg3);
+  color: var(--purple);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.msg-bubble hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 10px 0;
+}
+
+    /* ═══════════════════════════════════════════════════════
+       INTERACTION HISTORY SIDEBAR
+    ═══════════════════════════════════════════════════════ */
+    .history-sidebar {
+      position: absolute;
+      inset: 0;
+      background: var(--bg2);
+      z-index: 200;
+      display: flex;
+      flex-direction: column;
+      transform: translateX(100%);
+      transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      border-left: 1px solid var(--border);
+    }
+    .history-sidebar.open {
+      transform: translateX(0);
+    }
+    .history-sidebar-header {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .history-sidebar-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+    .history-new-btn {
+      font-size: 10px;
+      font-family: var(--font-mono);
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 5px;
+      border: 1px solid rgba(79,156,249,0.4);
+      background: rgba(79,156,249,0.08);
+      color: var(--accent);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .history-new-btn:hover {
+      background: rgba(79,156,249,0.18);
+    }
+    .history-close-btn {
+      width: 24px;
+      height: 24px;
+      border-radius: 5px;
+      border: 1px solid var(--border2);
+      background: var(--bg3);
+      color: var(--text3);
+      cursor: pointer;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s;
+    }
+    .history-close-btn:hover {
+      color: var(--text);
+      background: var(--bg4);
+    }
+    .history-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 0;
+    }
+    .history-list::-webkit-scrollbar { width: 3px; }
+    .history-list::-webkit-scrollbar-thumb {
+      background: var(--border2);
+      border-radius: 2px;
+    }
+    .history-date-group {
+      padding: 6px 14px 2px;
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text3);
+      font-family: var(--font-mono);
+    }
+    .history-session-card {
+      margin: 2px 8px;
+      padding: 9px 10px;
+      border-radius: 7px;
+      border: 1px solid transparent;
+      cursor: pointer;
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      transition: background 0.12s, border-color 0.12s;
+      position: relative;
+    }
+    .history-session-card:hover {
+      background: var(--bg3);
+      border-color: var(--border);
+    }
+    .history-session-card.active {
+      background: rgba(79,156,249,0.07);
+      border-color: rgba(79,156,249,0.3);
+    }
+    .history-session-icon {
+      font-size: 13px;
+      flex-shrink: 0;
+      margin-top: 1px;
+      opacity: 0.6;
+    }
+    .history-session-card.active .history-session-icon { opacity: 1; }
+    .history-session-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .history-session-title {
+      font-size: 12px;
+      color: var(--text);
+      line-height: 1.4;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-weight: 500;
+    }
+    .history-session-card.active .history-session-title { color: var(--accent); }
+    .history-session-meta {
+      font-size: 10px;
+      color: var(--text3);
+      font-family: var(--font-mono);
+      margin-top: 2px;
+    }
+    .history-delete-btn {
+      width: 22px;
+      height: 22px;
+      border-radius: 4px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--text3);
+      cursor: pointer;
+      font-size: 11px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      opacity: 0;
+      transition: all 0.12s;
+    }
+    .history-session-card:hover .history-delete-btn { opacity: 1; }
+    .history-delete-btn:hover {
+      border-color: var(--red);
+      color: var(--red);
+      background: rgba(248,113,113,0.1);
+    }
+    .history-empty-state {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 24px;
+      text-align: center;
+    }
+    .history-empty-icon { font-size: 28px; opacity: 0.3; }
+    .history-empty-text { font-size: 12px; color: var(--text3); line-height: 1.5; }
+    /* History toggle button in AI header */
+    .history-toggle-btn {
+      width: 26px;
+      height: 26px;
+      border-radius: 5px;
+      border: 1px solid var(--border2);
+      background: var(--bg3);
+      color: var(--text2);
+      cursor: pointer;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s;
+    }
+    .history-toggle-btn:hover {
+      background: var(--bg4);
+      color: var(--text);
+      border-color: var(--accent);
+    }
+    .history-toggle-btn.active {
+      background: rgba(79,156,249,0.12);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
   </style>
+
 </head>
 
 <body>
@@ -3241,7 +3501,7 @@
         </div>
       </div>
       <button class="btn" onclick="toggleSidebar()" title="Toggle Sidebar (Ctrl+B)">🗂️ Files</button>
-      <button class="btn smart-fix" id="forge-btn" onclick="openSmartFix()" title="Open Smart Fix (Ctrl+I)">⚡ FORGE</button>
+      <!-- <button class="btn smart-fix" id="forge-btn" onclick="openSmartFix()" title="Open Smart Fix (Ctrl+I)">⚡ FORGE</button> -->
       <button class="btn" id="index-btn" onclick="indexProject()">⬡ Index project</button>
       <button class="btn" onclick="clearChat()">↺ Clear chat</button>
       <button class="btn success" id="run-btn" onclick="runCode()" style="display:none" title="Run Code (Ctrl+Enter)">▶ Run</button>
@@ -3327,7 +3587,31 @@
           ⚛ ANTIMATTER
           <span class="ai-badge">Groq</span>
         </div>
-        <button id="ai-collapse-btn" onclick="toggleAIPanel()" style="background:none; border:none; color:var(--text3); cursor:pointer; font-size:16px;">›</button>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <button class="history-toggle-btn" id="history-toggle-btn"
+            onclick="HistoryManager.toggleSidebar()"
+            title="Conversation History">
+            🕐
+          </button>
+          <button id="ai-collapse-btn" onclick="toggleAIPanel()" style="background:none; border:none; color:var(--text3); cursor:pointer; font-size:16px;">›</button>
+        </div>
+      </div>
+
+      <!-- HISTORY SIDEBAR (slides over the AI panel) -->
+      <div class="history-sidebar" id="history-sidebar">
+        <div class="history-sidebar-header">
+          <div class="history-sidebar-title">🕐 History</div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <button class="history-new-btn" onclick="HistoryManager.newConversation()">+ New Chat</button>
+            <button class="history-close-btn" onclick="HistoryManager.toggleSidebar()">✕</button>
+          </div>
+        </div>
+        <div class="history-list" id="history-list">
+          <div class="history-empty-state" id="history-empty">
+            <div class="history-empty-icon">🕐</div>
+            <div class="history-empty-text">No conversations yet.<br>Start chatting in ORACLE to save history.</div>
+          </div>
+        </div>
       </div>
       <!-- Add after your main editor/AI panel split -->
       <div id="terminal-panel" style="
@@ -3384,8 +3668,8 @@
           <span class="mode-model-label">Model</span>
           <select class="mode-model-select" id="forge-model-select">
             <option value="llama-3.1-8b-instant">llama-3.3-70b</option>
-            <option value="deepseek-r1-distill-llama-70b">deepseek-r1</option>
-            <option value="mixtral-8x7b-32768">mixtral-8x7b</option>
+            <option value="openai/gpt-oss-120b">openai/gpt-oss-120b</option>
+            <option value="qwen/qwen3-32b">qwen/qwen3-32b</option>
           </select>
         </div>
 
@@ -3438,8 +3722,8 @@
           <span class="mode-model-label">Model</span>
           <select class="mode-model-select" id="oracle-model-select">
             <option value="llama-3.1-8b-instant">llama-3.3-70b</option>
-            <option value="deepseek-r1-distill-llama-70b">deepseek-r1</option>
-            <option value="mixtral-8x7b-32768">mixtral-8x7b</option>
+            <option value="openai/gpt-oss-120b">openai/gpt-oss-120b</option>
+            <option value="qwen/qwen3-32b">qwen/qwen3-32b</option>
           </select>
         </div>
         <div class="oracle-toolbar">
@@ -3481,8 +3765,8 @@
           <span class="mode-model-label">Model</span>
           <select class="mode-model-select" id="cortex-model-select">
             <option value="llama-3.1-8b-instant">llama-3.3-70b</option>
-            <option value="deepseek-r1-distill-llama-70b">deepseek-r1</option>
-            <option value="mixtral-8x7b-32768">mixtral-8x7b</option>
+            <option value="openai/gpt-oss-120b">openai/gpt-oss-120b</option>
+            <option value="qwen/qwen3-32b">qwen/qwen3-32b</option>
           </select>
         </div>
         <!-- Scrollable body: overview + step list -->
@@ -3610,7 +3894,8 @@
       <script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js"></script>
       <script>
         // ─── STATE ────────────────────────────────────────────
-        const BACKEND = 'http://localhost:1842';
+        const BACKEND = '
+        ';
         let editor = null, files = {}, activeFile = null;
         let isStreaming = false, conversationHistory = [];
         // let currentMode = 'chat';
@@ -3627,6 +3912,8 @@
               document.getElementById('user-profile').style.display = 'flex';
               document.getElementById('user-name').textContent = currentUser.username;
               document.getElementById('user-avatar').src = currentUser.avatar_url;
+              // Load history sessions on auth success
+              if (typeof HistoryManager !== 'undefined') HistoryManager.loadSessions();
             } else {
               document.getElementById('github-login-btn').style.display = 'flex';
               document.getElementById('user-profile').style.display = 'none';
@@ -4205,6 +4492,12 @@
 
             }
 
+            // Auto-log to history
+            if (!HistoryManager.currentSessionId) HistoryManager.createSession();
+            oracleHistory.push({ role: 'user', content: `🧠 CORTEX Goal: ${taskText}` });
+            oracleHistory.push({ role: 'assistant', content: `[CORTEX] Autonomous pipeline execution completed.` });
+            HistoryManager.saveSession();
+
           } catch (err) {
             addMessage('ai', `⚠ Agent error: ${err.message}`);
             ['planner', 'executor', 'critic', 'memory'].forEach(n => {
@@ -4220,6 +4513,192 @@
         // ── ORACLE: Send message ───────────────────────────────────────────────────
         let oracleHistory = [];
         let oracleStreaming = false;
+
+        // ── HISTORY MANAGER ───────────────────────────────────────────────────────
+        const HistoryManager = {
+          currentSessionId: null,
+          sessions: [],
+          sidebarOpen: false,
+
+          async loadSessions() {
+            try {
+              const res = await fetch(`${BACKEND}/history/sessions`);
+              if (!res.ok) return;
+              const data = await res.json();
+              this.sessions = data.sessions || [];
+              this.renderSidebar();
+            } catch (e) { console.warn('[history] loadSessions failed:', e); }
+          },
+
+          async loadSession(sessionId) {
+            try {
+              const res = await fetch(`${BACKEND}/history/sessions/${sessionId}`);
+              if (!res.ok) return;
+              const data = await res.json();
+              this.currentSessionId = sessionId;
+
+              // Restore oracle history array
+              oracleHistory = (data.messages || []).map(m => ({ role: m.role, content: m.content }));
+
+              // Re-render oracle messages panel
+              const oracleM = document.getElementById('oracle-messages');
+              oracleM.innerHTML = '';
+              for (const m of data.messages || []) {
+                addOracleMsg(m.role === 'user' ? 'you' : 'ai', m.content);
+              }
+              if ((data.messages || []).length === 0) {
+                oracleM.innerHTML = `<div class="empty-state" id="oracle-empty">
+                  <div class="empty-icon">🔮</div>
+                  <div class="empty-title">ORACLE</div>
+                  <div class="empty-sub">Resumed conversation — continue asking.</div>
+                </div>`;
+              }
+
+              setMode('oracle');
+              scrollOracleMessages();
+              this.renderSidebar();
+              if (this.sidebarOpen) this.toggleSidebar();
+            } catch (e) { console.warn('[history] loadSession failed:', e); }
+          },
+
+          async createSession() {
+            try {
+              const res = await fetch(`${BACKEND}/history/sessions`, { method: 'POST' });
+              if (!res.ok) return null;
+              const data = await res.json();
+              this.currentSessionId = data.session_id;
+              return data.session_id;
+            } catch (e) {
+              console.warn('[history] createSession failed:', e);
+              return null;
+            }
+          },
+
+          async saveSession() {
+            if (!this.currentSessionId || oracleHistory.length === 0) return;
+            try {
+              await fetch(`${BACKEND}/history/sessions/${this.currentSessionId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  session_id: this.currentSessionId,
+                  messages: oracleHistory,
+                  title: ''
+                })
+              });
+              this.loadSessions();
+            } catch (e) { console.warn('[history] saveSession failed:', e); }
+          },
+
+          async deleteSession(sessionId, event) {
+            if (event) event.stopPropagation();
+            if (!confirm('Delete this conversation?')) return;
+            try {
+              await fetch(`${BACKEND}/history/sessions/${sessionId}`, { method: 'DELETE' });
+              if (this.currentSessionId === sessionId) {
+                this.currentSessionId = null;
+                oracleHistory = [];
+              }
+              await this.loadSessions();
+            } catch (e) { console.warn('[history] deleteSession failed:', e); }
+          },
+
+          toggleSidebar() {
+            this.sidebarOpen = !this.sidebarOpen;
+            const sidebar = document.getElementById('history-sidebar');
+            const btn = document.getElementById('history-toggle-btn');
+            if (this.sidebarOpen) {
+              sidebar.classList.add('open');
+              if (btn) btn.classList.add('active');
+              this.loadSessions();
+            } else {
+              sidebar.classList.remove('open');
+              if (btn) btn.classList.remove('active');
+            }
+          },
+
+          async newConversation() {
+            this.currentSessionId = null;
+            oracleHistory = [];
+            const oracleM = document.getElementById('oracle-messages');
+            if (oracleM) oracleM.innerHTML = `<div class="empty-state" id="oracle-empty">
+              <div class="empty-icon">🔮</div>
+              <div class="empty-title">ORACLE</div>
+              <div class="empty-sub">Ask anything. ORACLE reads your codebase, explains, warns, and audits — but never changes code.</div>
+            </div>`;
+            setMode('oracle');
+            if (this.sidebarOpen) this.toggleSidebar();
+          },
+
+          _formatAge(isoStr) {
+            if (!isoStr) return '';
+            const d = new Date(isoStr);
+            const now = new Date();
+            const diffMin = Math.floor((now - d) / 60000);
+            const diffH = Math.floor(diffMin / 60);
+            if (diffMin < 1) return 'just now';
+            if (diffMin < 60) return `${diffMin}m ago`;
+            if (diffH < 24) return `${diffH}h ago`;
+            return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+          },
+
+          _dateGroup(isoStr) {
+            if (!isoStr) return 'Earlier';
+            const d = new Date(isoStr);
+            const now = new Date();
+            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const yesterday = new Date(today - 86400000);
+            const sessionDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+            if (sessionDay >= today) return 'Today';
+            if (sessionDay >= yesterday) return 'Yesterday';
+            return d.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+          },
+
+          renderSidebar() {
+            const list = document.getElementById('history-list');
+            if (!list) return;
+            if (this.sessions.length === 0) {
+              list.innerHTML = `<div class="history-empty-state">
+                <div class="history-empty-icon">🕐</div>
+                <div class="history-empty-text">No conversations yet.<br>Start chatting in ORACLE to save history.</div>
+              </div>`;
+              return;
+            }
+            const groups = {};
+            for (const s of this.sessions) {
+              const g = this._dateGroup(s.updated_at);
+              if (!groups[g]) groups[g] = [];
+              groups[g].push(s);
+            }
+            const ORDER = ['Today', 'Yesterday'];
+            const allGroups = [...ORDER, ...Object.keys(groups).filter(g => !ORDER.includes(g))];
+            let html = '';
+            for (const g of allGroups) {
+              if (!groups[g]) continue;
+              html += `<div class="history-date-group">${g}</div>`;
+              for (const s of groups[g]) {
+                const isActive = s.id === this.currentSessionId;
+                const age = this._formatAge(s.updated_at);
+                const mc = s.message_count || 0;
+                const safeTitle = escapeHtml(s.title || 'Untitled');
+                html += `
+                  <div class="history-session-card${isActive ? ' active' : ''}"
+                    onclick="HistoryManager.loadSession('${s.id}')">
+                    <span class="history-session-icon">🔮</span>
+                    <div class="history-session-info">
+                      <div class="history-session-title" title="${safeTitle}">${safeTitle}</div>
+                      <div class="history-session-meta">${age} · ${mc} msg${mc !== 1 ? 's' : ''}</div>
+                    </div>
+                    <button class="history-delete-btn"
+                      onclick="HistoryManager.deleteSession('${s.id}', event)"
+                      title="Delete conversation">🗑</button>
+                  </div>`;
+              }
+            }
+            list.innerHTML = html;
+          }
+        };
+
 
         function handleOracleKey(e) {
           if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendOracleMessage(); }
@@ -4239,23 +4718,9 @@
           autoResize(input);
         }
 
-        // function quickCmd(cmd) {
-        //   // Shared quick commands — route to FORGE's context bar for now
-        //   const cmds = {
-        //     '/explain': 'Explain what this code does in detail.',
-        //     '/refactor': 'Refactor this code to be cleaner and more efficient.',
-        //     '/fix': 'Find and fix any bugs or issues in this code.',
-        //   };
-        //   // If oracle panel is active, route there
-        //   const input = document.getElementById('oracle-input');
-        //   if (currentMode === 'oracle' && input) {
-        //     input.value = cmds[cmd] || cmd + ' ';
-        //     input.focus(); autoResize(input);
-        //   }
-        // }
-
         async function sendOracleMessage() {
           if (oracleStreaming) return;
+
           const input = document.getElementById('oracle-input');
           const text = input.value.trim();
           if (!text) return;
@@ -4269,6 +4734,11 @@
           addOracleMsg('you', text);
           oracleHistory.push({ role: 'user', content: text });
 
+          // Auto-create history session on first message
+          if (!HistoryManager.currentSessionId) {
+            HistoryManager.createSession();
+          }
+
           oracleStreaming = true;
           document.getElementById('oracle-send-btn').disabled = true;
           const thinkId = addOracleThinking();
@@ -4276,7 +4746,9 @@
           const model = document.getElementById('oracle-model-select').value;
           const useWebSearch = document.getElementById('oracle-web-search').checked;
           const fileContent = activeFile ? files[activeFile] : '';
-
+          
+          const diagramKeywords = ['architecture','data flow','diagram','describe project','project structure','how does this work','explain system'];
+          const wantsDiagram = diagramKeywords.some(k => text.toLowerCase().includes(k));
           try {
             const response = await fetch(`${BACKEND}/oracle`, {
               method: 'POST',
@@ -4289,6 +4761,7 @@
                 history: oracleHistory.slice(-10),
                 use_rag: true,
                 use_web_search: useWebSearch,
+                wants_diagram: wantsDiagram
               })
             });
 
@@ -4319,9 +4792,35 @@
               bubble.innerHTML = formatMessage(fullText);
               scrollOracleMessages();
             }
+          const mermaidMatch = fullText.match(/\[MERMAID\]([\s\S]*?)\[\/MERMAID\]/);
+          if (mermaidMatch) {
+            // Remove the raw tag from the bubble
+            fullText = fullText.replace(/\[MERMAID\][\s\S]*?\[\/MERMAID\]/, '').trimEnd();
+            bubble.innerHTML = formatMessage(fullText);
 
+            // Build diagram container and append below bubble
+            const diagramId = 'mermaid-' + Math.random().toString(36).slice(2, 8);
+            const diagramWrap = document.createElement('div');
+            diagramWrap.className = 'mermaid-block';
+            diagramWrap.id = diagramId;
+            diagramWrap.innerHTML = `<div class="mermaid-loading">⟳ Rendering diagram…</div>`;
+            msgEl.insertBefore(diagramWrap, msgEl.querySelector('.send-to-forge-btn')?.parentElement || null);
+            msgEl.appendChild(diagramWrap);   // fallback if footer not yet built
+
+            // Render after DOM settles
+            setTimeout(async () => {
+              try {
+                const { svg } = await mermaid.render('svg-' + diagramId, mermaidMatch[1].trim());
+                diagramWrap.innerHTML = svg;
+              } catch (e) {
+                diagramWrap.innerHTML = `<pre style="color:var(--text3);font-size:11px">${mermaidMatch[1].trim()}</pre>`;
+              }
+            }, 50);
+          }
             oracleHistory.push({ role: 'assistant', content: fullText });
 
+            // Auto-save after each complete AI response
+            HistoryManager.saveSession();
             // Add "Send to FORGE" button + RAG source chips
             const footer = document.createElement('div');
             footer.style.cssText = 'display:flex;flex-direction:column;gap:4px;margin-top:4px;';
@@ -4340,9 +4839,9 @@
             sendToForge.innerHTML = '⚡ Send to FORGE';
             sendToForge.onclick = () => {
               setMode('forge');
-              openSmartFix();
+              // openSmartFix();
               setTimeout(() => {
-                document.getElementById('smart-fix-input').value = fullText.slice(0, 300);
+                document.getElementById('forge-inline-input').value = fullText.slice(0, 30000);
               }, 80);
             };
             footer.appendChild(sendToForge);
@@ -4419,20 +4918,85 @@
             btn.disabled = false;
           }
         }
-        function formatMessage(text) {
-          // Code blocks
-          text = text.replace(/```(\w+)?\n([\s\S]*?)```/g, (_, lang, code) =>
-            `<pre><code>${escapeHtml(code.trim())}</code></pre>`
-          );
-          // Inline code
-          text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
-          // Bold
-          text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-          // Newlines
-          text = text.replace(/\n/g, '<br>');
-          return text;
-        }
+function formatMessage(text) {
+  // 1. Protect code blocks first (extract before any other processing)
+  const codeBlocks = [];
+  text = text.replace(/```(\w+)?\n?([\s\S]*?)```/g, (_, lang, code) => {
+    const idx = codeBlocks.length;
+    codeBlocks.push(`<pre><code class="lang-${lang || 'text'}">${escapeHtml(code.trim())}</code></pre>`);
+    return `%%CODEBLOCK_${idx}%%`;
+  });
 
+  // 2. Inline code (protect before bold/italic)
+  const inlineCodes = [];
+  text = text.replace(/`([^`]+)`/g, (_, code) => {
+    const idx = inlineCodes.length;
+    inlineCodes.push(`<code>${escapeHtml(code)}</code>`);
+    return `%%INLINE_${idx}%%`;
+  });
+
+  // 3. Headings (must run before bold so ### isn't mangled)
+  text = text.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
+  text = text.replace(/^### (.+)$/gm,  '<h3>$1</h3>');
+  text = text.replace(/^## (.+)$/gm,   '<h2>$1</h2>');
+  text = text.replace(/^# (.+)$/gm,    '<h1>$1</h1>');
+
+  // 4. Bold + italic
+  text = text.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+  text = text.replace(/\*\*(.+?)\*\*/g,     '<strong>$1</strong>');
+  text = text.replace(/\*(.+?)\*/g,         '<em>$1</em>');
+
+  // 5. Blockquotes
+  text = text.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
+  text = text.replace(/^> (.+)$/gm,    '<blockquote>$1</blockquote>');
+
+  // 6. Horizontal rule
+  text = text.replace(/^---+$/gm, '<hr>');
+
+  // 7. Unordered lists — group consecutive bullet lines into <ul>
+  text = text.replace(/((?:^[ \t]*[-*] .+\n?)+)/gm, match => {
+    const items = match.trim().split('\n').map(line =>
+      `<li>${line.replace(/^[ \t]*[-*] /, '').trim()}</li>`
+    ).join('');
+    return `<ul>${items}</ul>`;
+  });
+
+  // 8. Ordered lists — group consecutive numbered lines into <ol>
+  text = text.replace(/((?:^\d+\. .+\n?)+)/gm, match => {
+    const items = match.trim().split('\n').map(line =>
+      `<li>${line.replace(/^\d+\. /, '').trim()}</li>`
+    ).join('');
+    return `<ol>${items}</ol>`;
+  });
+
+  // 9. Tables  (| col | col |)
+  text = text.replace(/((?:^\|.+\|\n?)+)/gm, match => {
+    const rows = match.trim().split('\n').filter(r => r.trim());
+    const isSeparator = r => /^\|[-| :]+\|$/.test(r.trim());
+    let html = '<table>';
+    let headerDone = false;
+    rows.forEach(row => {
+      if (isSeparator(row)) { headerDone = true; return; }
+      const cells = row.split('|').filter((_, i, a) => i > 0 && i < a.length - 1);
+      const tag = !headerDone ? 'th' : 'td';
+      html += '<tr>' + cells.map(c => `<${tag}>${c.trim()}</${tag}>`).join('') + '</tr>';
+    });
+    html += '</table>';
+    return html;
+  });
+
+  // 10. Newlines → <br> (skip lines that are already block elements)
+  // text = text.replace(/\n(?!<(ul|ol|li|h[1-4]|pre|blockquote|table|tr|th|td|hr))/g, '<br>');
+text = text.replace(/(?<!(<\/h[1-4]>|<\/ul>|<\/ol>|<\/blockquote>|<\/pre>|<hr>))\n(?!<(ul|ol|li|h[1-4]|pre|blockquote|table|tr|th|td|hr))/g, '<br>');
+
+  // 11. Restore protected blocks
+  codeBlocks.forEach((block, i)  => { text = text.replace(`%%CODEBLOCK_${i}%%`, block); });
+  inlineCodes.forEach((code, i)  => { text = text.replace(`%%INLINE_${i}%%`,    code);  });
+
+  // text = text.replace(/(<br>)+(<\/?(h[1-4]|ul|ol|li|blockquote|pre|table|tr|th|td|hr)[^>]*>)/g, '$2');
+  // text = text.replace(/(<\/?(h[1-4]|ul|ol|li|blockquote|pre|table|tr|th|td|hr)[^>]*>)(<br>)+/g, '$1');
+  return text;
+}
         function escapeHtml(text) {
           return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         }
@@ -4507,13 +5071,19 @@
       <div class="empty-title">FORGE</div>
       <div class="empty-sub">Click ⚡ FORGE in the toolbar to describe a code change.</div>
     </div>`;
-          // Clear ORACLE messages
-          const oracleM = document.getElementById('oracle-messages');
-          if (oracleM) oracleM.innerHTML = `<div class="empty-state" id="oracle-empty">
-      <div class="empty-icon">🔮</div>
-      <div class="empty-title">ORACLE</div>
-      <div class="empty-sub">Ask anything about your code.</div>
-    </div>`;
+          // Clear ORACLE messages by creating a new session
+          if (typeof HistoryManager !== 'undefined') {
+            HistoryManager.newConversation();
+          } else {
+            const oracleM = document.getElementById('oracle-messages');
+            if (oracleM) oracleM.innerHTML = `<div class="empty-state" id="oracle-empty">
+        <div class="empty-icon">🔮</div>
+        <div class="empty-title">ORACLE</div>
+        <div class="empty-sub">Ask anything about your code.</div>
+      </div>`;
+            oracleHistory = [];
+          }
+          // Clear CORTEX
           // Clear CORTEX
           const cortexB = document.getElementById('cortex-body');
           if (cortexB) cortexB.innerHTML = `<div class="empty-state" id="cortex-empty">
@@ -4653,6 +5223,13 @@
           applyForgeSession(goal, plan, patchData);
           inputEl.value = '';
           inputEl.style.height = 'auto';
+          
+          // Auto-log to history
+          if (!HistoryManager.currentSessionId) HistoryManager.createSession();
+          oracleHistory.push({ role: 'user', content: `⚡ FORGE Task: ${goal}` });
+          const fileCount = Object.keys(patchData.results || {}).length;
+          oracleHistory.push({ role: 'assistant', content: `[FORGE] Generated inline patches for ${fileCount} file${fileCount === 1 ? '' : 's'}.` });
+          HistoryManager.saveSession();
           // Keep disabled while session is active (read-only)
         }
 
