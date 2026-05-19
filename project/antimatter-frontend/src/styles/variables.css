@@ -1,0 +1,19 @@
+:root {
+  --bg: #0d0f12;
+  --bg2: #12151a;
+  --bg3: #181c23;
+  --bg4: #1e232c;
+  --border: #252b36;
+  --border2: #2e3645;
+  --text: #c9d1e0;
+  --text2: #7a8599;
+  --text3: #4a5568;
+  --accent: #4f9cf9;
+  --accent2: #3b82f6;
+  --green: #34d399;
+  --amber: #fbbf24;
+  --red: #f87171;
+  --purple: #a78bfa;
+  --font-mono: 'JetBrains Mono', monospace;
+  --font-ui: 'DM Sans', sans-serif;
+}
