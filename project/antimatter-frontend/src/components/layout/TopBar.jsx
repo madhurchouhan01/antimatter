@@ -1,5 +1,5 @@
 // src/components/layout/TopBar.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 
 export default function TopBar() {
@@ -40,15 +40,17 @@ export default function TopBar() {
   const handleLogout = async () => {
     try {
       await fetch(`${backendUrl}/auth/logout`, {
-  method: 'POST',
-  credentials: 'include'
-});
+        method: 'POST',
+        credentials: 'include'
+      });
       setCurrentUser(null);
       window.location.reload();
     } catch (e) {
       console.error('Logout request failed:', e);
     }
   };
+
+
 
   const handleIndexProject = async () => {
     if (Object.keys(files).length === 0) {

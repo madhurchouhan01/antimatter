@@ -8,7 +8,7 @@ export default function AIPanel() {
   const { currentMode, setMode, aiPanelWidth } = useAppStore();
 
   return (
-    <div style={{ width: aiPanelWidth, backgroundColor: 'var(--bg2)', borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ width: aiPanelWidth, backgroundColor: 'var(--bg2)', borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
       <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', fontWeight: 600 }}>
         ⚛ ANTIMATTER CONSOLE
       </div>

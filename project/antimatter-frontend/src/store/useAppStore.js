@@ -10,9 +10,17 @@ export const useAppStore = create((set, get) => ({
   terminalOpen: true,
   currentUser: null,
   sandboxSessionId: null, // Keep track of the active shell container instance
+  sidebarWidth: 220,
+  aiPanelWidth: 320,
+  terminalHeight: 250,
+  sendTerminalCommand: null,
 
   setFiles: (files) => set({ files }),
   setSandboxSessionId: (id) => set({ sandboxSessionId: id }),
+  setSidebarWidth: (w) => set({ sidebarWidth: w }),
+  setAiPanelWidth: (w) => set({ aiPanelWidth: w }),
+  setTerminalHeight: (h) => set({ terminalHeight: h }),
+  setSendTerminalCommand: (fn) => set({ sendTerminalCommand: fn }),
 
   openFile: (name) => set((state) => {
     const tabs = state.openTabs.includes(name) ? state.openTabs : [...state.openTabs, name];
@@ -55,5 +63,6 @@ export const useAppStore = create((set, get) => ({
 
   setMode: (currentMode) => set({ currentMode }),
   toggleTerminal: () => set((state) => ({ terminalOpen: !state.terminalOpen })),
+  setTerminalOpen: (isOpen) => set({ terminalOpen: isOpen }),
   setCurrentUser: (currentUser) => set({ currentUser }),
 }));

@@ -4,7 +4,7 @@ import FileTree from '../tree/FileTree';
 
 export default function Sidebar() {
   const fileInputRef = useRef(null);
-  const { files, setFiles, openFile } = useAppStore();
+  const { files, setFiles, openFile, sidebarWidth } = useAppStore();
 
   const handleFileUpload = (event) => {
     const fileInputs = Array.from(event.target.files);
@@ -22,7 +22,7 @@ export default function Sidebar() {
   };
 
   return (
-    <div style={{ width: 220, minWidth: 150, maxWidth: 400, resize: 'horizontal', backgroundColor: 'var(--bg2)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', flexShrink: 0, overflow: 'hidden' }}>
+    <div style={{ width: sidebarWidth, backgroundColor: 'var(--bg2)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', flexShrink: 0, overflow: 'hidden' }}>
       <div style={{ padding: '10px 14px', fontSize: 10, fontWeight: 600, letterSpacing: '0.1em', color: 'var(--text3)', textTransform: 'uppercase', borderBottom: '1px solid var(--border)' }}>
         Explorer
       </div>

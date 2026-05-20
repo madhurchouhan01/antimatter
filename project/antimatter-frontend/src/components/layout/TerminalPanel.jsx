@@ -15,7 +15,8 @@ export default function TerminalPanel() {
     toggleTerminal, 
     backendUrl, 
     setSandboxSessionId, 
-    setFiles 
+    setFiles,
+    setSendTerminalCommand
   } = useAppStore();
 
   // Keep a mutable reference to the files store so the socket can access it
@@ -72,6 +73,12 @@ export default function TerminalPanel() {
       // Pass file structures via static component ref layer safely
       ws.send(JSON.stringify({ type: 'init', files: filesRef.current }));
       
+      setSendTerminalCommand(() => (cmd) => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'input', data: cmd + '\r' }));
+        }
+      });
+      
       setTimeout(() => {
         if (ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: 'resize', rows: term.rows, cols: term.cols }));
@@ -115,6 +122,7 @@ export default function TerminalPanel() {
 
     // Operational Cleanup Layer 
     return () => {
+      setSendTerminalCommand(null);
       dataListener.dispose();
       window.removeEventListener('resize', handleWindowResize);
       if (sseWatcher) sseWatcher.close();
@@ -122,10 +130,10 @@ export default function TerminalPanel() {
       term.dispose();
     };
     // CRITICAL FIX: Empty dependency array ensures this connection mounts EXACTLY once on startup
-  }, [backendUrl, setFiles, setSandboxSessionId]);
+  }, [backendUrl, setFiles, setSandboxSessionId, setSendTerminalCommand]);
 
   return (
-    <div style={{ height: terminalHeight, background: '#0d0d0d', borderTop: '2px solid var(--border)', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ flex: `0 0 ${terminalHeight}px`, height: terminalHeight, background: '#0d0d0d', borderTop: '2px solid var(--border)', display: 'flex', flexDirection: 'column' }}>
       <div style={{ padding: '6px 12px', background: '#141414', borderBottom: '1px solid #2a2a2a', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span style={{ color: '#888', fontSize: 12, fontFamily: "'JetBrains Mono'" }}>TERMINAL</span>
         <button onClick={toggleTerminal} style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer' }}>✕</button>
