@@ -1209,17 +1209,17 @@ def health():
     }
 
 
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-import os
+# from fastapi.staticfiles import StaticFiles
+# from fastapi.responses import FileResponse
+# import os
 
-# Add right after app = FastAPI()
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-FRONTEND_DIR = os.path.join(BASE_DIR, "../frontend")
+# # Add right after app = FastAPI()
+# BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# FRONTEND_DIR = os.path.join(BASE_DIR, "../frontend")
 
-@app.get("/")
-async def serve_frontend():
-    return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
+# @app.get("/")
+# async def serve_frontend():
+#     return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
 
-# Serve static assets (CSS, JS, images if any)
-app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
+# # Serve static assets (CSS, JS, images if any)
+# app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
