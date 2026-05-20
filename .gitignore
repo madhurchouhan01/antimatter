@@ -15,3 +15,5 @@ project/memory/*
 # project/memory/chromadb/
 
 start-env.bat
+
+antimatter-frontend/
