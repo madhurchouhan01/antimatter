@@ -35,4 +35,21 @@ class Project(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     owner: Mapped["User"] = relationship(back_populates="projects")
-    
+
+class Conversation(Base):
+    __tablename__ = "conversations"
+    id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID] = mapped_column(UUID, ForeignKey("projects.id", ondelete="CASCADE"))
+    title: Mapped[str | None] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    messages: Mapped[list["Message"]] = relationship(back_populates="conversation", order_by="Message.created_at")
+
+class Message(Base):
+    __tablename__ = "messages"
+    id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
+    conversation_id: Mapped[uuid.UUID] = mapped_column(UUID, ForeignKey("conversations.id", ondelete="CASCADE"))
+    role: Mapped[str] = mapped_column(String(50))        # "user" | "assistant" | "tool"
+    content: Mapped[str] = mapped_column(Text)
+    tool_calls: Mapped[dict | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    conversation: Mapped["Conversation"] = relationship(back_populates="messages")

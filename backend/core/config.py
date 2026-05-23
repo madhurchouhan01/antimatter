@@ -13,6 +13,15 @@ class Settings(BaseSettings):
     workspace_root: str = "/workspaces"
     environment: str = "development"
 
+    # LLM
+    groq_api_key: str = ""
+    groq_model: str = "llama-3.3-70b-versatile"
+
+    # LangSmith (optional — leave blank to disable)
+    langchain_api_key: str = ""
+    langchain_tracing_v2: str = "false"
+    langchain_project: str = "ai-code-editor"
+    
 @lru_cache
 def get_settings() -> Settings:
     return Settings()

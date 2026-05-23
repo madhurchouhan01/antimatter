@@ -7,7 +7,7 @@ from db.models import User, Project
 from api.middleware.auth import get_current_user
 from core.config import get_settings
 import uuid, os
-
+from datetime import datetime
 router = APIRouter()
 settings = get_settings()
 
@@ -20,7 +20,7 @@ class ProjectOut(BaseModel):
     name: str
     description: str | None
     workspace_path: str
-    created_at: str
+    created_at: datetime   
 
     model_config = {"from_attributes": True}
 
@@ -46,7 +46,7 @@ async def create_project(
     await db.refresh(project)
     return project
 
-@router.get("/", response_model=list[ProjectOut])
+@router.get("/list_projects", response_model=list[ProjectOut])
 async def list_projects(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     result = await db.execute(select(Project).where(Project.owner_id == user.id))
     return result.scalars().all()

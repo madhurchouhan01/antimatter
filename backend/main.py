@@ -1,14 +1,17 @@
+
+from api.routes import auth, projects, files, agent, conversations
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api.routes import auth, projects, files
 from db.session import init_db
 from core.config import get_settings
+from core.tracing import setup_tracing
 
 settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    setup_tracing()
     await init_db()
     yield
 
@@ -24,7 +27,12 @@ app.add_middleware(
 
 app.include_router(auth.router,     prefix="/api/auth",     tags=["auth"])
 app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
-app.include_router(files.router,    prefix="/api/files",    tags=["files"])
+# app.include_router(files.router,    prefix="/api/files",    tags=["files"])
 
 @app.get("/health")
 async def health(): return {"status": "ok"}
+
+
+app.include_router(agent.router, prefix="/api/agent", tags=["agent"])
+
+app.include_router(conversations.router, prefix="/api/projects", tags=["conversations"])
