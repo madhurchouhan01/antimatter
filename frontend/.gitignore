@@ -1,25 +1,3 @@
-# Environment variables
-.env
-.env.*
-
-# Virtual env
-antimatter-env/
-venv-test/
-
-# Python
-__pycache__/
-*.pyc
-
-# ChromaDB / memory
-project/memory/*
-# project/memory/chromadb/
-
-start-env.bat
-antimatter-frontend/
-
-
-
-# ----frontend-----
 # Logs
 logs
 *.log

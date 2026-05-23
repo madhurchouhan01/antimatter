@@ -2,7 +2,7 @@ import json
 import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 from db.models import Conversation, Message, Project
 from agent.graph import build_graph
 
@@ -36,7 +36,17 @@ async def load_history(db: AsyncSession, conversation_id: uuid.UUID) -> list:
         if m.role == "user":
             lc_messages.append(HumanMessage(content=m.content))
         elif m.role == "assistant":
-            lc_messages.append(AIMessage(content=m.content))
+            kwargs = {"content": m.content}
+            if m.tool_calls:
+                kwargs["tool_calls"] = m.tool_calls
+            lc_messages.append(AIMessage(**kwargs))
+        elif m.role == "tool":
+            tool_call_id = ""
+            name = ""
+            if m.tool_calls:
+                tool_call_id = m.tool_calls.get("id", "")
+                name = m.tool_calls.get("name", "")
+            lc_messages.append(ToolMessage(content=m.content, tool_call_id=tool_call_id, name=name))
     return lc_messages
 
 async def run_agent_streaming(
@@ -56,7 +66,7 @@ async def run_agent_streaming(
     graph = build_graph(project.workspace_path)
     state = {"messages": history + [HumanMessage(content=user_message)]}
 
-    full_response = ""
+    initial_msg_count = len(state["messages"])
 
     # Stream token by token
     async for event in graph.astream_events(state, version="v2"):
@@ -66,8 +76,16 @@ async def run_agent_streaming(
             chunk = event["data"]["chunk"]
             token = chunk.content
             if token:
-                full_response += token
                 await send_json({"type": "token", "content": token})
+            
+            # Stream tool call chunks if present
+            if chunk.tool_call_chunks:
+                for tcc in chunk.tool_call_chunks:
+                    await send_json({
+                        "type": "tool_call_chunk",
+                        "tool": tcc.get("name"),
+                        "args": tcc.get("args")
+                    })
 
         elif kind == "on_tool_start":
             await send_json({
@@ -82,9 +100,28 @@ async def run_agent_streaming(
                 "tool": event["name"],
                 "output": str(event["data"].get("output", "")),
             })
-
-    # Save assistant response
-    db.add(Message(conversation_id=conv.id, role="assistant", content=full_response))
-    await db.commit()
+            
+        elif kind == "on_chain_end" and event["name"] == "LangGraph":
+            # The top-level graph finished. We can grab the final state to save everything accurately!
+            final_messages = event["data"].get("output", {}).get("messages", [])
+            new_messages = final_messages[initial_msg_count:]
+            
+            for m in new_messages:
+                role = "assistant" if isinstance(m, AIMessage) else "tool"
+                content = m.content if isinstance(m.content, str) else str(m.content)
+                tool_calls = None
+                
+                if isinstance(m, AIMessage) and m.tool_calls:
+                    tool_calls = m.tool_calls
+                elif isinstance(m, ToolMessage):
+                    tool_calls = {"id": m.tool_call_id, "name": m.name}
+                    
+                db.add(Message(
+                    conversation_id=conv.id,
+                    role=role,
+                    content=content,
+                    tool_calls=tool_calls
+                ))
+            await db.commit()
 
     await send_json({"type": "done", "conversation_id": str(conv.id)})

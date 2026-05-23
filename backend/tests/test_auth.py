@@ -11,7 +11,7 @@ async def test_register_and_login(client):
     assert r2.status_code == 200
     token = r2.json()["access_token"]
 
-    r3 = await client.get("/api/projects/", headers={"Authorization": f"Bearer {token}"})
+    r3 = await client.get("/api/projects/list_projects", headers={"Authorization": f"Bearer {token}"})
     assert r3.status_code == 200
     assert isinstance(r3.json(), list)
 
@@ -20,3 +20,4 @@ async def test_wrong_password(client):
     await client.post("/api/auth/register", json={"email": "dev2@test.com", "password": "correct"})
     r = await client.post("/api/auth/login", json={"email": "dev2@test.com", "password": "wrong"})
     assert r.status_code == 401
+    

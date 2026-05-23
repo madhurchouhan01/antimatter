@@ -9,7 +9,7 @@ from main import app
 
 TEST_DATABASE_URL = "postgresql+asyncpg://aicoder:aicoder@localhost:5432/aicoder_test"
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture
 async def engine():
     engine = create_async_engine(TEST_DATABASE_URL)
     async with engine.begin() as conn:

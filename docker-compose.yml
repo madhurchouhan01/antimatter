@@ -8,7 +8,10 @@ services:
       - ./backend:/app
       - workspaces:/workspaces
     depends_on: [postgres, redis]
-    command: uvicorn main:app --host 0.0.0.0 --reload
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://aicoder:aicoder@postgres:5432/aicoder
+      - REDIS_URL=redis://redis:6379
+    command: uvicorn main:app --host 0.0.0.0 --port 1842 --reload
 
   postgres:
     image: pgvector/pgvector:pg16   # includes vector extension — you'll need it in Phase 5

@@ -10,7 +10,6 @@ async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-async def get_db() -> AsyncSession:
+async def get_db() -> AsyncSession: # type: ignore
     async with AsyncSessionLocal() as session:
         yield session
-        
