@@ -78,3 +78,22 @@ async def write_file(
         return {"status": "success"}
     except SecurityError as e:
         raise HTTPException(status_code=403, detail=str(e))
+
+from fastapi import UploadFile, File, Form
+
+@router.post("/{project_id}/upload")
+async def upload_file(
+    project_id: uuid.UUID,
+    path: str = Form(...),
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    project = await get_project_and_verify_owner(project_id, db, user)
+    service = FileService(project.workspace_path)
+    try:
+        content = await file.read()
+        await service.write_bytes(path, content)
+        return {"status": "success"}
+    except SecurityError as e:
+        raise HTTPException(status_code=403, detail=str(e))

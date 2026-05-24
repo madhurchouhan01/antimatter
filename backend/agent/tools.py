@@ -2,6 +2,7 @@ import subprocess
 import asyncio
 from langchain_core.tools import tool
 from services.file_service import FileService, SecurityError
+from sandbox.manager import sandbox_manager
 
 # Each tool receives workspace_root at call time via a closure factory
 def make_tools(workspace_root: str):
@@ -41,26 +42,23 @@ def make_tools(workspace_root: str):
 
     @tool
     async def run_command(command: str) -> str:
-        """
-        Run a shell command inside the project workspace.
-        Working directory is set to the workspace root.
-        Timeout: 30 seconds. Do NOT run interactive commands.
-        """
+        """Run a shell command inside the project sandbox container."""
         try:
-            proc = await asyncio.create_subprocess_shell(
-                command,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT,
-                cwd=str(fs.root),
+            sandbox = await sandbox_manager.get_or_create(project_id, user_id)
+            sandbox.touch()
+            result = sandbox.exec_run(
+                ["/bin/bash", "-c", command],
+                workdir="/workspace",
+                demux=True,
             )
-            try:
-                stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
-                output = stdout.decode("utf-8", errors="replace")
-                return output[:4000] if len(output) > 4000 else output
-            except asyncio.TimeoutError:
-                proc.kill()
-                return "ERROR: Command timed out after 30 seconds."
+            stdout, stderr = result.output
+            output = ""
+            if stdout:
+                output += stdout.decode("utf-8", errors="replace")
+            if stderr:
+                output += stderr.decode("utf-8", errors="replace")
+            return output[:4000] if len(output) > 4000 else output
         except Exception as e:
             return f"ERROR: {e}"
-
+        
     return [read_file, write_file, list_files, run_command]

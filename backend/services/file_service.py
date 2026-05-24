@@ -21,6 +21,11 @@ class FileService:
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(content)
 
+    async def write_bytes(self, path: str, content: bytes) -> None:
+        p = self._safe_path(path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_bytes(content)
+
     async def list_dir(self, path: str = "") -> list[dict]:
         p = self._safe_path(path)
         if not p.is_dir():

@@ -21,6 +21,12 @@ class Settings(BaseSettings):
     langchain_api_key: str = ""
     langchain_tracing_v2: str = "false"
     langchain_project: str = "ai-code-editor"
+
+    sandbox_image:   str = "antimatter-sandbox:latest"
+    sandbox_network: str = "antimatter-sandbox-net"
+    sandbox_cpu:     str = "1.0"       # CPU limit
+    sandbox_memory:  str = "512m"      # RAM limit
+    sandbox_idle_timeout: int = 1800   # 30 min in seconds
     
 @lru_cache
 def get_settings() -> Settings:
