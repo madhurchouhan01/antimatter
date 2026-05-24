@@ -78,7 +78,7 @@ export default function Terminal() {
           }))
         }
       } catch (err) {
-        // Ignore fit errors when container is hidden/0px
+        console.debug("Fit error ignored", err)
       }
     })
     resizeObserver.observe(termRef.current)
@@ -88,7 +88,7 @@ export default function Terminal() {
       term.dispose()
       ws.close()
     }
-  }, [project?.id])
+  }, [project, token])
 
   return (
     <div

@@ -1,5 +1,3 @@
-import { useAuthStore } from "../stores/authStore"
-
 class LSPClient {
   constructor() {
     this._sockets = {}      // language → WebSocket
@@ -26,7 +24,9 @@ class LSPClient {
         } else if (msg.method && this._handlers[msg.method]) {
           this._handlers[msg.method](msg.params)
         }
-      } catch {}
+      } catch (err) {
+        console.warn("LSP Parse Error:", err)
+      }
     }
 
     ws.onopen = () => {

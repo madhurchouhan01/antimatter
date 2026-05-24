@@ -1,7 +1,7 @@
 import asyncio
 from db.session import AsyncSessionLocal
 from core.security import hash_password
-from models import User
+from db.models import User
 
 async def main():
     async with AsyncSessionLocal() as db:
@@ -16,4 +16,5 @@ async def main():
 
         print("User created:", user.id)
 
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())

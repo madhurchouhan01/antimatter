@@ -100,7 +100,7 @@ async def terminal_ws(
                     except json.JSONDecodeError:
                         pass
 
-        except WebSocketDisconnect:
+        except (WebSocketDisconnect, RuntimeError):
             pass
         finally:
             pty_session.remove_websocket(websocket)

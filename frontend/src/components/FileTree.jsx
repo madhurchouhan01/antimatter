@@ -3,6 +3,8 @@ import { ChevronRight, ChevronDown, File, Folder, Upload } from "lucide-react"
 import { filesApi } from "../lib/api"
 import { useEditorStore } from "../stores/editorStore"
 import { useProjectStore } from "../stores/projectStore"
+import { useFileTreeStore } from "../stores/fileTreeStore"
+
 
 function TreeNode({ node, projectId, depth = 0 }) {
   const [open, setOpen]       = useState(false)
@@ -49,6 +51,23 @@ export default function FileTree() {
   const [roots, setRoots]   = useState([])
   const [loading, setLoading] = useState(false)
   const fileInputRef = useRef(null)
+  const { dirtyPaths, clearDirty } = useFileTreeStore()
+
+    // Re-fetch root when any file changes
+  useEffect(() => {
+        if (dirtyPaths.length === 0) return
+        // Re-fetch the parent directory of the changed file
+        const parentDirs = [...new Set(
+            dirtyPaths.map((d) => {
+                const parts = d.path.split("/")
+                parts.pop()
+                return parts.join("/")
+            })
+        )]
+        // Refresh those dirs in the tree
+        parentDirs.forEach((dir) => refreshDir(dir))
+        clearDirty()
+    }, [dirtyPaths])
 
   useEffect(() => {
     if (!project) return

@@ -1,7 +1,8 @@
 import { useRef, useCallback } from "react"
 import { useChatStore } from "../stores/chatStore"
 import { useAuthStore } from "../stores/authStore"
-
+import { useEditorStore } from "../stores/editorStore"
+import { useFileTreeStore } from "../stores/fileTreeStore"
 export function useAgentSocket(projectId) {
   const wsRef = useRef(null)
   const messageQueueRef = useRef([])
@@ -26,7 +27,11 @@ export function useAgentSocket(projectId) {
 
     ws.onmessage = (e) => {
       const msg = JSON.parse(e.data)
-
+      if (msg.type === "file.changed") {
+          // Trigger file tree refresh for the changed path
+          useFileTreeStore.getState().markDirty(msg.path, msg.event)
+          return
+      }
       if (msg.type === "token") {
         setStreaming(true)
         appendToken(msg.content)
@@ -57,23 +62,25 @@ export function useAgentSocket(projectId) {
       addMessage({ id: crypto.randomUUID(), role: "error", content: "WebSocket error" })
 
     wsRef.current = ws
-  }, [projectId, token])
+  }, [projectId, token, addMessage, appendToken, flushBuffer, setConversationId, setStreaming])
 
   const sendMessage = useCallback((text) => {
-    const { conversationId } = useChatStore.getState()
-    const payload = {
-      message: text,
-      conversation_id: conversationId,
-    }
+      const { conversationId } = useChatStore.getState()
+      const openFiles = useEditorStore.getState().openFiles.map((f) => f.path)
 
-    addMessage({ id: crypto.randomUUID(), role: "user", content: text })
+      addMessage({ id: crypto.randomUUID(), role: "user", content: text })
+      const payload = {
+          message:         text,
+          conversation_id: conversationId,
+          open_files:      openFiles,
+      }
 
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify(payload))
-    } else {
-      messageQueueRef.current.push(payload)
-      connect()
-    }
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify(payload))
+      } else {
+          messageQueueRef.current.push(payload)
+          connect()
+      }
   }, [connect, addMessage])
 
   const disconnect = useCallback(() => {

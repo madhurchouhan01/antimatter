@@ -60,7 +60,7 @@ async def lsp_ws(
             proxy = LSPProxy(lsp_process, websocket)
             await proxy.run()
 
-        except WebSocketDisconnect:
+        except (WebSocketDisconnect, RuntimeError):
             pass
         finally:
             proxy.close()

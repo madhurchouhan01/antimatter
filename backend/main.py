@@ -22,7 +22,10 @@ async def lifespan(app: FastAPI):
     async def idle_cleanup():
         while True:
             await asyncio.sleep(300)
-            await sandbox_manager.cleanup_idle()
+            try:
+                await sandbox_manager.cleanup_idle()
+            except Exception as e:
+                print(f"Error in idle_cleanup: {e}")
 
     cleanup_task = asyncio.create_task(idle_cleanup())
     yield

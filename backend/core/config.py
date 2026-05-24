@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     sandbox_cpu:     str = "1.0"       # CPU limit
     sandbox_memory:  str = "512m"      # RAM limit
     sandbox_idle_timeout: int = 1800   # 30 min in seconds
+
+    voyage_api_key: str = ""
     
 @lru_cache
 def get_settings() -> Settings:

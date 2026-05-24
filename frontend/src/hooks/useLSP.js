@@ -47,5 +47,5 @@ export function useLSP(monacoRef, editorRef, filePath, language) {
         textDocument: { uri: `file://${filePath}` }
       })
     }
-  }, [filePath, language, project?.id])
+  }, [filePath, language, project, token, monacoRef, editorRef])
 }

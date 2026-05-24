@@ -5,6 +5,7 @@ from sqlalchemy import select
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 from db.models import Conversation, Message, Project
 from agent.graph import build_graph
+from agent.context_builder import build_rag_context
 
 async def get_or_create_conversation(
     db: AsyncSession,
@@ -55,6 +56,7 @@ async def run_agent_streaming(
     conversation_id: uuid.UUID | None,
     db: AsyncSession,
     send_json,   # async callable — the WebSocket send function
+    open_files: list[str] = [],
 ):
     conv = await get_or_create_conversation(db, project.id, conversation_id)
     history = await load_history(db, conv.id)
@@ -63,8 +65,25 @@ async def run_agent_streaming(
     db.add(Message(conversation_id=conv.id, role="user", content=user_message))
     await db.flush()
 
+    # Build RAG context for this turn
+    rag_context = await build_rag_context(
+        db           = db,
+        project_id   = project.id,
+        query        = user_message,
+        open_files   = open_files,
+        workspace_path = project.workspace_path,
+    )
+
+    # Prepend RAG context to user message
+    enriched_message = user_message
+    if rag_context:
+        enriched_message = (
+            f"<codebase_context>\n{rag_context}\n</codebase_context>\n\n"
+            f"{user_message}"
+        )
+
     graph = build_graph(project.workspace_path)
-    state = {"messages": history + [HumanMessage(content=user_message)]}
+    state = {"messages": history + [HumanMessage(content=enriched_message)]}
 
     initial_msg_count = len(state["messages"])
 

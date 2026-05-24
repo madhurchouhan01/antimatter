@@ -5,6 +5,7 @@ import CodeEditor  from "./CodeEditor"
 import ChatPanel   from "./ChatPanel"
 import Terminal    from "./Terminal"
 import GitPanel    from "./GitPanel"
+import StatusBar from "./StatusBar"
 import {
   PanelLeftClose, PanelLeftOpen,
   MessageSquare, Terminal as TermIcon,
@@ -111,6 +112,8 @@ export default function Layout() {
           <ChatPanel />
         </div>
       )}
+
+      <StatusBar />
     </div>
   )
 }

@@ -1,6 +1,6 @@
 import { create } from "zustand"
 
-export const useChatStore = create((set, get) => ({
+export const useChatStore = create((set) => ({
   messages:       [],   // [{ id, role, content, toolCalls }]
   conversationId: null,
   isStreaming:    false,

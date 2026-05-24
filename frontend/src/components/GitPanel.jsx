@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { GitBranch, GitCommit, RefreshCw, Plus, Minus, Check } from "lucide-react"
+import { GitBranch, GitCommit, RefreshCw, Check } from "lucide-react"
 import { useGitStore } from "../stores/gitStore"
 import { useProjectStore } from "../stores/projectStore"
 import api from "../lib/api"
@@ -44,7 +44,7 @@ export default function GitPanel() {
     load()
   }
 
-  useEffect(() => { load() }, [project?.id])
+  useEffect(() => { load() }, [project?.id, load])
 
   if (!project) return null
 

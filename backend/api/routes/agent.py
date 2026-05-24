@@ -8,6 +8,10 @@ from db.models import User, Project
 from core.security import decode_access_token
 from agent.runner import run_agent_streaming
 from jose import JWTError
+from core.broadcaster import manager
+from context.watcher import workspace_watcher
+from context.indexer import code_indexer
+import asyncio  
 
 router = APIRouter()
 
@@ -45,6 +49,21 @@ async def agent_ws(
             await websocket.close(code=4004)
             return
 
+
+        # Register WS for broadcasts
+        manager.connect(str(project_id), websocket)
+
+        # Start file watcher for this project
+        await workspace_watcher.start(
+            project_id,
+            project.workspace_path,
+            broadcast_fn=manager.broadcast,
+        )
+
+        # Trigger background index on first connect
+        asyncio.create_task(
+            code_indexer.index_project(project_id, project.workspace_path)
+        )
         conversation_id = None
 
         try:
@@ -52,7 +71,8 @@ async def agent_ws(
                 data = await websocket.receive_json()
                 user_message = data.get("message", "").strip()
                 conversation_id = data.get("conversation_id") or conversation_id
-
+                open_files   = data.get("open_files", []) 
+                
                 if not user_message:
                     continue
 
@@ -62,8 +82,11 @@ async def agent_ws(
                     conversation_id=uuid.UUID(conversation_id) if conversation_id else None,
                     db=db,
                     send_json=websocket.send_json,
+                    open_files      = open_files,
                 )
 
-        except WebSocketDisconnect:
+        except (WebSocketDisconnect, RuntimeError):
             pass
-        
+
+        finally:
+            manager.disconnect(str(project_id), websocket)
