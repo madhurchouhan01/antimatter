@@ -2,7 +2,7 @@ import Editor from "@monaco-editor/react"
 import { useEditorStore } from "../stores/editorStore"
 import { useProjectStore } from "../stores/projectStore"
 import { filesApi } from "../lib/api"
-import { useCallback } from "react"
+import { useRef, useEffect } from "react"
 
 function getLanguage(path) {
   const ext = path?.split(".").pop()
@@ -20,10 +20,12 @@ export default function CodeEditor() {
 
   const file = openFiles.find((f) => f.path === activeFile)
 
-  const handleSave = useCallback(async () => {
-    if (!file || !project) return
-    await filesApi.write(project.id, file.path, file.content)
-    markSaved(file.path)
+  const fileRef = useRef(file)
+  const projectRef = useRef(project)
+
+  useEffect(() => {
+    fileRef.current = file
+    projectRef.current = project
   }, [file, project])
 
   if (!file) return (
@@ -53,7 +55,15 @@ export default function CodeEditor() {
           // Ctrl+S / Cmd+S to save
           editor.addCommand(
             monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS,
-            handleSave
+            async () => {
+              const currentFile = fileRef.current
+              const currentProject = projectRef.current
+              if (!currentFile || !currentProject) return
+              
+              const val = editor.getValue()
+              await filesApi.write(currentProject.id, currentFile.path, val)
+              useEditorStore.getState().markSaved(currentFile.path)
+            }
           )
         }}
       />

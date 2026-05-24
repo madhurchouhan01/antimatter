@@ -5,10 +5,13 @@ services:
     ports: ["1842:1842"]
     env_file: .env
     volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
       - ./backend:/app
       - workspaces:/workspaces
     depends_on: [postgres, redis]
     environment:
+      - SANDBOX_IMAGE=antimatter-sandbox:latest
+      - SANDBOX_NETWORK=antimatter-sandbox-net
       - DATABASE_URL=postgresql+asyncpg://aicoder:aicoder@postgres:5432/aicoder
       - REDIS_URL=redis://redis:6379
     command: uvicorn main:app --host 0.0.0.0 --port 1842 --reload
@@ -25,7 +28,13 @@ services:
   redis:
     image: redis:7-alpine
     ports: ["6379:6379"]
-
+    
+  networks:
+    default:
+    sandbox-net:
+      name: antimatter-sandbox-net
+      driver: bridge
+      internal: true
 volumes:
   pgdata:
   workspaces:

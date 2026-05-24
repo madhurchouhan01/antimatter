@@ -37,6 +37,14 @@ export const filesApi = {
     api.get(`/api/files/${projectId}/read`, { params: { path } }),
   write: (projectId, path, content) =>
     api.post(`/api/files/${projectId}/write`, { path, content }),
+  upload: (projectId, path, file) => {
+    const formData = new FormData()
+    formData.append("path", path)
+    formData.append("file", file)
+    return api.post(`/api/files/${projectId}/upload`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    })
+  },
 }
 
 // Conversation endpoints

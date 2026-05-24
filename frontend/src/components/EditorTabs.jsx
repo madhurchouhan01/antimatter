@@ -5,11 +5,11 @@ export default function EditorTabs() {
   const { openFiles, activeFile, closeFile } = useEditorStore()
 
   if (!openFiles.length) return (
-    <div className="h-9 bg-editor-sidebar border-b border-editor-border" />
+    <div className="flex-1 h-9 bg-editor-sidebar border-b border-editor-border" />
   )
 
   return (
-    <div className="flex h-9 bg-editor-sidebar border-b border-editor-border overflow-x-auto">
+    <div className="flex-1 flex h-9 bg-editor-sidebar border-b border-editor-border overflow-x-auto">
       {openFiles.map((f) => {
         const name = f.path.split("/").pop()
         const isActive = f.path === activeFile

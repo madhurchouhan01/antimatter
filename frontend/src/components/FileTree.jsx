@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react"
-import { ChevronRight, ChevronDown, File, Folder } from "lucide-react"
+import { useEffect, useState, useRef } from "react"
+import { ChevronRight, ChevronDown, File, Folder, Upload } from "lucide-react"
 import { filesApi } from "../lib/api"
 import { useEditorStore } from "../stores/editorStore"
 import { useProjectStore } from "../stores/projectStore"
@@ -48,6 +48,7 @@ export default function FileTree() {
   const project = useProjectStore((s) => s.activeProject)
   const [roots, setRoots]   = useState([])
   const [loading, setLoading] = useState(false)
+  const fileInputRef = useRef(null)
 
   useEffect(() => {
     if (!project) return
@@ -56,6 +57,23 @@ export default function FileTree() {
       .then((r) => setRoots(r.data))
       .finally(() => setLoading(false))
   }, [project])
+
+  const handleUploadClick = () => {
+    if (fileInputRef.current) fileInputRef.current.click()
+  }
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file || !project) return
+    try {
+      await filesApi.upload(project.id, file.name, file)
+      const res = await filesApi.list(project.id)
+      setRoots(res.data)
+    } catch (err) {
+      console.error("Upload failed", err)
+    }
+    e.target.value = ""
+  }
 
   if (!project) return (
     <div className="p-4 text-editor-muted text-xs">No project open</div>
@@ -67,9 +85,23 @@ export default function FileTree() {
 
   return (
     <div className="h-full overflow-y-auto py-2">
-      <div className="px-3 py-1 text-xs text-editor-muted uppercase tracking-wider font-semibold mb-1">
-        {project.name}
+      <div className="flex items-center justify-between px-3 py-1 mb-1">
+        <span className="text-xs text-editor-muted uppercase tracking-wider font-semibold">
+          {project.name}
+        </span>
+        <Upload
+          size={14}
+          className="text-editor-muted hover:text-editor-text cursor-pointer"
+          onClick={handleUploadClick}
+          title="Upload file to project root"
+        />
       </div>
+      <input
+        type="file"
+        className="hidden"
+        ref={fileInputRef}
+        onChange={handleFileChange}
+      />
       {roots.map((node) => (
         <TreeNode key={node.path} node={node} projectId={project.id} />
       ))}
