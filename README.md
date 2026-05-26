@@ -11,7 +11,7 @@
 **Port:** `1842`  
 **Stack:** Vanilla JS + Monaco Editor (frontend) · FastAPI + Groq SDK + Docker (backend) · ChromaDB + SQLite (memory/sandboxes)  
 **Auth:** GitHub OAuth + JWT (HttpOnly Cookies)  
-**LLM provider:** Groq API (not Anthropic) — models: `llama-3.1-8b-instant`, `deepseek-r1-distill-llama-70b`, `mixtral-8x7b-32768`  
+**LLM provider:** Groq API (not Anthropic) — models: `llama-3.1-8b-instant`, `deepseek-r1-distill-llama-70b` 
 **Developer:** Madhur — Data Scientist transitioning to GenAI/Agentic AI Engineering  
 **Goal:** Portfolio-grade project demonstrating RAG pipelines, multi-agent orchestration, and agentic code editing  
 
