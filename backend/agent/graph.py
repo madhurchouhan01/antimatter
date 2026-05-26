@@ -33,6 +33,9 @@ def build_graph(workspace_root: str):
         messages = state["messages"]
         if not any(isinstance(m, SystemMessage) for m in messages):
             messages = [SystemMessage(content=SYSTEM_PROMPT)] + messages
+        from pprint import pprint
+        pprint(messages)
+        
         response = llm.invoke(messages)
         return {"messages": [response]}
 
