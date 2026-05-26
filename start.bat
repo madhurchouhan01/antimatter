@@ -2,8 +2,8 @@
 
 call D:\AntiMatter\antimatter-env\Scripts\activate.bat
 
-cd /d D:\AntiMatter\project
+cd /d D:\AntiMatter\backend
 
-uvicorn backend.main:app --port 1842
+uvicorn main:app --port 1842
 
 pause

@@ -1,12 +1,12 @@
 import { useEffect, useState, useRef } from "react"
-import { ChevronRight, ChevronDown, File, Folder, Upload } from "lucide-react"
+import { ChevronRight, ChevronDown, File, Folder, Upload, Trash2 } from "lucide-react"
 import { filesApi } from "../lib/api"
 import { useEditorStore } from "../stores/editorStore"
 import { useProjectStore } from "../stores/projectStore"
 import { useFileTreeStore } from "../stores/fileTreeStore"
 
 
-function TreeNode({ node, projectId, depth = 0 }) {
+function TreeNode({ node, projectId, depth = 0, onRefresh }) {
   const [open, setOpen]       = useState(false)
   const [children, setChildren] = useState([])
   const openFile = useEditorStore((s) => s.openFile)
@@ -24,23 +24,53 @@ function TreeNode({ node, projectId, depth = 0 }) {
     }
   }
 
+  const handleRefresh = async () => {
+    const res = await filesApi.list(projectId, node.path)
+    setChildren(res.data)
+  }
+
+  const handleDelete = async (e) => {
+    e.stopPropagation()
+    if (!confirm(`Are you sure you want to delete ${node.name}?`)) return
+    try {
+      await filesApi.delete(projectId, node.path)
+      if (onRefresh) onRefresh()
+    } catch (err) {
+      console.error("Delete failed", err)
+    }
+  }
+
   return (
     <div>
       <div
-        className="flex items-center gap-1 px-2 py-0.5 cursor-pointer hover:bg-editor-highlight rounded text-sm text-editor-text select-none"
+        className="group flex items-center justify-between gap-1 px-2 py-0.5 cursor-pointer hover:bg-editor-highlight rounded text-sm text-editor-text select-none"
         style={{ paddingLeft: `${depth * 12 + 8}px` }}
         onClick={handleClick}
       >
-        {node.is_dir
-          ? (open ? <ChevronDown size={14} /> : <ChevronRight size={14} />)
-          : <span className="w-3.5" />}
-        {node.is_dir
-          ? <Folder size={14} className="text-yellow-400 shrink-0" />
-          : <File   size={14} className="text-editor-muted shrink-0" />}
-        <span className="truncate">{node.name}</span>
+        <div className="flex items-center gap-1 min-w-0">
+          {node.is_dir
+            ? (open ? <ChevronDown size={14} className="shrink-0" /> : <ChevronRight size={14} className="shrink-0" />)
+            : <span className="w-3.5 shrink-0" />}
+          {node.is_dir
+            ? <Folder size={14} className="text-yellow-400 shrink-0" />
+            : <File   size={14} className="text-editor-muted shrink-0" />}
+          <span className="truncate">{node.name}</span>
+        </div>
+        <Trash2
+          size={14}
+          className="text-editor-muted hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity duration-150 shrink-0 ml-2 animate-fade-in"
+          onClick={handleDelete}
+          title={`Delete ${node.name}`}
+        />
       </div>
       {open && children.map((child) => (
-        <TreeNode key={child.path} node={child} projectId={projectId} depth={depth + 1} />
+        <TreeNode
+          key={child.path}
+          node={child}
+          projectId={projectId}
+          depth={depth + 1}
+          onRefresh={handleRefresh}
+        />
       ))}
     </div>
   )
@@ -48,26 +78,22 @@ function TreeNode({ node, projectId, depth = 0 }) {
 
 export default function FileTree() {
   const project = useProjectStore((s) => s.activeProject)
+  const { dirtyPaths, clearDirty } = useFileTreeStore()
   const [roots, setRoots]   = useState([])
   const [loading, setLoading] = useState(false)
   const fileInputRef = useRef(null)
-  const { dirtyPaths, clearDirty } = useFileTreeStore()
+  const refreshRoots = () => {
+    if (!project) return
+    filesApi.list(project.id)
+      .then((r) => setRoots(r.data))
+  }
 
-    // Re-fetch root when any file changes
+  // Re-fetch root when any file changes
   useEffect(() => {
-        if (dirtyPaths.length === 0) return
-        // Re-fetch the parent directory of the changed file
-        const parentDirs = [...new Set(
-            dirtyPaths.map((d) => {
-                const parts = d.path.split("/")
-                parts.pop()
-                return parts.join("/")
-            })
-        )]
-        // Refresh those dirs in the tree
-        parentDirs.forEach((dir) => refreshDir(dir))
-        clearDirty()
-    }, [dirtyPaths])
+    if (dirtyPaths.length === 0) return
+    refreshRoots()
+    clearDirty()
+  }, [dirtyPaths])
 
   useEffect(() => {
     if (!project) return
@@ -86,8 +112,7 @@ export default function FileTree() {
     if (!file || !project) return
     try {
       await filesApi.upload(project.id, file.name, file)
-      const res = await filesApi.list(project.id)
-      setRoots(res.data)
+      refreshRoots()
     } catch (err) {
       console.error("Upload failed", err)
     }
@@ -122,7 +147,12 @@ export default function FileTree() {
         onChange={handleFileChange}
       />
       {roots.map((node) => (
-        <TreeNode key={node.path} node={node} projectId={project.id} />
+        <TreeNode
+          key={node.path}
+          node={node}
+          projectId={project.id}
+          onRefresh={refreshRoots}
+        />
       ))}
     </div>
   )

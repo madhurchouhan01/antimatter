@@ -45,6 +45,8 @@ export const filesApi = {
       headers: { "Content-Type": "multipart/form-data" },
     })
   },
+  delete: (projectId, path) =>
+    api.delete(`/api/files/${projectId}`, { params: { path } }),
 }
 
 // Conversation endpoints

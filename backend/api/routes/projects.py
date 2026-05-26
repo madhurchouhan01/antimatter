@@ -31,6 +31,7 @@ async def create_project(
     user: User = Depends(get_current_user),
 ):
     project_id = uuid.uuid4()
+    # print(f"Workspace root: {settings.workspace_root}, User ID: {user.id}, Project ID: {project_id}")
     workspace_path = os.path.join(settings.workspace_root, str(user.id), str(project_id))
     os.makedirs(workspace_path, exist_ok=True)
 

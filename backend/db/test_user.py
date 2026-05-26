@@ -6,7 +6,7 @@ from db.models import User
 async def main():
     async with AsyncSessionLocal() as db:
         user = User(
-            email="dev@test.com",
+            email="dev2@test.com",
             hashed_password=hash_password("secret123")
         )
 

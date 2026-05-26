@@ -55,7 +55,7 @@ async def lsp_ws(
 
         try:
             lsp_process = await lsp_manager.get_or_create(
-                session_id, language, project.workspace_path
+                session_id, language, str(project.id), str(project.owner_id)
             )
             proxy = LSPProxy(lsp_process, websocket)
             await proxy.run()

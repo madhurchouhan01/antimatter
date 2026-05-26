@@ -18,7 +18,7 @@ class BranchRequest(BaseModel):
     name: str
 
 def get_git(project: Project) -> GitService:
-    return GitService(project.workspace_path)
+    return GitService(project.id, project.owner_id)
 
 async def get_project(
     project_id: uuid.UUID,
@@ -44,9 +44,10 @@ async def git_status(
 ):
     project = await get_project(project_id, db, user)
     svc = get_git(project)
+    await svc.initialize()
     if not svc.is_repo:
-        svc.init()
-    return svc.status()
+        await svc.init()
+    return await svc.status()
 
 @router.get("/{project_id}/diff")
 async def git_diff(
@@ -58,7 +59,8 @@ async def git_diff(
 ):
     project = await get_project(project_id, db, user)
     svc = get_git(project)
-    return {"diff": svc.diff(staged=staged, file_path=file_path)}
+    await svc.initialize()
+    return {"diff": await svc.diff(staged=staged, file_path=file_path)}
 
 @router.post("/{project_id}/commit")
 async def git_commit(
@@ -69,9 +71,10 @@ async def git_commit(
 ):
     project = await get_project(project_id, db, user)
     svc = get_git(project)
+    await svc.initialize()
     if body.paths:
-        svc.stage(body.paths)
-    sha = svc.commit(body.message, user.name or user.email)
+        await svc.stage(body.paths)
+    sha = await svc.commit(body.message, user.name or user.email)
     return {"sha": sha}
 
 @router.post("/{project_id}/branch")
@@ -82,7 +85,9 @@ async def create_branch(
     user: User = Depends(get_current_user),
 ):
     project = await get_project(project_id, db, user)
-    get_git(project).create_branch(body.name)
+    svc = get_git(project)
+    await svc.initialize()
+    await svc.create_branch(body.name)
     return {"ok": True}
 
 @router.get("/{project_id}/branches")
@@ -92,7 +97,9 @@ async def list_branches(
     user: User = Depends(get_current_user),
 ):
     project = await get_project(project_id, db, user)
-    return {"branches": get_git(project).branches()}
+    svc = get_git(project)
+    await svc.initialize()
+    return {"branches": await svc.branches()}
 
 @router.get("/{project_id}/log")
 async def git_log(
@@ -101,4 +108,6 @@ async def git_log(
     user: User = Depends(get_current_user),
 ):
     project = await get_project(project_id, db, user)
-    return {"commits": get_git(project).log()}
+    svc = get_git(project)
+    await svc.initialize()
+    return {"commits": await svc.log()}

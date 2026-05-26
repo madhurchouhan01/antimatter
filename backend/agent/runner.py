@@ -69,9 +69,9 @@ async def run_agent_streaming(
     rag_context = await build_rag_context(
         db           = db,
         project_id   = project.id,
+        user_id      = project.owner_id,
         query        = user_message,
         open_files   = open_files,
-        workspace_path = project.workspace_path,
     )
 
     # Prepend RAG context to user message
@@ -82,7 +82,7 @@ async def run_agent_streaming(
             f"{user_message}"
         )
 
-    graph = build_graph(project.workspace_path)
+    graph = build_graph(str(project.id), str(project.owner_id))
     state = {"messages": history + [HumanMessage(content=enriched_message)]}
 
     initial_msg_count = len(state["messages"])

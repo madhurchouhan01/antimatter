@@ -23,7 +23,7 @@ class DockerPTYSession:
         def _create_and_start():
             exec_id = self.client.api.exec_create(
                 self.container.id,
-                cmd="/bin/bash",
+                cmd=["/bin/bash", "-i"],
                 stdin=True,
                 stdout=True,
                 stderr=True,
