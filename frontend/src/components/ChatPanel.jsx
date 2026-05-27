@@ -38,8 +38,7 @@ export default function ChatPanel() {
 
   useEffect(() => {
     if (project) connect()
-    return () => disconnect()
-  }, [project?.id])
+  }, [project?.id, connect])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })

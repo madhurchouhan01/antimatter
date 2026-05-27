@@ -20,4 +20,11 @@ export const useTerminalStore = create((set) => ({
           ? state.sessions[0]?.id ?? null
           : state.activeSession,
     })),
+
+  termOpen: true,
+  setTermOpen: (val) => set({ termOpen: val }),
+  sendCommand: null,
+  pendingCommands: [],
+  addPendingCommand: (cmd) => set((state) => ({ pendingCommands: [...state.pendingCommands, cmd] })),
+  clearPendingCommands: () => set({ pendingCommands: [] }),
 }))

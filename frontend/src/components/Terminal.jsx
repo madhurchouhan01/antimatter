@@ -4,6 +4,7 @@ import { FitAddon } from "@xterm/addon-fit"
 import { WebLinksAddon } from "@xterm/addon-web-links"
 import { useAuthStore } from "../stores/authStore"
 import { useProjectStore } from "../stores/projectStore"
+import { useTerminalStore } from "../stores/terminalStore"
 import "@xterm/xterm/css/xterm.css"
 
 export default function Terminal() {
@@ -48,7 +49,26 @@ export default function Terminal() {
     ws.binaryType = "arraybuffer"
     wsRef.current = ws
 
-    ws.onopen = () => term.writeln("\r\n\x1b[32mTerminal connected.\x1b[0m\r\n")
+    ws.onopen = () => {
+      term.writeln("\r\n\x1b[32mTerminal connected.\x1b[0m\r\n")
+      
+      const sendCmdFn = (cmd) => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(new TextEncoder().encode(cmd))
+        }
+      }
+
+      useTerminalStore.setState({ sendCommand: sendCmdFn })
+
+      // Flush pending commands
+      const { pendingCommands, clearPendingCommands } = useTerminalStore.getState()
+      if (pendingCommands.length > 0) {
+        pendingCommands.forEach((cmd) => {
+          sendCmdFn(cmd)
+        })
+        clearPendingCommands()
+      }
+    }
 
     ws.onmessage = (e) => {
       if (e.data instanceof ArrayBuffer) {
@@ -87,6 +107,7 @@ export default function Terminal() {
       resizeObserver.disconnect()
       term.dispose()
       ws.close()
+      useTerminalStore.setState({ sendCommand: null })
     }
   }, [project, token])
 

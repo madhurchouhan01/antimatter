@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import FileTree    from "./FileTree"
 import EditorTabs  from "./EditorTabs"
 import CodeEditor  from "./CodeEditor"
@@ -6,6 +6,9 @@ import ChatPanel   from "./ChatPanel"
 import Terminal    from "./Terminal"
 import GitPanel    from "./GitPanel"
 import StatusBar from "./StatusBar"
+import { useTerminalStore } from "../stores/terminalStore"
+import { useProjectStore } from "../stores/projectStore"
+import { useAgentSocket } from "../hooks/useAgentSocket"
 import {
   PanelLeftClose, PanelLeftOpen,
   MessageSquare, Terminal as TermIcon,
@@ -16,7 +19,17 @@ export default function Layout() {
   const [sidebarTab,  setSidebarTab]  = useState("files")  // "files" | "git"
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [chatOpen,    setChatOpen]    = useState(true)
-  const [termOpen,    setTermOpen]    = useState(true)
+  
+  const termOpen = useTerminalStore((s) => s.termOpen)
+  const setTermOpen = useTerminalStore((s) => s.setTermOpen)
+  const project = useProjectStore((s) => s.activeProject)
+  
+  const { connect, disconnect } = useAgentSocket(project?.id)
+
+  useEffect(() => {
+    if (project) connect()
+    return () => disconnect()
+  }, [project?.id, connect, disconnect])
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-editor-bg text-editor-text">

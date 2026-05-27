@@ -1,10 +1,34 @@
 import { useEffect, useState, useRef } from "react"
-import { ChevronRight, ChevronDown, File, Folder, Upload, Trash2 } from "lucide-react"
+import { ChevronRight, ChevronDown, File, Folder, Upload, Trash2, RefreshCw, FolderOpen } from "lucide-react"
 import { filesApi } from "../lib/api"
 import { useEditorStore } from "../stores/editorStore"
 import { useProjectStore } from "../stores/projectStore"
 import { useFileTreeStore } from "../stores/fileTreeStore"
 
+// Language icon mapping
+const LANGUAGE_ICONS = {
+  // JavaScript/TypeScript
+  js: "📜", jsx: "⚛️", ts: "📘", tsx: "⚛️",
+  // Python
+  py: "🐍",
+  // Web
+  html: "🌐", css: "🎨",
+  // Data/Config
+  json: "{ }", yaml: "📋", yml: "📋", xml: "📄", toml: "⚙️",
+  // Markup
+  md: "📝", markdown: "📝",
+  // Shell
+  sh: "💻", bash: "💻", zsh: "💻",
+  // Version Control
+  gitignore: "🚫",
+  // Other
+  txt: "📄", log: "📋",
+}
+
+function getFileIcon(filename) {
+  const ext = filename.split(".").pop().toLowerCase()
+  return LANGUAGE_ICONS[ext] || "📄"
+}
 
 function TreeNode({ node, projectId, depth = 0, onRefresh }) {
   const [open, setOpen]       = useState(false)
@@ -53,7 +77,7 @@ function TreeNode({ node, projectId, depth = 0, onRefresh }) {
             : <span className="w-3.5 shrink-0" />}
           {node.is_dir
             ? <Folder size={14} className="text-yellow-400 shrink-0" />
-            : <File   size={14} className="text-editor-muted shrink-0" />}
+            : <span className="text-base shrink-0">{getFileIcon(node.name)}</span>}
           <span className="truncate">{node.name}</span>
         </div>
         <Trash2
@@ -78,14 +102,23 @@ function TreeNode({ node, projectId, depth = 0, onRefresh }) {
 
 export default function FileTree() {
   const project = useProjectStore((s) => s.activeProject)
-  const { dirtyPaths, clearDirty } = useFileTreeStore()
+  const { dirtyPaths, clearDirty, syncing } = useFileTreeStore()
   const [roots, setRoots]   = useState([])
   const [loading, setLoading] = useState(false)
   const fileInputRef = useRef(null)
-  const refreshRoots = () => {
+  const folderInputRef = useRef(null)
+  
+  const refreshRoots = async () => {
     if (!project) return
-    filesApi.list(project.id)
-      .then((r) => setRoots(r.data))
+    setLoading(true)
+    try {
+      const r = await filesApi.list(project.id)
+      setRoots(r.data)
+    } catch (err) {
+      console.error("Refresh failed", err)
+    } finally {
+      setLoading(false)
+    }
   }
 
   // Re-fetch root when any file changes
@@ -107,6 +140,10 @@ export default function FileTree() {
     if (fileInputRef.current) fileInputRef.current.click()
   }
 
+  const handleFolderUploadClick = () => {
+    if (folderInputRef.current) folderInputRef.current.click()
+  }
+
   const handleFileChange = async (e) => {
     const file = e.target.files?.[0]
     if (!file || !project) return
@@ -115,6 +152,23 @@ export default function FileTree() {
       refreshRoots()
     } catch (err) {
       console.error("Upload failed", err)
+    }
+    e.target.value = ""
+  }
+
+  const handleFolderChange = async (e) => {
+    const files = e.target.files
+    if (!files || !project) return
+    try {
+      // Upload each file with its folder structure
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i]
+        const relativePath = file.webkitRelativePath || file.name
+        await filesApi.upload(project.id, relativePath, file)
+      }
+      refreshRoots()
+    } catch (err) {
+      console.error("Folder upload failed", err)
     }
     e.target.value = ""
   }
@@ -132,19 +186,45 @@ export default function FileTree() {
       <div className="flex items-center justify-between px-3 py-1 mb-1">
         <span className="text-xs text-editor-muted uppercase tracking-wider font-semibold">
           {project.name}
+          {syncing && <span className="ml-2 text-yellow-400 text-xs">syncing...</span>}
         </span>
-        <Upload
-          size={14}
-          className="text-editor-muted hover:text-editor-text cursor-pointer"
-          onClick={handleUploadClick}
-          title="Upload file to project root"
-        />
+        <div className="flex items-center gap-2">
+          <RefreshCw
+            size={14}
+            className={`text-editor-muted hover:text-editor-text cursor-pointer transition-transform ${
+              syncing ? "animate-spin" : ""
+            }`}
+            onClick={refreshRoots}
+            title="Refresh file tree"
+          />
+          <FolderOpen
+            size={14}
+            className="text-editor-muted hover:text-editor-text cursor-pointer"
+            onClick={handleFolderUploadClick}
+            title="Upload folder to project"
+          />
+          <Upload
+            size={14}
+            className="text-editor-muted hover:text-editor-text cursor-pointer"
+            onClick={handleUploadClick}
+            title="Upload file to project root"
+          />
+        </div>
       </div>
       <input
         type="file"
         className="hidden"
         ref={fileInputRef}
         onChange={handleFileChange}
+      />
+      <input
+        type="file"
+        className="hidden"
+        ref={folderInputRef}
+        onChange={handleFolderChange}
+        directory=""
+        webkitdirectory=""
+        mozdirectory=""
       />
       {roots.map((node) => (
         <TreeNode
