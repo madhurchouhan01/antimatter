@@ -1,40 +1,57 @@
 import asyncio
+import json
 import uuid
-from pathlib import Path
-from watchfiles import awatch, Change
-from context.indexer import code_indexer
 
-# Directories to ignore (prevents noise from node_modules, caches, etc.)
-IGNORE_PATTERNS = {
+# Directories to ignore inside the container (prevents noise)
+IGNORE_DIRS = {
     'node_modules', '__pycache__', '.git', '.pytest_cache', '.venv',
-    'venv', 'dist', 'build', '.egg-info', '.next', 'coverage',
-    '.DS_Store', 'Thumbs.db', '.env', '.vscode', '.idea'
+    'venv', 'dist', 'build', '.next', 'coverage', '.idea', '.vscode',
 }
+
+POLL_INTERVAL = 2.0  # seconds between polls
+
+# Python snippet run inside the container to snapshot all file mtimes
+_SNAPSHOT_SCRIPT = """
+import os, json
+ignore = %s
+result = {}
+for dirpath, dirnames, filenames in os.walk('/workspace'):
+    dirnames[:] = [d for d in dirnames
+                   if d not in ignore and not d.startswith('.')]
+    for f in filenames:
+        fpath = os.path.join(dirpath, f)
+        try:
+            result[fpath] = os.path.getmtime(fpath)
+        except Exception:
+            pass
+print(json.dumps(result))
+""" % repr(list(IGNORE_DIRS))
+
 
 class WorkspaceWatcher:
     """
-    Watches a workspace directory for file changes.
-    On change: re-indexes the file + broadcasts event to frontend.
-    Includes: debouncing (prevents rapid refreshes), filtering (ignores common dirs).
+    Watches a sandbox Docker volume for file changes by polling inside the
+    container with exec_run every POLL_INTERVAL seconds.
+
+    No host-filesystem access. All file I/O stays inside the Docker volume.
+    On change: broadcasts a file.changed event to the frontend for tree sync.
     """
 
     def __init__(self):
-        self._watchers: dict[str, asyncio.Task] = {}  # project_id → task
-        self._debounce_timers: dict[str, asyncio.Task] = {}  # project_id → debounce task
-        self._pending_changes: dict[str, dict] = {}  # project_id → {path → change_type}
+        self._watchers:  dict[str, asyncio.Task] = {}   # project_id → task
+        self._snapshots: dict[str, dict]          = {}   # project_id → {path: mtime}
 
     async def start(
         self,
         project_id: uuid.UUID,
-        workspace_path: str,
-        broadcast_fn,      # async callable(project_id, event_dict)
+        broadcast_fn,       # async callable(project_id_str, event_dict)
     ):
         pid = str(project_id)
         if pid in self._watchers:
             return  # already watching
 
         task = asyncio.create_task(
-            self._watch_loop(project_id, workspace_path, broadcast_fn)
+            self._poll_loop(project_id, broadcast_fn)
         )
         self._watchers[pid] = task
 
@@ -43,89 +60,86 @@ class WorkspaceWatcher:
         task = self._watchers.pop(pid, None)
         if task:
             task.cancel()
+        self._snapshots.pop(pid, None)
 
-    async def _watch_loop(
-        self,
-        project_id: uuid.UUID,
-        workspace_path: str,
-        broadcast_fn,
-    ):
-        pid = str(project_id)
-        async for changes in awatch(workspace_path):
-            for change_type, file_path in changes:
-                # Skip ignored directories
-                if self._should_ignore(file_path):
-                    continue
-                
-                # Accumulate changes for debouncing
-                if pid not in self._pending_changes:
-                    self._pending_changes[pid] = {}
-                self._pending_changes[pid][file_path] = change_type
-                
-                # Cancel existing debounce timer
-                if pid in self._debounce_timers:
-                    self._debounce_timers[pid].cancel()
-                
-                # Start new debounce timer (300ms)
-                async def debounce_callback():
-                    await asyncio.sleep(0.3)
-                    if pid in self._pending_changes:
-                        for path, ctype in self._pending_changes[pid].items():
-                            await self._handle_change(
-                                project_id, workspace_path, ctype, path, broadcast_fn
-                            )
-                        del self._pending_changes[pid]
-                    if pid in self._debounce_timers:
-                        del self._debounce_timers[pid]
-                
-                timer_task = asyncio.create_task(debounce_callback())
-                self._debounce_timers[pid] = timer_task
-    
-    def _should_ignore(self, file_path: str) -> bool:
-        """Check if file should be ignored based on path patterns."""
-        path = Path(file_path)
-        for part in path.parts:
-            if part in IGNORE_PATTERNS or part.startswith('.'):
-                return True
-        return False
+    # ------------------------------------------------------------------ #
+    #  Internal helpers                                                     #
+    # ------------------------------------------------------------------ #
 
-    async def _handle_change(
-        self,
-        project_id: uuid.UUID,
-        workspace_path: str,
-        change_type: Change,
-        file_path: str,
-        broadcast_fn,
-    ):
-        path = Path(file_path)
-        rel_path = str(path.relative_to(workspace_path))
+    async def _get_snapshot(self, project_id: uuid.UUID) -> dict[str, float]:
+        """Run a Python script inside the container to collect file mtimes."""
+        # Import here to avoid circular imports at module load time
+        from sandbox.manager import sandbox_manager
 
-        # Re-index on add/modify
-        if change_type in (Change.added, Change.modified):
-            asyncio.create_task(
-                code_indexer.index_file(
-                    project_id, file_path, workspace_path
+        pid     = str(project_id)
+        sandbox = sandbox_manager.get(pid)
+        if not sandbox:
+            return {}
+
+        loop = asyncio.get_event_loop()
+        try:
+            res = await loop.run_in_executor(
+                None,
+                lambda: sandbox.container.exec_run(
+                    ["python3", "-c", _SNAPSHOT_SCRIPT],
+                    workdir="/workspace",
                 )
             )
-            event_type = "created" if change_type == Change.added else "modified"
+            raw = res.output.decode("utf-8", errors="replace").strip()
+            return json.loads(raw)
+        except Exception:
+            return {}
 
-        elif change_type == Change.deleted:
-            asyncio.create_task(
-                code_indexer.delete_file_index(project_id, file_path)
-            )
-            event_type = "deleted"
+    async def _poll_loop(self, project_id: uuid.UUID, broadcast_fn):
+        pid = str(project_id)
 
-        else:
-            return
+        # Give the container a moment to be fully ready on first connect
+        await asyncio.sleep(3)
 
-        # Broadcast to frontend for file tree sync
-        # Include both file path and parent directory for smart refresh
-        await broadcast_fn(str(project_id), {
-            "type":      "file.changed",
-            "event":     event_type,
-            "path":      rel_path,
-            "dir":       str(path.parent.relative_to(workspace_path)),
-            "is_file":   path.is_file(),
-        })
+        # Seed the initial snapshot (no events on first poll)
+        self._snapshots[pid] = await self._get_snapshot(project_id)
+
+        while True:
+            try:
+                await asyncio.sleep(POLL_INTERVAL)
+
+                new_snap = await self._get_snapshot(project_id)
+                old_snap = self._snapshots.get(pid, {})
+
+                changes: list[tuple[str, str]] = []
+
+                # Added or modified
+                for path, mtime in new_snap.items():
+                    if path not in old_snap:
+                        changes.append(("created", path))
+                    elif mtime != old_snap[path]:
+                        changes.append(("modified", path))
+
+                # Deleted
+                for path in old_snap:
+                    if path not in new_snap:
+                        changes.append(("deleted", path))
+
+                self._snapshots[pid] = new_snap
+
+                for event_type, abs_path in changes:
+                    # Convert /workspace/foo/bar.py → foo/bar.py
+                    rel_path = abs_path.removeprefix("/workspace").lstrip("/")
+                    parent   = "/".join(rel_path.split("/")[:-1])
+
+                    await broadcast_fn(pid, {
+                        "type":    "file.changed",
+                        "event":   event_type,
+                        "path":    rel_path,
+                        "dir":     parent,
+                        "is_file": True,
+                    })
+
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                # Don't let transient errors (container busy, JSON hiccup) kill the loop
+                pass
+
 
 workspace_watcher = WorkspaceWatcher()

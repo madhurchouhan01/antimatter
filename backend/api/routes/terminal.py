@@ -27,6 +27,7 @@ async def terminal_ws(
     websocket: WebSocket,
     project_id: uuid.UUID,
     token: str = Query(...),
+    terminal_id: str = Query("default"),
 ):
     await websocket.accept()
 
@@ -50,9 +51,9 @@ async def terminal_ws(
             return
 
         # Create DB record
-        session_id = str(uuid.uuid4())
+        session_id_db = str(uuid.uuid4())
         db_session = TerminalSession(
-            id=uuid.UUID(session_id),
+            id=uuid.UUID(session_id_db),
             project_id=project.id,
             user_id=user.id
         )
@@ -60,8 +61,8 @@ async def terminal_ws(
         await db.commit()
 
 
-        # Use project_id for terminal session persistence
-        session_id = f"term-{project.id}"
+        # Use project_id + terminal_id for terminal session persistence
+        session_id = f"term-{project.id}-{terminal_id}"
         
         # Check if PTY session already exists
         pty_session = pty_manager.get(session_id)

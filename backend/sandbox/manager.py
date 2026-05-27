@@ -75,10 +75,9 @@ class SandboxManager:
                 if container.status != "running":
                     container.start()
             except NotFound:
-                # Ensure workspace volume exists
+                # Ensure named Docker volume exists (no host filesystem leakage)
                 volume_name = self._ensure_volume(user_id, project_id)
 
-                # Spin up new sandbox container
                 container = self.client.containers.run(
                     image=settings.sandbox_image,
                     name=container_name,
@@ -98,7 +97,6 @@ class SandboxManager:
                         "antimatter.project_id": project_id,
                         "antimatter.user_id":    user_id,
                     },
-                    # Security: drop all capabilities
                     cap_drop=["ALL"],
                     security_opt=["no-new-privileges:true"],
                     read_only=False,
