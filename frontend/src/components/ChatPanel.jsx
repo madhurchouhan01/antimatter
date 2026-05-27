@@ -3,6 +3,7 @@ import { Send, Wrench, Bot, User, AlertCircle } from "lucide-react"
 import { useChatStore } from "../stores/chatStore"
 import { useProjectStore } from "../stores/projectStore"
 import { useAgentSocket } from "../hooks/useAgentSocket"
+import Markdown from "./Markdown"
 
 function MessageBubble({ msg }) {
   const icons = {
@@ -22,9 +23,11 @@ function MessageBubble({ msg }) {
   }
 
   return (
-    <div className={`flex items-start gap-2 px-3 py-2 rounded-lg max-w-[90%] ${colors[msg.role] ?? colors.assistant}`}>
+    <div className={`flex items-start gap-2.5 px-3 py-2 rounded-lg max-w-[90%] ${colors[msg.role] ?? colors.assistant}`}>
       <span className="mt-0.5 shrink-0">{icons[msg.role]}</span>
-      <span className="whitespace-pre-wrap break-words text-sm">{msg.content}</span>
+      <div className="flex-1 min-w-0">
+        <Markdown text={msg.content} />
+      </div>
     </div>
   )
 }
@@ -38,8 +41,7 @@ export default function ChatPanel() {
 
   useEffect(() => {
     if (project) connect()
-    return () => disconnect()
-  }, [project?.id])
+  }, [project?.id, connect])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -72,9 +74,12 @@ export default function ChatPanel() {
         )}
         {messages.map((msg) => <MessageBubble key={msg.id} msg={msg} />)}
         {streamBuffer && (
-          <div className="bg-editor-highlight text-editor-text self-start px-3 py-2 rounded-lg max-w-[90%] text-sm whitespace-pre-wrap">
-            {streamBuffer}
-            <span className="animate-pulse">▌</span>
+          <div className="bg-editor-highlight text-editor-text self-start px-3 py-2 rounded-lg max-w-[90%] text-sm flex gap-2.5 items-start">
+            <span className="mt-0.5 shrink-0 text-blue-400"><Bot size={14} /></span>
+            <div className="flex-1 min-w-0">
+              <Markdown text={streamBuffer} />
+              <span className="animate-pulse inline-block ml-0.5 text-blue-400 font-bold">▌</span>
+            </div>
           </div>
         )}
         <div ref={bottomRef} />

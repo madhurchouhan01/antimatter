@@ -8,9 +8,9 @@ MAX_CONTEXT_TOKENS = 8000   # rough char limit for injected context
 async def build_rag_context(
     db: AsyncSession,
     project_id: uuid.UUID,
+    user_id: uuid.UUID,
     query: str,
     open_files: list[str] = [],
-    workspace_path: str = "",
 ) -> str:
     """
     Assemble context string for the agent:
@@ -21,8 +21,8 @@ async def build_rag_context(
     budget = MAX_CONTEXT_TOKENS
 
     # 1. Open files — always include (pinned context)
-    if open_files and workspace_path:
-        fs = FileService(workspace_path)
+    if open_files:
+        fs = FileService(project_id, user_id)
         for file_path in open_files[:3]:   # max 3 open files
             try:
                 content = await fs.read(file_path)

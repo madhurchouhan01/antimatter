@@ -4,9 +4,9 @@ from langchain_core.tools import tool
 from services.file_service import FileService, SecurityError
 from sandbox.manager import sandbox_manager
 
-# Each tool receives workspace_root at call time via a closure factory
-def make_tools(workspace_root: str):
-    fs = FileService(workspace_root)
+# Each tool receives project context at call time via a closure factory
+def make_tools(project_id: str, user_id: str):
+    fs = FileService(project_id, user_id)
 
     @tool
     async def read_file(path: str) -> str:

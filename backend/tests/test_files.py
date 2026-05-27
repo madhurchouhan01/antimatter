@@ -77,3 +77,25 @@ async def test_file_operations(client, temp_workspace, engine):
     # Test security path traversal prevention
     read_traversal = await client.get(f"/api/files/{project_id}/read", params={"path": "../../some_file.py"}, headers=headers)
     assert read_traversal.status_code == 403
+
+    # Test delete file
+    delete_resp = await client.delete(f"/api/files/{project_id}", params={"path": "hello.py"}, headers=headers)
+    assert delete_resp.status_code == 200
+    assert delete_resp.json() == {"status": "success"}
+
+    # Verify hello.py is gone
+    list_after_delete = await client.get(f"/api/files/{project_id}/list", headers=headers)
+    assert list_after_delete.status_code == 200
+    root_files_after = {f["name"] for f in list_after_delete.json()}
+    assert "hello.py" not in root_files_after
+    assert "src" in root_files_after
+
+    # Test delete directory
+    delete_dir_resp = await client.delete(f"/api/files/{project_id}", params={"path": "src"}, headers=headers)
+    assert delete_dir_resp.status_code == 200
+    assert delete_dir_resp.json() == {"status": "success"}
+
+    # Verify src directory is gone
+    list_after_delete_dir = await client.get(f"/api/files/{project_id}/list", headers=headers)
+    assert list_after_delete_dir.status_code == 200
+    assert len(list_after_delete_dir.json()) == 0

@@ -53,10 +53,9 @@ async def agent_ws(
         # Register WS for broadcasts
         manager.connect(str(project_id), websocket)
 
-        # Start file watcher for this project
+        # Start container-polling file watcher (no host path needed)
         await workspace_watcher.start(
             project_id,
-            project.workspace_path,
             broadcast_fn=manager.broadcast,
         )
 

@@ -9,10 +9,9 @@ class Settings(BaseSettings):
     secret_key: str
     access_token_expire_minutes: int = 15
     refresh_token_expire_days: int = 30
-    groq_api_key: str = ""
-    workspace_root: str = "/workspaces"
+    workspace_root: str = "/users"
     environment: str = "development"
-
+    echo : bool = False
     # LLM
     groq_api_key: str = ""
     groq_model: str = "llama-3.3-70b-versatile"

@@ -1,26 +1,29 @@
-import { useRef, useCallback } from "react"
+import { useCallback } from "react"
 import { useChatStore } from "../stores/chatStore"
 import { useAuthStore } from "../stores/authStore"
 import { useEditorStore } from "../stores/editorStore"
 import { useFileTreeStore } from "../stores/fileTreeStore"
+
+let globalWs = null
+const messageQueue = []
+
 export function useAgentSocket(projectId) {
-  const wsRef = useRef(null)
-  const messageQueueRef = useRef([])
   const { addMessage, appendToken, flushBuffer,
           setStreaming, setConversationId } = useChatStore()
   const token = useAuthStore((s) => s.token)
 
   const connect = useCallback(() => {
     if (!projectId) return                                        // no project yet
-    if (wsRef.current?.readyState === WebSocket.OPEN) return
-    if (wsRef.current?.readyState === WebSocket.CONNECTING) return
+    if (globalWs?.readyState === WebSocket.OPEN) return
+    if (globalWs?.readyState === WebSocket.CONNECTING) return
 
     const url = `ws://127.0.0.1:1842/api/agent/ws/${projectId}?token=${token}`
     const ws  = new WebSocket(url)
+    globalWs = ws
 
     ws.onopen = () => {
-      while (messageQueueRef.current.length > 0) {
-        const msg = messageQueueRef.current.shift()
+      while (messageQueue.length > 0) {
+        const msg = messageQueue.shift()
         ws.send(JSON.stringify(msg))
       }
     }
@@ -61,7 +64,11 @@ export function useAgentSocket(projectId) {
     ws.onerror = () =>
       addMessage({ id: crypto.randomUUID(), role: "error", content: "WebSocket error" })
 
-    wsRef.current = ws
+    ws.onclose = () => {
+      if (globalWs === ws) {
+        globalWs = null
+      }
+    }
   }, [projectId, token, addMessage, appendToken, flushBuffer, setConversationId, setStreaming])
 
   const sendMessage = useCallback((text) => {
@@ -75,16 +82,17 @@ export function useAgentSocket(projectId) {
           open_files:      openFiles,
       }
 
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
-          wsRef.current.send(JSON.stringify(payload))
+      if (globalWs?.readyState === WebSocket.OPEN) {
+          globalWs.send(JSON.stringify(payload))
       } else {
-          messageQueueRef.current.push(payload)
+          messageQueue.push(payload)
           connect()
       }
   }, [connect, addMessage])
 
   const disconnect = useCallback(() => {
-    wsRef.current?.close()
+    globalWs?.close()
+    globalWs = null
   }, [])
 
   return { sendMessage, connect, disconnect }

@@ -3,7 +3,7 @@ from core.config import get_settings
 from db.models import Base
 
 settings = get_settings()
-engine = create_async_engine(settings.database_url, echo=settings.environment == "development")
+engine = create_async_engine(settings.database_url, echo=settings.echo)
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
     
 async def init_db():

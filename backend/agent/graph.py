@@ -25,8 +25,8 @@ Rules:
 class AgentState(TypedDict):
     messages: Annotated[list[BaseMessage], operator.add]
 
-def build_graph(workspace_root: str):
-    tools = make_tools(workspace_root)
+def build_graph(project_id: str, user_id: str):
+    tools = make_tools(project_id, user_id)
     llm = get_llm().bind_tools(tools)
 
     def agent_node(state: AgentState):

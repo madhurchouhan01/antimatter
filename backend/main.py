@@ -43,11 +43,11 @@ app.add_middleware(
 app.include_router(auth.router,     prefix="/api/auth",     tags=["auth"])
 app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
 app.include_router(files.router,    prefix="/api/files",    tags=["files"])
-app.include_router(agent.router, prefix="/api/agent", tags=["agent"])
-app.include_router(conversations.router, prefix="/api/projects", tags=["conversations"])
+app.include_router(agent.router,    prefix="/api/agent",    tags=["agent"])
 app.include_router(terminal.router, prefix="/api/terminal", tags=["terminal"])
-app.include_router(lsp.router, prefix="/api/lsp", tags=["lsp"])
-app.include_router(git.router, prefix="/api/git", tags=["git"])
+app.include_router(lsp.router,      prefix="/api/lsp",      tags=["lsp"])
+app.include_router(git.router,      prefix="/api/git",      tags=["git"])
+app.include_router(conversations.router, prefix="/api/projects", tags=["conversations"])
 
 @app.get("/health")
 async def health(): return {"status": "ok"}

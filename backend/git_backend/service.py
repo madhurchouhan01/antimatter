@@ -1,7 +1,4 @@
-import git
-from git import Repo, Actor, InvalidGitRepositoryError
 from dataclasses import dataclass
-from pathlib import Path
 
 @dataclass
 class GitStatus:
@@ -14,47 +11,89 @@ class GitStatus:
     is_repo: bool
 
 class GitService:
-    def __init__(self, workspace_path: str):
-        self.path = workspace_path
-        try:
-            self.repo = Repo(workspace_path)
-            self.is_repo = True
-        except InvalidGitRepositoryError:
-            self.repo = None
-            self.is_repo = False
+    def __init__(self, project_id: str, user_id: str):
+        self.project_id = str(project_id)
+        self.user_id = str(user_id)
+        self.container = None
+        self.is_repo = False
 
-    def init(self) -> None:
+    async def initialize(self) -> None:
+        from sandbox.manager import sandbox_manager
+        sandbox = await sandbox_manager.get_or_create(self.project_id, self.user_id)
+        self.container = sandbox.container
+        
+        # Check if it is a git repository
+        res = self.container.exec_run(
+            ["git", "rev-parse", "--is-inside-work-tree"],
+            workdir="/workspace"
+        )
+        self.is_repo = (res.exit_code == 0)
+
+    async def init(self) -> None:
         """Initialize a new git repo in the workspace."""
-        self.repo = Repo.init(self.path)
+        if not self.container:
+            await self.initialize()
+        self.container.exec_run(["git", "init"], workdir="/workspace")
         self.is_repo = True
 
-    def status(self) -> GitStatus:
+    async def status(self) -> GitStatus:
         if not self.is_repo:
             return GitStatus(
                 branch="", staged=[], unstaged=[],
                 untracked=[], ahead=0, behind=0, is_repo=False
             )
-        try:
-            branch = self.repo.active_branch.name
-        except TypeError:
-            branch = "HEAD (detached)"
-
-        staged   = [item.a_path for item in self.repo.index.diff("HEAD")] if self.repo.head.is_valid() else []
-        unstaged = [item.a_path for item in self.repo.index.diff(None)]
-        untracked = self.repo.untracked_files
-
-        # Ahead/behind vs origin
-        ahead = behind = 0
-        try:
-            origin = self.repo.remotes.origin
-            origin.fetch()
-            commits_ahead  = list(self.repo.iter_commits(f"origin/{branch}..{branch}"))
-            commits_behind = list(self.repo.iter_commits(f"{branch}..origin/{branch}"))
-            ahead  = len(commits_ahead)
-            behind = len(commits_behind)
-        except Exception:
-            pass
-
+        
+        # Try fetching in the background to get updated ahead/behind vs origin
+        self.container.exec_run(["git", "fetch"], workdir="/workspace")
+        
+        # Run porcelain status with branch info
+        res = self.container.exec_run(["git", "status", "--porcelain", "-b"], workdir="/workspace")
+        output = res.output.decode("utf-8")
+        
+        lines = output.strip().splitlines() if output.strip() else []
+        branch = ""
+        ahead = 0
+        behind = 0
+        staged = []
+        unstaged = []
+        untracked = []
+        
+        for line in lines:
+            if line.startswith("## "):
+                # Parse branch and ahead/behind info
+                branch_info = line[3:]
+                if "..." in branch_info:
+                    parts = branch_info.split("...")
+                    branch = parts[0]
+                    rest = parts[1]
+                    if "[" in rest and "]" in rest:
+                        stats = rest[rest.index("[")+1 : rest.index("]")]
+                        for stat in stats.split(","):
+                            stat = stat.strip()
+                            if stat.startswith("ahead "):
+                                ahead = int(stat.split(" ")[1])
+                            elif stat.startswith("behind "):
+                                behind = int(stat.split(" ")[1])
+                else:
+                    branch = branch_info
+            else:
+                if len(line) < 4:
+                     continue
+                code = line[:2]
+                path = line[3:]
+                if path.startswith('"') and path.endswith('"'):
+                    path = path[1:-1]
+                if " -> " in path:
+                    path = path.split(" -> ")[-1]
+                    
+                x, y = code[0], code[1]
+                if x in ('M', 'A', 'D', 'R', 'C'):
+                    staged.append(path)
+                if y in ('M', 'D'):
+                    unstaged.append(path)
+                if code == '??':
+                    untracked.append(path)
+                    
         return GitStatus(
             branch=branch,
             staged=staged,
@@ -65,46 +104,81 @@ class GitService:
             is_repo=True
         )
 
-    def diff(self, staged: bool = False, file_path: str | None = None) -> str:
+    async def diff(self, staged: bool = False, file_path: str | None = None) -> str:
         if not self.is_repo:
             return ""
-        try:
-            if staged:
-                return self.repo.git.diff("--cached", file_path or "")
-            return self.repo.git.diff(file_path or "")
-        except Exception:
+        cmd = ["git", "diff"]
+        if staged:
+            cmd.append("--cached")
+        if file_path:
+            cmd.extend(["--", file_path])
+        res = self.container.exec_run(cmd, workdir="/workspace")
+        return res.output.decode("utf-8")
+
+    async def stage(self, paths: list[str]) -> None:
+        if not self.is_repo:
+            return
+        cmd = ["git", "add"] + paths
+        self.container.exec_run(cmd, workdir="/workspace")
+
+    async def unstage(self, paths: list[str]) -> None:
+        if not self.is_repo:
+            return
+        cmd = ["git", "reset", "HEAD", "--"] + paths
+        self.container.exec_run(cmd, workdir="/workspace")
+
+    async def commit(self, message: str, author_name: str, author_email: str = "") -> str:
+        if not self.is_repo:
             return ""
+        self.container.exec_run(["git", "config", "local", "user.name", author_name], workdir="/workspace")
+        self.container.exec_run(["git", "config", "local", "user.email", author_email or "author@antimatter.dev"], workdir="/workspace")
+        
+        cmd = ["git", "commit", "-m", message]
+        self.container.exec_run(cmd, workdir="/workspace")
+        
+        res = self.container.exec_run(["git", "rev-parse", "HEAD"], workdir="/workspace")
+        return res.output.decode("utf-8").strip()
 
-    def stage(self, paths: list[str]) -> None:
-        self.repo.index.add(paths)
+    async def create_branch(self, name: str) -> None:
+        if not self.is_repo:
+            return
+        self.container.exec_run(["git", "checkout", "-b", name], workdir="/workspace")
 
-    def unstage(self, paths: list[str]) -> None:
-        self.repo.index.reset(paths=paths)
+    async def checkout(self, branch: str) -> None:
+        if not self.is_repo:
+            return
+        self.container.exec_run(["git", "checkout", branch], workdir="/workspace")
 
-    def commit(self, message: str, author_name: str, author_email: str = "") -> str:
-        author = Actor(author_name, author_email)
-        commit = self.repo.index.commit(message, author=author, committer=author)
-        return commit.hexsha
+    async def branches(self) -> list[str]:
+        if not self.is_repo:
+            return []
+        res = self.container.exec_run(["git", "branch"], workdir="/workspace")
+        lines = res.output.decode("utf-8").splitlines()
+        branches_list = []
+        for line in lines:
+            branch_name = line.replace("*", "").strip()
+            if branch_name:
+                branches_list.append(branch_name)
+        return branches_list
 
-    def create_branch(self, name: str) -> None:
-        self.repo.create_head(name).checkout()
-
-    def checkout(self, branch: str) -> None:
-        self.repo.git.checkout(branch)
-
-    def branches(self) -> list[str]:
-        return [b.name for b in self.repo.branches]
-
-    def log(self, max_count: int = 20) -> list[dict]:
-        if not self.is_repo or not self.repo.head.is_valid():
+    async def log(self, max_count: int = 20) -> list[dict]:
+        if not self.is_repo:
+            return []
+        cmd = ["git", "log", f"-n{max_count}", "--pretty=format:%H|%s|%an|%cI"]
+        res = self.container.exec_run(cmd, workdir="/workspace")
+        if res.exit_code != 0:
             return []
         commits = []
-        for c in self.repo.iter_commits(max_count=max_count):
-            commits.append({
-                "sha":     c.hexsha[:8],
-                "message": c.message.strip(),
-                "author":  c.author.name,
-                "date":    c.committed_datetime.isoformat(),
-            })
+        lines = res.output.decode("utf-8").splitlines()
+        for line in lines:
+            parts = line.split("|")
+            if len(parts) >= 4:
+                commits.append({
+                    "sha":     parts[0][:8],
+                    "message": parts[1],
+                    "author":  parts[2],
+                    "date":    parts[3],
+                })
         return commits
+
     

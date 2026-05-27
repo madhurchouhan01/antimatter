@@ -31,24 +31,29 @@ class LSPProcess:
         self._sock     = None
         self.client    = docker.from_env()
 
-    def start(self):
+    async def start(self):
+        loop = asyncio.get_event_loop()
         cmd = LSP_COMMANDS[self.language]
-        exec_id = self.client.api.exec_create(
-            self.container.id,
-            cmd=cmd,
-            stdin=True,
-            stdout=True,
-            stderr=False,
-            tty=False,
-            workdir="/workspace",
-        )
-        self._exec_id = exec_id["Id"]
-        self._sock    = self.client.api.exec_start(
-            self._exec_id,
-            detach=False,
-            tty=False,
-            socket=True,
-        )
+        
+        def _start():
+            exec_id = self.client.api.exec_create(
+                self.container.id,
+                cmd=cmd,
+                stdin=True,
+                stdout=True,
+                stderr=False,
+                tty=False,
+                workdir="/workspace",
+            )
+            self._exec_id = exec_id["Id"]
+            self._sock    = self.client.api.exec_start(
+                self._exec_id,
+                detach=False,
+                tty=False,
+                socket=True,
+            )
+            
+        await loop.run_in_executor(None, _start)
 
     @property
     def stdin(self):
@@ -75,11 +80,13 @@ class LSPManager:
         return f"{session_id}:{language}"
 
     async def get_or_create(
-        self, session_id: str, language: str, workspace_root: str
+        self, session_id: str, language: str, project_id: str, user_id: str
     ) -> LSPProcess:
         key = self._key(session_id, language)
         if key not in self._processes:
-            lsp = LSPProcess(language=language, workspace_root=workspace_root)
+            from sandbox.manager import sandbox_manager
+            sandbox = await sandbox_manager.get_or_create(project_id, user_id)
+            lsp = LSPProcess(language=language, container=sandbox.container)
             await lsp.start()
             self._processes[key] = lsp
         return self._processes[key]

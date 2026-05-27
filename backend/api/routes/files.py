@@ -39,7 +39,7 @@ async def list_files(
     user: User = Depends(get_current_user),
 ):
     project = await get_project_and_verify_owner(project_id, db, user)
-    service = FileService(project.workspace_path)
+    service = FileService(project_id, user.id)
     try:
         return await service.list_dir(path)
     except FileNotFoundError as e:
@@ -55,7 +55,7 @@ async def read_file(
     user: User = Depends(get_current_user),
 ):
     project = await get_project_and_verify_owner(project_id, db, user)
-    service = FileService(project.workspace_path)
+    service = FileService(project_id, user.id)
     try:
         content = await service.read(path)
         return {"content": content}
@@ -72,10 +72,27 @@ async def write_file(
     user: User = Depends(get_current_user),
 ):
     project = await get_project_and_verify_owner(project_id, db, user)
-    service = FileService(project.workspace_path)
+    service = FileService(project_id, user.id)
     try:
         await service.write(body.path, body.content)
         return {"status": "success"}
+    except SecurityError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+
+@router.delete("/{project_id}")
+async def delete_file(
+    project_id: uuid.UUID,
+    path: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    project = await get_project_and_verify_owner(project_id, db, user)
+    service = FileService(project_id, user.id)
+    try:
+        await service.delete(path)
+        return {"status": "success"}
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except SecurityError as e:
         raise HTTPException(status_code=403, detail=str(e))
 
@@ -90,7 +107,7 @@ async def upload_file(
     user: User = Depends(get_current_user),
 ):
     project = await get_project_and_verify_owner(project_id, db, user)
-    service = FileService(project.workspace_path)
+    service = FileService(project_id, user.id)
     try:
         content = await file.read()
         await service.write_bytes(path, content)
