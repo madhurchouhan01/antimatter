@@ -52,6 +52,11 @@ export default function ChatPanel() {
     if (!text || isStreaming) return
     setInput("")
     sendMessage(text)
+
+    const textarea = document.getElementById("chat-input-textarea")
+    if (textarea) {
+        textarea.style.height = 'auto'
+    }
   }
 
   return (
@@ -89,11 +94,16 @@ export default function ChatPanel() {
       <div className="p-3 border-t border-editor-border">
         <div className="flex gap-2 items-end bg-editor-highlight rounded-lg px-3 py-2">
           <textarea
-            className="flex-1 bg-transparent text-editor-text text-sm resize-none outline-none max-h-40 min-h-[20px]"
+            id="chat-input-textarea"
+            className="flex-1 bg-transparent text-editor-text text-sm resize-none outline-none max-h-40 min-h-[24px]"
             placeholder="Ask the agent..."
             rows={1}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => {
+              setInput(e.target.value)
+              e.target.style.height = 'auto'
+              e.target.style.height = e.target.scrollHeight + 'px'
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault()
