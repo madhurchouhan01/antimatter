@@ -1,13 +1,24 @@
 import { useEffect, useRef, useState } from "react"
-import { Send, Wrench, Bot, User, AlertCircle, Sparkles } from "lucide-react"
+import { Send, Wrench, Bot, User, AlertCircle, Sparkles, Info } from "lucide-react"
 import { useChatStore } from "../stores/chatStore"
 import { useProjectStore } from "../stores/projectStore"
 import { useAgentSocket } from "../hooks/useAgentSocket"
 import Markdown from "./Markdown"
 
 function MessageBubble({ msg }) {
-  const isUser = msg.role === "user"
-  const isTool = msg.role === "tool_start" || msg.role === "tool_end"
+  const isUser   = msg.role === "user"
+  const isTool   = msg.role === "tool_start" || msg.role === "tool_end"
+  const isSystem = msg.role === "system"
+
+  // System messages: slim horizontal notification bar, not a bubble
+  if (isSystem) {
+    return (
+      <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-editor-highlight/30 border border-editor-border/30 text-editor-muted text-[11px] self-stretch">
+        <Info size={12} className="shrink-0 text-editor-muted/70" />
+        <Markdown text={msg.content} />
+      </div>
+    )
+  }
 
   const icons = {
     user:       <User size={14} className="text-white" />,

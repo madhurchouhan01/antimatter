@@ -57,6 +57,7 @@ async def run_agent_streaming(
     db: AsyncSession,
     send_json,   # async callable — the WebSocket send function
     open_files: list[str] = [],
+    emit_fn=None,  # async callable for file.patch proposals
 ):
     conv = await get_or_create_conversation(db, project.id, conversation_id)
     history = await load_history(db, conv.id)
@@ -82,7 +83,7 @@ async def run_agent_streaming(
             f"{user_message}"
         )
 
-    graph = build_graph(str(project.id), str(project.owner_id))
+    graph = build_graph(str(project.id), str(project.owner_id), emit_fn=emit_fn)
     state = {"messages": history + [HumanMessage(content=enriched_message)]}
 
     initial_msg_count = len(state["messages"])

@@ -10,13 +10,14 @@ from agent.tools import make_tools
 SYSTEM_PROMPT = """You are an expert AI coding assistant embedded in a code editor.
 You have access to the user's project workspace through these tools:
 - read_file: read any file
-- write_file: create or overwrite any file
+- write_file: PROPOSE a change to a file (shows diff to user for approval — do NOT write the same file twice)
 - list_files: browse the directory tree
 - run_command: execute shell commands (npm install, python script.py, git status, etc.)
 
 Rules:
 - Always read a file before editing it unless you're creating it from scratch.
-- After writing a file, confirm by reading it back if the user asks to verify.
+- write_file proposes a diff — the user must accept it before you can assume it was written.
+- Never propose multiple diffs at once. Propose one file at a time.
 - Keep responses concise. Show code in markdown fences.
 - Never run destructive commands (rm -rf, drop database, etc.) without explicit user confirmation.
 - If a task will take multiple tool calls, narrate your plan first.
@@ -25,8 +26,8 @@ Rules:
 class AgentState(TypedDict):
     messages: Annotated[list[BaseMessage], operator.add]
 
-def build_graph(project_id: str, user_id: str):
-    tools = make_tools(project_id, user_id)
+def build_graph(project_id: str, user_id: str, emit_fn=None):
+    tools = make_tools(project_id, user_id, emit_fn=emit_fn)
     llm = get_llm().bind_tools(tools)
 
     def agent_node(state: AgentState):

@@ -114,3 +114,23 @@ async def upload_file(
         return {"status": "success"}
     except SecurityError as e:
         raise HTTPException(status_code=403, detail=str(e))
+
+class PatchApplyRequest(BaseModel):
+    path: str
+    content: str  # the accepted "modified" content
+
+@router.post("/{project_id}/apply-patch")
+async def apply_patch(
+    project_id: uuid.UUID,
+    body: PatchApplyRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Called by the frontend when the user clicks Accept on an AI-proposed diff."""
+    project = await get_project_and_verify_owner(project_id, db, user)
+    service = FileService(project_id, user.id)
+    try:
+        await service.write(body.path, body.content)
+        return {"status": "success", "path": body.path}
+    except SecurityError as e:
+        raise HTTPException(status_code=403, detail=str(e))

@@ -81,7 +81,8 @@ async def agent_ws(
                     conversation_id=uuid.UUID(conversation_id) if conversation_id else None,
                     db=db,
                     send_json=websocket.send_json,
-                    open_files      = open_files,
+                    open_files=open_files,
+                    emit_fn=websocket.send_json,
                 )
 
         except (WebSocketDisconnect, RuntimeError):

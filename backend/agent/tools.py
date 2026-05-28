@@ -1,11 +1,16 @@
-import subprocess
 import asyncio
+from typing import Callable, Awaitable, Optional
 from langchain_core.tools import tool
 from services.file_service import FileService, SecurityError
 from sandbox.manager import sandbox_manager
 
 # Each tool receives project context at call time via a closure factory
-def make_tools(project_id: str, user_id: str):
+# emit_fn: optional async callback used by write_file to propose a diff instead of writing directly
+def make_tools(
+    project_id: str,
+    user_id: str,
+    emit_fn: Optional[Callable[[dict], Awaitable[None]]] = None,
+):
     fs = FileService(project_id, user_id)
 
     @tool
@@ -20,10 +25,31 @@ def make_tools(project_id: str, user_id: str):
 
     @tool
     async def write_file(path: str, content: str) -> str:
-        """Write content to a file at the given path. Creates parent directories if needed."""
+        """
+        Propose a change to a file. The user must review and accept the diff before
+        it is written to disk. Do NOT call this multiple times for the same file —
+        wait for the user to accept or reject before proposing further changes.
+        """
         try:
-            await fs.write(path, content)
-            return f"OK: Written to {path}"
+            # Read current content to compute the diff
+            try:
+                original = await fs.read(path)
+            except FileNotFoundError:
+                original = ""  # new file
+
+            if emit_fn:
+                # Emit a patch proposal to the frontend — do NOT write to disk
+                await emit_fn({
+                    "type": "file.patch",
+                    "path": path,
+                    "original": original,
+                    "modified": content,
+                })
+                return f"PENDING: Diff proposed for {path}. Waiting for user approval."
+            else:
+                # Fallback: write directly (used in tests / non-WS contexts)
+                await fs.write(path, content)
+                return f"OK: Written to {path}"
         except SecurityError:
             return "ERROR: Path traversal attempt blocked."
 
@@ -60,5 +86,5 @@ def make_tools(project_id: str, user_id: str):
             return output[:4000] if len(output) > 4000 else output
         except Exception as e:
             return f"ERROR: {e}"
-        
-    return [read_file, write_file, list_files, run_command]
+
+    return [read_file, write_file, list_files, run_command]

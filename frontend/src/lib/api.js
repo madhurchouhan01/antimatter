@@ -37,6 +37,8 @@ export const filesApi = {
     api.get(`/api/files/${projectId}/read`, { params: { path } }),
   write: (projectId, path, content) =>
     api.post(`/api/files/${projectId}/write`, { path, content }),
+  applyPatch: (projectId, path, content) =>
+    api.post(`/api/files/${projectId}/apply-patch`, { path, content }),
   upload: (projectId, path, file) => {
     const formData = new FormData()
     formData.append("path", path)

@@ -3,6 +3,7 @@ import { useChatStore } from "../stores/chatStore"
 import { useAuthStore } from "../stores/authStore"
 import { useEditorStore } from "../stores/editorStore"
 import { useFileTreeStore } from "../stores/fileTreeStore"
+import { useDiffStore } from "../stores/diffStore"
 
 let globalWs = null
 const messageQueue = []
@@ -37,6 +38,15 @@ export function useAgentSocket(projectId) {
       }
       if (msg.type === "indexing.status") {
           useFileTreeStore.getState().setIndexing(msg.status)
+          return
+      }
+      if (msg.type === "file.patch") {
+          // AI proposed a file change — show the diff viewer overlay
+          useDiffStore.getState().setPendingDiff({
+            path:     msg.path,
+            original: msg.original,
+            modified: msg.modified,
+          })
           return
       }
       if (msg.type === "token") {
