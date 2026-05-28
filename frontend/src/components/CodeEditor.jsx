@@ -7,7 +7,6 @@ import { FolderOpen, GitBranch } from "lucide-react"
 import { useFileTreeStore } from "../stores/fileTreeStore"
 import { useTerminalStore } from "../stores/terminalStore"
 import DiffViewer from "./DiffViewer"
-import { useLSP } from "../hooks/useLSP"
 
 function getLanguage(path) {
   const ext = path?.split(".").pop()
@@ -65,15 +64,10 @@ export default function CodeEditor() {
   const [repoUrl, setRepoUrl] = useState("")
   const [uploading, setUploading] = useState(false)
   const folderInputRef = useRef(null)
-  const monacoRef     = useRef(null)   // holds the monaco instance
-  const versionRef    = useRef(1)      // LSP document version counter
-
-  // LSP integration
-  const { onFileOpen, onFileChange } = useLSP(project?.id, monacoRef)
 
   const file = openFiles.find((f) => f.path === activeFile)
 
-  const fileRef    = useRef(file)
+  const fileRef = useRef(file)
   const projectRef = useRef(project)
 
   useEffect(() => {
@@ -214,14 +208,8 @@ export default function CodeEditor() {
           cursorBlinking: "smooth",
           smoothScrolling: true,
         }}
-        onChange={(val) => {
-          const v = versionRef.current++
-          updateContent(file.path, val ?? "")
-          onFileChange(file.path, val ?? "", v)
-        }}
+        onChange={(val) => updateContent(file.path, val ?? "")}
         onMount={(editor, monaco) => {
-          monacoRef.current = monaco
-
           monaco.editor.defineTheme('tokyo-night', {
             base: 'vs-dark',
             inherit: true,
@@ -238,9 +226,6 @@ export default function CodeEditor() {
             }
           });
           monaco.editor.setTheme('tokyo-night');
-
-          // Notify LSP about this file
-          onFileOpen(file.path, file.content ?? "", monaco)
 
           // Ctrl+S / Cmd+S to save
           editor.addCommand(
