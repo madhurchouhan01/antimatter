@@ -21,7 +21,8 @@ class ConnectionManager:
     async def broadcast(self, project_id: str, message: dict):
         """Send a message to all clients connected to a project."""
         dead = set()
-        for ws in self._connections.get(project_id, set()):
+        clients = self._connections.get(project_id, set())
+        for ws in clients:
             try:
                 await ws.send_json(message)
             except Exception:

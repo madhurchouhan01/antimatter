@@ -6,6 +6,7 @@ from context.chunker import chunk_file
 from context.embedder import embed_documents
 from context.vector_store import vector_store
 from db.session import AsyncSessionLocal
+from core.broadcaster import manager
 
 # File extensions worth indexing
 INDEXABLE_EXTENSIONS = {
@@ -30,18 +31,29 @@ class CodeIndexer:
         workspace_path: str,
     ) -> dict:
         """Full index of entire project workspace."""
-        root  = Path(workspace_path)
-        files = self._collect_files(root)
+        try:
+            from core.broadcaster import manager
+            await manager.broadcast(str(project_id), {"type": "indexing.status", "status": True})
+            import asyncio
+            await asyncio.sleep(3)
+        except Exception:
+            pass
+            
+        try:
+            root  = Path(workspace_path)
+            files = self._collect_files(root)
 
-        total_chunks = 0
-        async with AsyncSessionLocal() as db:
-            for file_path in files:
-                count = await self._index_file(
-                    db, project_id, str(file_path), root
-                )
-                total_chunks += count
+            total_chunks = 0
+            async with AsyncSessionLocal() as db:
+                for file_path in files:
+                    count = await self._index_file(
+                        db, project_id, str(file_path), root
+                    )
+                    total_chunks += count
 
-        return {"files_indexed": len(files), "chunks": total_chunks}
+            return {"files_indexed": len(files), "chunks": total_chunks}
+        finally:
+            await manager.broadcast(str(project_id), {"type": "indexing.status", "status": False})
 
     async def index_file(
         self,

@@ -35,6 +35,10 @@ export function useAgentSocket(projectId) {
           useFileTreeStore.getState().markDirty(msg.path, msg.event)
           return
       }
+      if (msg.type === "indexing.status") {
+          useFileTreeStore.getState().setIndexing(msg.status)
+          return
+      }
       if (msg.type === "token") {
         setStreaming(true)
         appendToken(msg.content)

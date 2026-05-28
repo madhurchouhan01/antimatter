@@ -5,7 +5,7 @@ import CodeEditor  from "./CodeEditor"
 import ChatPanel   from "./ChatPanel"
 import Terminal    from "./Terminal"
 import GitPanel    from "./GitPanel"
-import StatusBar from "./StatusBar"
+import IndexingNotification from "./IndexingNotification"
 import { useTerminalStore } from "../stores/terminalStore"
 import { useProjectStore } from "../stores/projectStore"
 import { useAgentSocket } from "../hooks/useAgentSocket"
@@ -292,7 +292,7 @@ export default function Layout() {
         </>
       )}
 
-      <StatusBar />
+      <IndexingNotification />
     </div>
   )
 }
