@@ -13,7 +13,7 @@ pytest==8.3.3
 pytest-asyncio==0.24.0
 ruff==0.6.5
 mypy==1.11.2
-psycopg2-binary
+psycopg2-binary==2.9.12
 docker==7.1.0
 
 # langchain and related dependencies
@@ -39,8 +39,7 @@ watchfiles==0.24.0
 celery==5.4.0
 pgvector==0.3.5
 
-pgvector
-asyncpg
-pytest-asyncio
+asyncpg==0.29.0
+pytest-asyncio==0.24.0
 
-python-jose[cryptography]
+argon2_cffi==25.1.0
