@@ -31,3 +31,12 @@ body { margin: 0; background: #1a1b26; color: #a9b1d6; }
   scrollbar-width: thin;
   scrollbar-color: rgba(122, 162, 247, 0.15) transparent;
 }
+
+/* Ghost text inline suggestion (Phase 4) */
+.ghost-text-suggestion {
+  color: #565f89 !important;
+  font-style: italic;
+  opacity: 0.7;
+  pointer-events: none;
+  user-select: none;
+}

@@ -7,6 +7,15 @@ import { FolderOpen, GitBranch } from "lucide-react"
 import { useFileTreeStore } from "../stores/fileTreeStore"
 import { useTerminalStore } from "../stores/terminalStore"
 import DiffViewer from "./DiffViewer"
+import InlineChatWidget from "./InlineChatWidget"
+import { useChatStore } from "../stores/chatStore"
+import { useGhostStore } from "../stores/ghostStore"
+
+/** Extract the first fenced code block from markdown text */
+function extractCodeBlock(text) {
+  const m = text?.match(/```(?:\w+)?\n([\s\S]*?)```/)
+  return m ? m[1].trimEnd() : null
+}
 
 function getLanguage(path) {
   const ext = path?.split(".").pop()
@@ -64,6 +73,59 @@ export default function CodeEditor() {
   const [repoUrl, setRepoUrl] = useState("")
   const [uploading, setUploading] = useState(false)
   const folderInputRef = useRef(null)
+  const editorRef  = useRef(null)
+  const monacoRef  = useRef(null)
+  const [inlineChat, setInlineChat] = useState(null)
+  const ghostDecorRef   = useRef(null)   // active decoration collection
+  const lastMsgIdRef    = useRef(null)   // last processed assistant msg id
+  const acceptingRef    = useRef(false)  // flag: currently accepting ghost
+
+  // Ghost store
+  const ghost = useGhostStore((s) => s.ghost)
+
+  // Chat store — watch for new agent messages
+  const messages    = useChatStore((s) => s.messages)
+  const isStreaming = useChatStore((s) => s.isStreaming)
+
+  // ── Auto-extract code from last assistant message ──────────────────────────
+  useEffect(() => {
+    if (isStreaming) return
+    if (!editorRef.current) return
+    const last = [...messages].reverse().find((m) => m.role === "assistant")
+    if (!last || last.id === lastMsgIdRef.current) return
+    lastMsgIdRef.current = last.id
+    const code = extractCodeBlock(last.content)
+    if (!code) return
+    const pos = editorRef.current.getPosition()
+    if (!pos) return
+    useGhostStore.getState().setGhost({ text: code, line: pos.lineNumber, col: pos.column })
+  }, [isStreaming, messages])
+
+  // ── Manage Monaco decorations when ghost changes ───────────────────────────
+  useEffect(() => {
+    const editor = editorRef.current
+    const monaco = monacoRef.current
+    ghostDecorRef.current?.clear()
+    ghostDecorRef.current = null
+    if (!ghost || !editor || !monaco) return
+
+    const firstLine = ghost.text.split("\n")[0]
+    const extra     = ghost.text.split("\n").length - 1
+    const hint      = extra > 0 ? `  ···(+${extra} lines)` : ""
+    ghostDecorRef.current = editor.createDecorationsCollection([{
+      range: new monaco.Range(ghost.line, ghost.col, ghost.line, ghost.col),
+      options: {
+        after: { content: "\u00A0" + firstLine + hint, inlineClassName: "ghost-text-suggestion" },
+        description: "ghost-text",
+      },
+    }])
+  }, [ghost])
+
+  // Cleanup decorations + ghost on unmount
+  useEffect(() => () => {
+    ghostDecorRef.current?.clear()
+    useGhostStore.getState().clearGhost()
+  }, [])
 
   const file = openFiles.find((f) => f.path === activeFile)
 
@@ -210,6 +272,10 @@ export default function CodeEditor() {
         }}
         onChange={(val) => updateContent(file.path, val ?? "")}
         onMount={(editor, monaco) => {
+          // Store refs for InlineChatWidget positioning
+          editorRef.current  = editor
+          monacoRef.current  = monaco
+
           monaco.editor.defineTheme('tokyo-night', {
             base: 'vs-dark',
             inherit: true,
@@ -234,14 +300,66 @@ export default function CodeEditor() {
               const currentFile = fileRef.current
               const currentProject = projectRef.current
               if (!currentFile || !currentProject) return
-              
               const val = editor.getValue()
               await filesApi.write(currentProject.id, currentFile.path, val)
               useEditorStore.getState().markSaved(currentFile.path)
             }
           )
+
+          // Tab — accept ghost text if active, otherwise default indent
+          editor.addCommand(monaco.KeyCode.Tab, () => {
+            const { ghost: g, clearGhost } = useGhostStore.getState()
+            if (g) {
+              acceptingRef.current = true
+              const tabSize    = editor.getOption(monaco.editor.EditorOption.tabSize)
+              const useSpaces  = editor.getOption(monaco.editor.EditorOption.insertSpaces)
+              editor.executeEdits("ghost", [{
+                range: new monaco.Range(g.line, g.col, g.line, g.col),
+                text: g.text,
+                forceMoveMarkers: true,
+              }])
+              clearGhost()
+              acceptingRef.current = false
+              return
+            }
+            // Default: insert indent
+            const tabSize   = editor.getOption(monaco.editor.EditorOption.tabSize)
+            const useSpaces = editor.getOption(monaco.editor.EditorOption.insertSpaces)
+            editor.trigger("keyboard", "type", { text: useSpaces ? " ".repeat(tabSize) : "\t" })
+          })
+
+          // Clear ghost on any cursor move (but not when we triggered it)
+          editor.onDidChangeCursorPosition(() => {
+            if (acceptingRef.current) return
+            useGhostStore.getState().clearGhost()
+          })
+
+          // Ctrl+K / Cmd+K — open inline AI chat at cursor line
+          editor.addCommand(
+            monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK,
+            () => {
+              const selection     = editor.getSelection()
+              const pos           = editor.getPosition()
+              if (!pos) return
+              const selectedText  = (selection && !selection.isEmpty())
+                ? editor.getModel()?.getValueInRange(selection) ?? ""
+                : ""
+              setInlineChat({ line: pos.lineNumber, selectedText })
+            }
+          )
         }}
       />
+
+      {/* Inline AI chat widget — floats below cursor line on Ctrl+K */}
+      {inlineChat && (
+        <InlineChatWidget
+          editor={editorRef.current}
+          line={inlineChat.line}
+          selectedText={inlineChat.selectedText}
+          filePath={file.path}
+          onClose={() => setInlineChat(null)}
+        />
+      )}
     </div>
   )
 }
