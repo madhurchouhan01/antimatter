@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react"
+import { useNavigate } from "react-router-dom"
 import FileTree    from "./FileTree"
 import EditorTabs  from "./EditorTabs"
 import CodeEditor  from "./CodeEditor"
@@ -8,11 +9,12 @@ import GitPanel    from "./GitPanel"
 import IndexingNotification from "./IndexingNotification"
 import { useTerminalStore } from "../stores/terminalStore"
 import { useProjectStore } from "../stores/projectStore"
+import { useAuthStore } from "../stores/authStore"
 import { useAgentSocket } from "../hooks/useAgentSocket"
 import {
   PanelLeftClose, PanelLeftOpen,
   MessageSquare, Terminal as TermIcon,
-  GitBranch, Plus, Maximize2, Minimize2, ChevronDown
+  GitBranch, Plus, Maximize2, Minimize2, ChevronDown, LogOut
 } from "lucide-react"
 
 export default function Layout() {
@@ -36,12 +38,22 @@ export default function Layout() {
   const termFullscreen = useTerminalStore((s) => s.termFullscreen)
   const setTermFullscreen = useTerminalStore((s) => s.setTermFullscreen)
 
+  const clearAuth = useAuthStore((s) => s.clearAuth)
+  const navigate = useNavigate()
+
   const { connect, disconnect } = useAgentSocket(project?.id)
 
   useEffect(() => {
     if (project) connect()
     return () => disconnect()
   }, [project?.id, connect, disconnect])
+
+  const handleLogout = () => {
+    if (window.confirm("Are you sure you want to log out?")) {
+      clearAuth()
+      navigate("/login")
+    }
+  }
 
   const handleAddTerminal = () => {
     const nextNum = sessions.length + 1
@@ -106,25 +118,25 @@ export default function Layout() {
       {/* Left sidebar */}
       {sidebarOpen && (
         <>
-          <div 
+          <div
             style={{ width: `${sidebarWidth}px` }}
-            className="shrink-0 bg-editor-sidebar border-r border-editor-border flex flex-col"
+            className="shrink-0 bg-editor-sidebar/95 backdrop-blur-xl border-r border-editor-border/50 flex flex-col shadow-xl z-20 relative"
           >
             {/* Sidebar tab switcher */}
-            <div className="flex border-b border-editor-border">
+            <div className="flex border-b border-editor-border/50 bg-editor-sidebar">
               <button
                 onClick={() => setSidebarTab("files")}
-                className={`flex-1 flex items-center justify-center py-2 text-xs gap-1
-                  ${sidebarTab === "files" ? "text-editor-text border-b-2 border-blue-500" : "text-editor-muted"}`}
+                className={`flex-1 flex items-center justify-center py-2.5 text-xs font-semibold uppercase tracking-wider gap-1.5 transition-colors
+                  ${sidebarTab === "files" ? "text-editor-accent border-b-[3px] border-editor-accent bg-editor-highlight/30" : "text-editor-muted hover:bg-editor-highlight/50 border-b-[3px] border-transparent"}`}
               >
-                <PanelLeftOpen size={12} /> Files
+                <PanelLeftOpen size={14} /> Files
               </button>
               <button
                 onClick={() => setSidebarTab("git")}
-                className={`flex-1 flex items-center justify-center py-2 text-xs gap-1
-                  ${sidebarTab === "git" ? "text-editor-text border-b-2 border-blue-500" : "text-editor-muted"}`}
+                className={`flex-1 flex items-center justify-center py-2.5 text-xs font-semibold uppercase tracking-wider gap-1.5 transition-colors
+                  ${sidebarTab === "git" ? "text-editor-accent border-b-[3px] border-editor-accent bg-editor-highlight/30" : "text-editor-muted hover:bg-editor-highlight/50 border-b-[3px] border-transparent"}`}
               >
-                <GitBranch size={12} /> Git
+                <GitBranch size={14} /> Git
               </button>
             </div>
 
@@ -144,33 +156,50 @@ export default function Layout() {
       <div className="flex-1 flex flex-col overflow-hidden">
 
         {/* Topbar */}
-        <div className="flex items-center h-9 bg-editor-sidebar border-b border-editor-border px-2 gap-2">
+        <div className="flex items-center h-12 bg-editor-sidebar/90 backdrop-blur-md border-b border-editor-border/50 px-4 gap-3 shadow-sm z-10 relative">
           {!sidebarOpen && (
-            <PanelLeftOpen
-              size={16}
-              className="cursor-pointer text-editor-muted hover:text-editor-text"
+            <button 
+              className="p-1.5 rounded-md hover:bg-editor-highlight/50 text-editor-muted hover:text-editor-text transition-colors"
               onClick={() => setSidebarOpen(true)}
-            />
+            >
+              <PanelLeftOpen size={16} />
+            </button>
           )}
           {sidebarOpen && (
-            <PanelLeftClose
-              size={16}
-              className="cursor-pointer text-editor-muted hover:text-editor-text"
+            <button 
+              className="p-1.5 rounded-md hover:bg-editor-highlight/50 text-editor-muted hover:text-editor-text transition-colors"
               onClick={() => setSidebarOpen(false)}
-            />
+            >
+              <PanelLeftClose size={16} />
+            </button>
           )}
           <EditorTabs />
-          <div className="ml-auto flex items-center gap-3">
-            <TermIcon
-              size={15}
-              className="cursor-pointer text-editor-muted hover:text-editor-text"
+          <div className="ml-auto flex items-center gap-2">
+            <button
               onClick={() => setTermOpen((o) => !o)}
-            />
-            <MessageSquare
-              size={15}
-              className="cursor-pointer text-editor-muted hover:text-editor-text"
+              title="Toggle Terminal"
+              className={`p-2 rounded-lg transition-all ${termOpen ? 'bg-editor-accent/20 text-editor-accent shadow-inner' : 'text-editor-muted hover:bg-editor-highlight hover:text-editor-text'}`}
+            >
+              <TermIcon size={16} />
+            </button>
+            <button
               onClick={() => setChatOpen((o) => !o)}
-            />
+              title="Toggle AI Chat"
+              className={`p-2 rounded-lg transition-all ${chatOpen ? 'bg-editor-accent/20 text-editor-accent shadow-inner' : 'text-editor-muted hover:bg-editor-highlight hover:text-editor-text'}`}
+            >
+              <MessageSquare size={16} />
+            </button>
+            
+            <div className="w-[1px] h-5 bg-editor-border/50 mx-2"></div>
+            
+            <button
+              onClick={handleLogout}
+              className="group flex items-center gap-1.5 px-3 py-1.5 bg-editor-bg hover:bg-red-500/10 border border-editor-border/50 hover:border-red-500/30 rounded-lg text-editor-muted hover:text-red-400 transition-all shadow-sm hover:shadow-[0_0_12px_rgba(248,113,113,0.15)]"
+              title="Log Out"
+            >
+              <LogOut size={14} className="group-hover:-translate-x-0.5 transition-transform" />
+              <span className="text-xs font-semibold tracking-wide uppercase hidden sm:inline">Logout</span>
+            </button>
           </div>
         </div>
 
@@ -199,10 +228,10 @@ export default function Layout() {
             }`}
           >
             {/* Tab/Actions Header */}
-            <div className="flex items-center px-3 bg-editor-sidebar border-b border-editor-border shrink-0 select-none h-8">
-              <div className="flex items-center gap-1.5 border-r border-editor-border pr-2.5 shrink-0">
-                <TermIcon size={12} className="text-editor-muted" />
-                <span className="text-[10px] text-editor-muted font-bold uppercase tracking-wider font-mono">Terminal</span>
+            <div className="flex items-center px-4 bg-editor-sidebar border-b border-editor-border/50 shrink-0 select-none h-9">
+              <div className="flex items-center gap-2 border-r border-editor-border/50 pr-4 shrink-0">
+                <TermIcon size={14} className="text-editor-accent" />
+                <span className="text-[11px] text-editor-text font-bold uppercase tracking-widest font-mono">Terminal</span>
               </div>
               
               {/* Terminal tabs */}

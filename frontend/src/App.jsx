@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom"
 import { useAuthStore } from "./stores/authStore"
 import Login         from "./pages/Login"
+import Register      from "./pages/Register"
 import ProjectPicker from "./pages/ProjectPicker"
 import Layout        from "./components/Layout"
 
@@ -14,6 +15,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login"    element={<Login />} />
+        <Route path="/register" element={<Register />} />
         <Route path="/projects" element={<Protected><ProjectPicker /></Protected>} />
         <Route path="/editor"   element={<Protected><Layout /></Protected>} />
         <Route path="*"         element={<Navigate to="/projects" replace />} />

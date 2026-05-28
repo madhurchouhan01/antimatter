@@ -3,20 +3,25 @@ export default {
   theme: {
     extend: {
       colors: {
-        // VS Code-like dark theme tokens
+        // Tokyo Night aesthetic tokens
         editor: {
-          bg:        "#1e1e1e",
-          sidebar:   "#252526",
-          panel:     "#1f1f1f",
-          border:    "#3c3c3c",
-          highlight: "#2a2d2e",
-          accent:    "#0e639c",
-          text:      "#cccccc",
-          muted:     "#858585",
+          bg:        "#1a1b26",
+          sidebar:   "#16161e",
+          panel:     "#1f2335",
+          border:    "#27273a",
+          highlight: "#292e42",
+          accent:    "#7aa2f7",
+          accentHover: "#89ddff",
+          text:      "#a9b1d6",
+          muted:     "#565f89",
         }
       },
       fontFamily: {
         mono: ["'JetBrains Mono'", "monospace"],
+      },
+      boxShadow: {
+        glow: "0 0 10px rgba(122, 162, 247, 0.3)",
+        "glow-lg": "0 0 20px rgba(122, 162, 247, 0.4)",
       }
     }
   },

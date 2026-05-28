@@ -1,24 +1,22 @@
 import { useState } from "react"
 import { useNavigate, Link } from "react-router-dom"
 import { authApi } from "../lib/api"
-import { useAuthStore } from "../stores/authStore"
 
-export default function Login() {
+export default function Register() {
   const [email, setEmail]       = useState("")
   const [password, setPassword] = useState("")
+  const [name, setName]         = useState("")
   const [error, setError]       = useState("")
-  const setTokens  = useAuthStore((s) => s.setTokens)
-  const navigate   = useNavigate()
+  const navigate = useNavigate()
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError("")
     try {
-      const res = await authApi.login(email, password)
-      setTokens(res.data.access_token, res.data.refresh_token)
-      navigate("/projects")
-    } catch {
-      setError("Invalid credentials")
+      await authApi.register(email, password, name)
+      navigate("/login")
+    } catch (err) {
+      setError(err.response?.data?.detail || "Registration failed")
     }
   }
 
@@ -30,8 +28,8 @@ export default function Login() {
 
       <div className="w-full max-w-md z-10 backdrop-blur-xl bg-editor-sidebar/80 border border-editor-border/50 shadow-2xl rounded-2xl p-10 flex flex-col gap-6 transform transition-all">
         <div className="text-center">
-          <h1 className="text-3xl font-bold text-white tracking-tight mb-2">Welcome Back</h1>
-          <p className="text-editor-muted text-sm">Sign in to Antimatter</p>
+          <h1 className="text-3xl font-bold text-white tracking-tight mb-2">Create Account</h1>
+          <p className="text-editor-muted text-sm">Sign up to get started with Antimatter</p>
         </div>
         
         {error && (
@@ -41,6 +39,15 @@ export default function Login() {
         )}
         
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-editor-muted uppercase tracking-wider">Full Name</label>
+            <input
+              className="bg-editor-bg/50 border border-editor-border/50 rounded-lg px-4 py-2.5 text-sm text-editor-text outline-none focus:border-blue-500 focus:bg-editor-highlight/50 transition-colors"
+              placeholder="John Doe" type="text"
+              value={name} onChange={(e) => setName(e.target.value)}
+              required
+            />
+          </div>
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-editor-muted uppercase tracking-wider">Email Address</label>
             <input
@@ -57,6 +64,7 @@ export default function Login() {
               placeholder="••••••••" type="password"
               value={password} onChange={(e) => setPassword(e.target.value)}
               required
+              minLength={6}
             />
           </div>
           
@@ -64,14 +72,14 @@ export default function Login() {
             type="submit"
             className="mt-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-lg px-4 py-2.5 text-sm font-semibold transition-all shadow-lg shadow-blue-500/25 active:scale-[0.98]"
           >
-            Sign in
+            Sign Up
           </button>
         </form>
 
         <p className="text-center text-sm text-editor-muted mt-2">
-          Don't have an account?{" "}
-          <Link to="/register" className="text-blue-400 hover:text-blue-300 font-medium transition-colors">
-            Sign up
+          Already have an account?{" "}
+          <Link to="/login" className="text-blue-400 hover:text-blue-300 font-medium transition-colors">
+            Sign in
           </Link>
         </p>
       </div>

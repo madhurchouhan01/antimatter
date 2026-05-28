@@ -67,11 +67,11 @@ function TreeNode({ node, projectId, depth = 0, onRefresh }) {
   return (
     <div>
       <div
-        className="group flex items-center justify-between gap-1 px-2 py-0.5 cursor-pointer hover:bg-editor-highlight rounded text-sm text-editor-text select-none"
+        className="group flex items-center justify-between gap-1 px-2 py-1 cursor-pointer hover:bg-editor-highlight/60 rounded-md text-[13px] text-editor-text select-none transition-colors"
         style={{ paddingLeft: `${depth * 12 + 8}px` }}
         onClick={handleClick}
       >
-        <div className="flex items-center gap-1 min-w-0">
+        <div className="flex items-center gap-1.5 min-w-0">
           {node.is_dir
             ? (open ? <ChevronDown size={14} className="shrink-0" /> : <ChevronRight size={14} className="shrink-0" />)
             : <span className="w-3.5 shrink-0" />}

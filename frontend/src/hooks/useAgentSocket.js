@@ -65,8 +65,10 @@ export function useAgentSocket(projectId) {
       }
     }
 
-    ws.onerror = () =>
-      addMessage({ id: crypto.randomUUID(), role: "error", content: "WebSocket error" })
+    ws.onerror = (e) => {
+      console.error("Agent socket error:", e)
+      // addMessage({ id: crypto.randomUUID(), role: "error", content: "WebSocket error" })
+    }
 
     ws.onclose = () => {
       if (globalWs === ws) {

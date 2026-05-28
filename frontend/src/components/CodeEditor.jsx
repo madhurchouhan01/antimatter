@@ -19,26 +19,36 @@ function getLanguage(path) {
 
 function EmptyState({ project, onOpenFolder, onCloneRepo, uploading }) {
   return (
-    <div className="flex-1 flex flex-col items-center justify-center text-editor-muted gap-6">
-      <div className="text-center">
-        <p className="text-sm mb-8">Open a file from the explorer or start below</p>
+    <div className="flex-1 flex flex-col items-center justify-center text-editor-muted gap-8 relative overflow-hidden bg-editor-bg">
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-blue-500/5 blur-[100px] rounded-full pointer-events-none" />
+      
+      <div className="text-center z-10 flex flex-col items-center">
+        <div className="w-16 h-16 rounded-2xl bg-editor-highlight/50 flex items-center justify-center mb-6 shadow-xl border border-editor-border/50">
+          <FolderOpen size={32} className="text-editor-accent" />
+        </div>
+        <h2 className="text-2xl font-bold text-white mb-2">Workspace Ready</h2>
+        <p className="text-sm text-editor-muted mb-8 max-w-sm">
+          Open a file from the explorer on the left, or bring your code into the workspace to get started.
+        </p>
+        
         <div className="flex gap-4">
           <button
             onClick={onOpenFolder}
             disabled={uploading}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition disabled:opacity-50"
+            className="group relative flex items-center gap-2 px-6 py-2.5 bg-editor-sidebar border border-editor-border/50 hover:border-editor-accent/50 text-white rounded-xl transition-all shadow-lg hover:shadow-glow disabled:opacity-50"
             title="Upload folder to project"
           >
-            <FolderOpen size={18} />
-            {uploading ? "Uploading..." : "Upload Folder"}
+            <FolderOpen size={18} className="text-blue-400 group-hover:scale-110 transition-transform" />
+            <span className="font-medium text-sm">{uploading ? "Uploading..." : "Upload Folder"}</span>
           </button>
+          
           <button
             onClick={onCloneRepo}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded transition"
+            className="group relative flex items-center gap-2 px-6 py-2.5 bg-editor-sidebar border border-editor-border/50 hover:border-editor-accentHover/50 text-white rounded-xl transition-all shadow-lg hover:shadow-glow disabled:opacity-50"
             title="Clone a Git repository"
           >
-            <GitBranch size={18} />
-            Clone Repo
+            <GitBranch size={18} className="text-purple-400 group-hover:scale-110 transition-transform" />
+            <span className="font-medium text-sm">Clone Repo</span>
           </button>
         </div>
       </div>
@@ -113,7 +123,7 @@ export default function CodeEditor() {
   }
 
   if (!project) return (
-    <div className="flex-1 flex items-center justify-center text-editor-muted text-sm">
+    <div className="flex-1 flex items-center justify-center text-editor-muted text-sm bg-editor-bg">
       No project open
     </div>
   )
@@ -138,31 +148,32 @@ export default function CodeEditor() {
 
       {/* Clone Repo Modal */}
       {showCloneModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-editor-bg border border-editor-border rounded-lg p-6 w-96 shadow-lg">
-            <h2 className="text-lg font-semibold text-editor-text mb-4">Clone Repository</h2>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-editor-sidebar border border-editor-border/50 rounded-2xl p-8 w-[400px] shadow-2xl">
+            <h2 className="text-xl font-bold text-white mb-2">Clone Repository</h2>
+            <p className="text-editor-muted text-sm mb-6">Enter a Git URL to clone into your workspace.</p>
             <input
               type="text"
-              placeholder="Enter repository URL (e.g., https://github.com/user/repo.git)"
+              placeholder="https://github.com/user/repo.git"
               value={repoUrl}
               onChange={(e) => setRepoUrl(e.target.value)}
-              className="w-full px-3 py-2 bg-editor-highlight border border-editor-border rounded text-editor-text text-sm mb-4 focus:outline-none focus:border-blue-500"
+              className="w-full px-4 py-3 bg-editor-bg border border-editor-border/50 rounded-xl text-white text-sm mb-6 focus:outline-none focus:border-editor-accent/50 transition-colors shadow-inner"
               onKeyPress={(e) => e.key === "Enter" && handleCloneRepo()}
             />
-            <div className="flex gap-2 justify-end">
+            <div className="flex gap-3 justify-end">
               <button
                 onClick={() => {
                   setShowCloneModal(false)
                   setRepoUrl("")
                 }}
-                className="px-4 py-2 bg-editor-highlight hover:bg-editor-border text-editor-text rounded transition"
+                className="px-5 py-2.5 bg-transparent hover:bg-editor-highlight text-editor-muted hover:text-white rounded-xl transition-colors text-sm font-medium"
               >
                 Cancel
               </button>
               <button
                 onClick={handleCloneRepo}
                 disabled={!repoUrl.trim()}
-                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded transition disabled:opacity-50"
+                className="px-5 py-2.5 bg-editor-accent hover:bg-editor-accentHover text-white rounded-xl transition-colors disabled:opacity-50 text-sm font-medium shadow-lg shadow-blue-500/20"
               >
                 Clone
               </button>
@@ -174,12 +185,12 @@ export default function CodeEditor() {
   )
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="flex-1 flex flex-col overflow-hidden bg-editor-bg">
       <Editor
         height="100%"
         language={getLanguage(file.path)}
         value={file.content}
-        theme="vs-dark"
+        theme="tokyo-night"
         options={{
           fontSize: 14,
           fontFamily: "'JetBrains Mono', monospace",
@@ -188,9 +199,30 @@ export default function CodeEditor() {
           lineNumbers: "on",
           wordWrap: "on",
           automaticLayout: true,
+          padding: { top: 16 },
+          renderLineHighlight: "all",
+          cursorBlinking: "smooth",
+          smoothScrolling: true,
         }}
         onChange={(val) => updateContent(file.path, val ?? "")}
         onMount={(editor, monaco) => {
+          monaco.editor.defineTheme('tokyo-night', {
+            base: 'vs-dark',
+            inherit: true,
+            rules: [
+              { background: '1a1b26' }
+            ],
+            colors: {
+              'editor.background': '#1a1b26',
+              'editor.lineHighlightBackground': '#292e4250',
+              'editorLineNumber.foreground': '#565f89',
+              'editorLineNumber.activeForeground': '#a9b1d6',
+              'editorIndentGuide.background': '#27273a',
+              'editorIndentGuide.activeBackground': '#3b4261',
+            }
+          });
+          monaco.editor.setTheme('tokyo-night');
+
           // Ctrl+S / Cmd+S to save
           editor.addCommand(
             monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS,

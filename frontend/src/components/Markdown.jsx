@@ -15,47 +15,40 @@ export default function Markdown({ text }) {
         rehypePlugins={[rehypeHighlight]}
         components={{
           h1: ({ children }) => (
-            <h1 className="text-4xl font-bold mt-8 mb-4 border-b border-editor-border pb-2">
+            <h1 className="text-2xl font-bold mt-4 mb-2 border-b border-editor-border/50 pb-1">
               {children}
             </h1>
           ),
-
           h2: ({ children }) => (
-            <h2 className="text-3xl font-semibold mt-7 mb-3 border-b border-editor-border pb-2">
+            <h2 className="text-xl font-semibold mt-3 mb-2 border-b border-editor-border/50 pb-1">
               {children}
             </h2>
           ),
-
           h3: ({ children }) => (
-            <h3 className="text-2xl font-semibold mt-6 mb-3">
+            <h3 className="text-lg font-semibold mt-2 mb-1">
               {children}
             </h3>
           ),
-
           h4: ({ children }) => (
-            <h4 className="text-xl font-semibold mt-5 mb-2">
+            <h4 className="text-base font-semibold mt-2 mb-1">
               {children}
             </h4>
           ),
-
           h5: ({ children }) => (
-            <h5 className="text-lg font-semibold mt-4 mb-2">
+            <h5 className="text-sm font-semibold mt-1 mb-1">
               {children}
             </h5>
           ),
-
           h6: ({ children }) => (
-            <h6 className="text-base font-semibold mt-4 mb-2 text-editor-muted">
+            <h6 className="text-xs font-semibold mt-1 mb-1 text-editor-muted">
               {children}
             </h6>
           ),
-
           p: ({ children }) => (
-            <p className="my-3 whitespace-pre-wrap">
+            <p className="mb-2 last:mb-0 whitespace-pre-wrap leading-relaxed">
               {children}
             </p>
           ),
-
           strong: ({ children }) => (
             <strong className="font-bold text-white">
               {children}
@@ -75,25 +68,22 @@ export default function Markdown({ text }) {
           ),
 
           blockquote: ({ children }) => (
-            <blockquote className="border-l-4 border-editor-border pl-4 italic text-editor-muted my-4">
+            <blockquote className="border-l-2 border-blue-500 pl-3 italic text-editor-muted/80 my-2">
               {children}
             </blockquote>
           ),
-
           ul: ({ children }) => (
-            <ul className="list-disc pl-6 my-3 space-y-1">
+            <ul className="list-disc pl-5 mb-2 last:mb-0 space-y-0.5">
               {children}
             </ul>
           ),
-
           ol: ({ children }) => (
-            <ol className="list-decimal pl-6 my-3 space-y-1">
+            <ol className="list-decimal pl-5 mb-2 last:mb-0 space-y-0.5">
               {children}
             </ol>
           ),
-
           li: ({ children }) => (
-            <li className="leading-7">
+            <li className="leading-relaxed">
               {children}
             </li>
           ),
@@ -171,14 +161,13 @@ export default function Markdown({ text }) {
             }
 
             return (
-              <div className="my-4 rounded-lg overflow-hidden border border-editor-border bg-[#161616]">
+              <div className="my-2 last:mb-0 rounded-lg overflow-hidden border border-editor-border/50 bg-[#121212] shadow-sm">
                 {match?.[1] && (
-                  <div className="px-3 py-2 text-[11px] uppercase tracking-wider bg-editor-sidebar border-b border-editor-border text-editor-muted font-mono">
-                    {match[1]}
+                  <div className="px-3 py-1.5 text-[10px] uppercase tracking-wider bg-editor-sidebar border-b border-editor-border/50 text-editor-muted font-mono flex items-center justify-between">
+                    <span>{match[1]}</span>
                   </div>
                 )}
-
-                <pre className="overflow-x-auto p-4 text-sm">
+                <pre className="overflow-x-auto p-3 text-[12px] leading-tight">
                   <code className={className} {...props}>
                     {children}
                   </code>
