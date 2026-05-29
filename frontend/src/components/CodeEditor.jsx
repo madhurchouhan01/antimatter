@@ -76,54 +76,51 @@ export default function CodeEditor() {
   const editorRef  = useRef(null)
   const monacoRef  = useRef(null)
   const [inlineChat, setInlineChat] = useState(null)
-  const ghostDecorRef   = useRef(null)   // active decoration collection
-  const lastMsgIdRef    = useRef(null)   // last processed assistant msg id
-  const acceptingRef    = useRef(false)  // flag: currently accepting ghost
+  const lastMsgIdRef = useRef(null)   // last processed assistant msg id
+  const acceptingRef = useRef(false)  // flag: currently accepting ghost
+  const providerRef  = useRef(null)   // inline completions provider disposable
 
   // Ghost store
   const ghost = useGhostStore((s) => s.ghost)
 
-  // Chat store — watch for new agent messages
-  const messages    = useChatStore((s) => s.messages)
-  const isStreaming = useChatStore((s) => s.isStreaming)
-
-  // ── Auto-extract code from last assistant message ──────────────────────────
+  // ── Subscribe to chatStore outside React to avoid batching issues ──────────
   useEffect(() => {
-    if (isStreaming) return
-    if (!editorRef.current) return
-    const last = [...messages].reverse().find((m) => m.role === "assistant")
-    if (!last || last.id === lastMsgIdRef.current) return
-    lastMsgIdRef.current = last.id
-    const code = extractCodeBlock(last.content)
-    if (!code) return
-    const pos = editorRef.current.getPosition()
-    if (!pos) return
-    useGhostStore.getState().setGhost({ text: code, line: pos.lineNumber, col: pos.column })
-  }, [isStreaming, messages])
+    let prevIsStreaming = useChatStore.getState().isStreaming
 
-  // ── Manage Monaco decorations when ghost changes ───────────────────────────
+    const unsub = useChatStore.subscribe((state) => {
+      // Fire when streaming just turned OFF
+      if (prevIsStreaming && !state.isStreaming) {
+        prevIsStreaming = false
+        const editor = editorRef.current
+        if (!editor) return
+        const last = [...state.messages].reverse().find((m) => m.role === "assistant")
+        if (!last || last.id === lastMsgIdRef.current) return
+        lastMsgIdRef.current = last.id
+        const code = extractCodeBlock(last.content)
+        if (!code) return
+        const pos = editor.getPosition()
+        if (!pos) return
+        useGhostStore.getState().setGhost({ text: code, line: pos.lineNumber, col: pos.column })
+      } else {
+        prevIsStreaming = state.isStreaming
+      }
+    })
+    return unsub
+  }, [])
+
+  // ── When ghost is set, trigger Monaco inline suggestion display ───────────────
   useEffect(() => {
-    const editor = editorRef.current
-    const monaco = monacoRef.current
-    ghostDecorRef.current?.clear()
-    ghostDecorRef.current = null
-    if (!ghost || !editor || !monaco) return
-
-    const firstLine = ghost.text.split("\n")[0]
-    const extra     = ghost.text.split("\n").length - 1
-    const hint      = extra > 0 ? `  ···(+${extra} lines)` : ""
-    ghostDecorRef.current = editor.createDecorationsCollection([{
-      range: new monaco.Range(ghost.line, ghost.col, ghost.line, ghost.col),
-      options: {
-        after: { content: "\u00A0" + firstLine + hint, inlineClassName: "ghost-text-suggestion" },
-        description: "ghost-text",
-      },
-    }])
+    if (!ghost || !editorRef.current) return
+    // Small delay so the provider is queried after state settles
+    const t = setTimeout(() => {
+      editorRef.current?.trigger("ghost", "editor.action.inlineSuggest.trigger", {})
+    }, 60)
+    return () => clearTimeout(t)
   }, [ghost])
 
-  // Cleanup decorations + ghost on unmount
+  // Cleanup provider on unmount
   useEffect(() => () => {
-    ghostDecorRef.current?.clear()
+    providerRef.current?.dispose()
     useGhostStore.getState().clearGhost()
   }, [])
 
@@ -269,6 +266,7 @@ export default function CodeEditor() {
           renderLineHighlight: "all",
           cursorBlinking: "smooth",
           smoothScrolling: true,
+          inlineSuggest: { enabled: true },
         }}
         onChange={(val) => updateContent(file.path, val ?? "")}
         onMount={(editor, monaco) => {
@@ -306,32 +304,23 @@ export default function CodeEditor() {
             }
           )
 
-          // Tab — accept ghost text if active, otherwise default indent
-          editor.addCommand(monaco.KeyCode.Tab, () => {
-            const { ghost: g, clearGhost } = useGhostStore.getState()
-            if (g) {
-              acceptingRef.current = true
-              const tabSize    = editor.getOption(monaco.editor.EditorOption.tabSize)
-              const useSpaces  = editor.getOption(monaco.editor.EditorOption.insertSpaces)
-              editor.executeEdits("ghost", [{
-                range: new monaco.Range(g.line, g.col, g.line, g.col),
-                text: g.text,
-                forceMoveMarkers: true,
-              }])
-              clearGhost()
-              acceptingRef.current = false
-              return
-            }
-            // Default: insert indent
-            const tabSize   = editor.getOption(monaco.editor.EditorOption.tabSize)
-            const useSpaces = editor.getOption(monaco.editor.EditorOption.insertSpaces)
-            editor.trigger("keyboard", "type", { text: useSpaces ? " ".repeat(tabSize) : "\t" })
-          })
-
-          // Clear ghost on any cursor move (but not when we triggered it)
-          editor.onDidChangeCursorPosition(() => {
-            if (acceptingRef.current) return
-            useGhostStore.getState().clearGhost()
+          // Register inline completions provider (Copilot-style ghost text)
+          // Monaco handles Tab-to-accept and rendering natively via this API.
+          providerRef.current?.dispose()
+          providerRef.current = monaco.languages.registerInlineCompletionsProvider('*', {
+            provideInlineCompletions: (_model, position) => {
+              const { ghost: g } = useGhostStore.getState()
+              if (!g || position.lineNumber !== g.line) return { items: [] }
+              return {
+                items: [{
+                  insertText: g.text,
+                  range: new monaco.Range(g.line, g.col, g.line, g.col),
+                }],
+                enableForwardStability: true,
+              }
+            },
+            disposeInlineCompletions: () => {},
+            handleItemDidShow: () => {},
           })
 
           // Ctrl+K / Cmd+K — open inline AI chat at cursor line
