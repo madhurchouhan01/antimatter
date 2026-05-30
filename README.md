@@ -1,7 +1,4 @@
 # ANTIMATTER — AI-Powered Code Editor
-
-> **README purpose:** This document is written to give any LLM complete context of the ANTIMATTER project — its architecture, file structure, component responsibilities, data flows, API contracts, and design decisions — so no additional explanation is needed to continue development.
-
 ---
 
 ## 1. Project Identity
