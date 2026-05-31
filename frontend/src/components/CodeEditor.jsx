@@ -1,4 +1,4 @@
-import Editor from "@monaco-editor/react"
+import Editor, { DiffEditor } from "@monaco-editor/react"
 import { useEditorStore } from "../stores/editorStore"
 import { useProjectStore } from "../stores/projectStore"
 import { filesApi } from "../lib/api"
@@ -6,9 +6,9 @@ import { useRef, useEffect, useState } from "react"
 import { FolderOpen, GitBranch } from "lucide-react"
 import { useFileTreeStore } from "../stores/fileTreeStore"
 import { useTerminalStore } from "../stores/terminalStore"
-import DiffViewer from "./DiffViewer"
-import InlineChatWidget from "./InlineChatWidget"
 import { useChatStore } from "../stores/chatStore"
+import { useDiffStore } from "../stores/diffStore"
+import { useAgentSocket } from "../hooks/useAgentSocket"
 import { useGhostStore } from "../stores/ghostStore"
 
 /** Extract the first fenced code block from markdown text */
@@ -82,6 +82,10 @@ export default function CodeEditor() {
 
   // Ghost store
   const ghost = useGhostStore((s) => s.ghost)
+  
+  const pendingDiffs = useDiffStore((s) => s.pendingDiffs)
+  const removePendingDiff = useDiffStore((s) => s.removePendingDiff)
+  const { sendMessage } = useAgentSocket(project?.id)
 
   // ── Subscribe to chatStore outside React to avoid batching issues ──────────
   useEffect(() => {
@@ -244,10 +248,234 @@ export default function CodeEditor() {
     </>
   )
 
+  const pendingDiff = file ? pendingDiffs[file.path] : null
+
+  const handleAcceptDiff = async () => {
+    if (!pendingDiff || !project || !file) return
+    try {
+      await filesApi.write(project.id, file.path, pendingDiff.modified)
+      updateContent(file.path, pendingDiff.modified)
+      markSaved(file.path)
+      removePendingDiff(file.path)
+      sendMessage(`SYSTEM: The user accepted the changes for ${file.path}.`, "llama-3.3-70b-versatile", { hidden: true })
+    } catch (e) {
+      console.error("Failed to accept diff", e)
+    }
+  }
+
+  const handleRejectDiff = () => {
+    if (!file) return
+    removePendingDiff(file.path)
+    sendMessage(`SYSTEM: The user rejected the changes for ${file.path}.`, "llama-3.3-70b-versatile", { hidden: true })
+  }
+
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-editor-bg relative">
-      {/* AI Diff overlay — mounts on top of editor when agent proposes a change */}
-      <DiffViewer />
+    <div className="flex-1 flex flex-col overflow-hidden bg-editor-bg relative group">
+      
+      {pendingDiff && (
+        <div className="absolute top-4 right-6 z-20 flex items-center gap-2 bg-editor-sidebar border border-editor-border/50 rounded-lg p-1.5 shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+          <button 
+            onClick={handleAcceptDiff}
+            className="px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-md transition-colors"
+          >
+            Accept
+          </button>
+          <button 
+            onClick={handleRejectDiff}
+            className="px-3 py-1.5 hover:bg-editor-highlight text-editor-text text-sm font-medium rounded-md transition-colors"
+          >
+            Reject
+          </button>
+        </div>
+      )}
+
+      {pendingDiff ? (
+        <DiffEditor
+          height="100%"
+          language={getLanguage(file.path)}
+          original={pendingDiff.original}
+          modified={pendingDiff.modified}
+          theme="tokyo-night"
+          options={{
+            renderSideBySide: false,
+            fontSize: 14,
+            fontFamily: "'JetBrains Mono', monospace",
+            minimap: { enabled: false },
+            scrollBeyondLastLine: false,
+            lineNumbers: "on",
+            wordWrap: "on",
+            automaticLayout: true,
+            padding: { top: 16 },
+            readOnly: false,
+          }}
+          onMount={(editor, monaco) => {
+            monaco.editor.defineTheme('tokyo-night', {
+              base: 'vs-dark',
+              inherit: true,
+              rules: [{ background: '1a1b26' }],
+              colors: {
+                'editor.background': '#1a1b26',
+                'editor.lineHighlightBackground': '#292e4250',
+                'editorLineNumber.foreground': '#565f89',
+                'editorLineNumber.activeForeground': '#a9b1d6',
+                'editorIndentGuide.background': '#27273a',
+                'editorIndentGuide.activeBackground': '#3b4261',
+              }
+            })
+            monaco.editor.setTheme('tokyo-night')
+
+            // Track widgets so we can clean them up
+            let widgets = []
+            let hoverListener = null
+            
+            let suppressHover = false
+            let lastMouseX = -1
+            let lastMouseY = -1
+            
+            editor.onDidUpdateDiff(() => {
+              const changes = editor.getLineChanges()
+              const modifiedEditor = editor.getModifiedEditor()
+              const originalEditor = editor.getOriginalEditor()
+              
+              widgets.forEach(w => modifiedEditor.removeContentWidget(w.widget))
+              widgets = []
+              if (hoverListener) hoverListener.dispose()
+              
+              if (!changes || changes.length === 0) return
+              
+              changes.forEach((c, i) => {
+                const layout = modifiedEditor.getLayoutInfo()
+                const domNode = document.createElement("div")
+                domNode.className = "opacity-0 transition-opacity duration-300 z-[100] cursor-default pointer-events-none"
+                
+                const wrapper = document.createElement("div")
+                wrapper.className = "flex"
+                wrapper.style.transform = `translateX(${layout.width - layout.contentLeft - 30}px) translateX(-100%)`
+                
+                const btnContainer = document.createElement("div")
+                btnContainer.className = "flex items-center bg-[#1e1e2e] border border-white/10 rounded-md shadow-xl overflow-hidden pointer-events-none transition-all duration-200"
+                
+                let isMouseOverWidget = false
+                btnContainer.addEventListener("mouseenter", () => {
+                  if (suppressHover) return
+                  isMouseOverWidget = true
+                  domNode.style.opacity = "1"
+                })
+                btnContainer.addEventListener("mouseleave", () => {
+                  isMouseOverWidget = false
+                  domNode.style.opacity = "0"
+                })
+                
+                const btnAccept = document.createElement("button")
+                btnAccept.className = "px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium transition-colors border-r border-white/10"
+                btnAccept.innerText = "Accept"
+                
+                const btnReject = document.createElement("button")
+                btnReject.className = "px-3 py-1.5 hover:bg-white/10 text-gray-300 hover:text-white text-xs font-medium transition-colors"
+                btnReject.innerText = "Reject"
+                
+                btnContainer.appendChild(btnAccept)
+                btnContainer.appendChild(btnReject)
+                wrapper.appendChild(btnContainer)
+                domNode.appendChild(wrapper)
+                
+                const getOriginalRange = () => {
+                  let start = c.originalStartLineNumber
+                  let end = c.originalEndLineNumber
+                  if (end === 0) { start = Math.max(1, start); end = start }
+                  const model = originalEditor.getModel()
+                  return new monaco.Range(start, 1, end, model.getLineMaxColumn(end) || 1)
+                }
+                
+                const getModifiedRange = () => {
+                  let start = c.modifiedStartLineNumber
+                  let end = c.modifiedEndLineNumber
+                  if (end === 0) { start = Math.max(1, start); end = start }
+                  const model = modifiedEditor.getModel()
+                  return new monaco.Range(start, 1, end, model.getLineMaxColumn(end) || 1)
+                }
+
+                btnAccept.onclick = () => {
+                  suppressHover = true
+                  btnContainer.style.pointerEvents = "none"
+                  const modRange = getModifiedRange()
+                  const modText = c.modifiedEndLineNumber === 0 ? "" : modifiedEditor.getModel().getValueInRange(modRange)
+                  // Apply to original to make diff disappear
+                  originalEditor.getModel().pushEditOperations([], [{ range: getOriginalRange(), text: modText }], () => null)
+                  
+                  useDiffStore.getState().addPendingDiff(
+                    file.path, 
+                    originalEditor.getModel().getValue(), 
+                    modifiedEditor.getModel().getValue()
+                  )
+                }
+                
+                btnReject.onclick = () => {
+                  suppressHover = true
+                  btnContainer.style.pointerEvents = "none"
+                  const origRange = getOriginalRange()
+                  const origText = c.originalEndLineNumber === 0 ? "" : originalEditor.getModel().getValueInRange(origRange)
+                  // Revert modified to original
+                  modifiedEditor.getModel().pushEditOperations([], [{ range: getModifiedRange(), text: origText }], () => null)
+                  
+                  useDiffStore.getState().addPendingDiff(
+                    file.path, 
+                    originalEditor.getModel().getValue(), 
+                    modifiedEditor.getModel().getValue()
+                  )
+                }
+                
+                const line = Math.max(1, c.modifiedStartLineNumber)
+                const widgetObj = {
+                  getId: () => `diff-widget-${i}`,
+                  getDomNode: () => domNode,
+                  getPosition: () => ({
+                    position: { lineNumber: line, column: 1 },
+                    preference: [monaco.editor.ContentWidgetPositionPreference.BELOW, monaco.editor.ContentWidgetPositionPreference.EXACT]
+                  })
+                }
+                
+                modifiedEditor.addContentWidget(widgetObj)
+                widgets.push({
+                  widget: widgetObj,
+                  domNode,
+                  btnContainer,
+                  get isMouseOverWidget() { return isMouseOverWidget },
+                  startLine: Math.max(1, c.modifiedStartLineNumber),
+                  endLine: Math.max(1, c.modifiedEndLineNumber)
+                })
+              })
+              
+              hoverListener = modifiedEditor.onMouseMove((e) => {
+                if (!e.event.browserEvent) return
+                const currentX = e.event.browserEvent.clientX
+                const currentY = e.event.browserEvent.clientY
+                
+                if (suppressHover) {
+                  const dist = Math.abs(currentX - lastMouseX) + Math.abs(currentY - lastMouseY)
+                  if (dist > 15) {
+                    suppressHover = false
+                  } else {
+                    return
+                  }
+                }
+                
+                lastMouseX = currentX
+                lastMouseY = currentY
+
+                if (!e.target.position) return
+                const line = e.target.position.lineNumber
+                widgets.forEach(w => {
+                  if (w.isMouseOverWidget) return
+                  const isHovered = line >= w.startLine - 1 && line <= w.endLine + 1
+                  w.domNode.style.opacity = isHovered ? "1" : "0"
+                  w.btnContainer.style.pointerEvents = isHovered ? "auto" : "none"
+                })
+              })
+            })
+          }}
+        />
+      ) : (
 
       <Editor
         height="100%"
@@ -339,8 +567,10 @@ export default function CodeEditor() {
         }}
       />
 
+      )}
+      
       {/* Inline AI chat widget — floats below cursor line on Ctrl+K */}
-      {inlineChat && (
+      {inlineChat && !pendingDiff && (
         <InlineChatWidget
           editor={editorRef.current}
           line={inlineChat.line}

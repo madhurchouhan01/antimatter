@@ -7,6 +7,7 @@ import ChatPanel   from "./ChatPanel"
 import Terminal    from "./Terminal"
 import GitPanel    from "./GitPanel"
 import IndexingNotification from "./IndexingNotification"
+import GlobalDiffPanel from "./GlobalDiffPanel"
 import { useTerminalStore } from "../stores/terminalStore"
 import { useProjectStore } from "../stores/projectStore"
 import { useAuthStore } from "../stores/authStore"
@@ -22,8 +23,8 @@ export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [chatOpen,    setChatOpen]    = useState(true)
   
-  const [sidebarWidth, setSidebarWidth] = useState(224) // default 224px
-  const [chatWidth, setChatWidth]       = useState(320) // default 320px
+  const [sidebarWidth, setSidebarWidth] = useState(280) // default 280px
+  const [chatWidth, setChatWidth]       = useState(380) // default 380px
   const [termHeight, setTermHeight]     = useState(192) // default 192px
 
   const termOpen = useTerminalStore((s) => s.termOpen)
@@ -140,7 +141,9 @@ export default function Layout() {
               </button>
             </div>
 
-            <div className="flex-1 overflow-hidden">
+            <GlobalDiffPanel />
+
+            <div className="flex-1 overflow-hidden flex flex-col">
               {sidebarTab === "files" ? <FileTree /> : <GitPanel />}
             </div>
           </div>

@@ -192,6 +192,30 @@ export default function ChatPanel() {
         )}
         {messages.map((msg) => <MessageBubble key={msg.id} msg={msg} onRetry={handleRetry} />)}
         
+        {/* Thinking shimmer: shown only while waiting for first token */}
+        {isStreaming && !streamBuffer && (
+          <div className="flex items-start gap-3 px-3.5 py-3 rounded-2xl rounded-tl-sm max-w-[92%] bg-editor-highlight/50 backdrop-blur-md text-editor-text self-start border border-editor-border/50 shadow-sm">
+            <div className="mt-0.5 shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-editor-accent/10">
+              <Bot size={14} className="text-editor-accent" />
+            </div>
+            <div className="flex-1 min-w-0 space-y-2 py-1">
+              <div className="flex items-center gap-2 text-[11px] text-editor-accent/70 font-medium tracking-wide">
+                <span className="flex gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-editor-accent animate-bounce [animation-delay:0ms]"></span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-editor-accent animate-bounce [animation-delay:150ms]"></span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-editor-accent animate-bounce [animation-delay:300ms]"></span>
+                </span>
+                <span className="animate-pulse">Thinking</span>
+              </div>
+              <div className="space-y-1.5">
+                <div className="h-2.5 bg-editor-muted/20 rounded-full w-3/4 animate-pulse"></div>
+                <div className="h-2.5 bg-editor-muted/20 rounded-full w-1/2 animate-pulse [animation-delay:200ms]"></div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Streaming content: shown once first token arrives */}
         {streamBuffer && (
           <div className="flex items-start gap-3 px-3.5 py-2.5 rounded-2xl rounded-tl-sm max-w-[92%] bg-editor-highlight/50 backdrop-blur-md text-editor-text self-start border border-editor-border/50 shadow-sm">
             <div className="mt-0.5 shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-editor-accent/10">

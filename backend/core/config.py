@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     sandbox_idle_timeout: int = 1800   # 30 min in seconds
 
     voyage_api_key: str = ""
+    github_client_id: str = ""
+    github_client_secret: str = ""
+    frontend_url: str = "http://localhost:5173"
     
 @lru_cache
 def get_settings() -> Settings:
