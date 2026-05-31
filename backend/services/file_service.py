@@ -87,7 +87,7 @@ else:
     async def write(self, path: str, content: str) -> None:
         await self.write_bytes(path, content.encode("utf-8"))
 
-    async def list_dir(self, path: str = "") -> list[dict]:
+    async def list_dir(self, path: str = "", recursive: bool = False) -> list[dict]:
         container = await self._get_container()
         target_path = self._safe_path(path)
         
@@ -103,14 +103,38 @@ try:
         print(json.dumps({{"error": "not_dir"}}))
         exit(0)
     entries = []
-    for entry in os.scandir(target):
-        rel_path = os.path.relpath(entry.path, root)
-        entries.append({{
-            "name": entry.name,
-            "path": rel_path.replace(os.sep, '/'),
-            "is_dir": entry.is_dir()
-        }})
-    entries.sort(key=lambda x: (not x["is_dir"], x["name"]))
+    if {str(recursive)}:
+        for dirpath, dirnames, filenames in os.walk(target):
+            dirnames.sort()
+            filenames.sort()
+            for dirname in dirnames:
+                full_path = os.path.join(dirpath, dirname)
+                rel_path = os.path.relpath(full_path, root)
+                entries.append({{
+                    "name": dirname,
+                    "path": rel_path.replace(os.sep, '/'),
+                    "is_dir": True,
+                    "is_symlink": os.path.islink(full_path)
+                }})
+            for filename in filenames:
+                full_path = os.path.join(dirpath, filename)
+                rel_path = os.path.relpath(full_path, root)
+                entries.append({{
+                    "name": filename,
+                    "path": rel_path.replace(os.sep, '/'),
+                    "is_dir": False,
+                    "is_symlink": os.path.islink(full_path)
+                }})
+    else:
+        for entry in os.scandir(target):
+            rel_path = os.path.relpath(entry.path, root)
+            entries.append({{
+                "name": entry.name,
+                "path": rel_path.replace(os.sep, '/'),
+                "is_dir": entry.is_dir(),
+                "is_symlink": entry.is_symlink()
+            }})
+        entries.sort(key=lambda x: (not x["is_dir"], x["name"]))
     print(json.dumps({{"status": "success", "data": entries}}))
 except Exception as e:
     print(json.dumps({{"error": str(e)}}))

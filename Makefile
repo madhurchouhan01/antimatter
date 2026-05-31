@@ -23,3 +23,9 @@ migrate-gen:
 
 migrate-history:
 	docker compose run --rm api alembic history --verbose
+
+watch-logs:
+	docker compose logs -f api
+	
+clear-logs:
+	docker compose up -d --force-recreate --no-deps api 

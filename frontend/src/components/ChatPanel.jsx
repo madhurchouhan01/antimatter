@@ -1,14 +1,68 @@
 import { useEffect, useRef, useState } from "react"
-import { Send, Wrench, Bot, User, AlertCircle, Sparkles, Info } from "lucide-react"
+import { Send, Wrench, Bot, User, AlertCircle, Sparkles, Info, Zap, PlusSquare, RefreshCw } from "lucide-react"
 import { useChatStore } from "../stores/chatStore"
 import { useProjectStore } from "../stores/projectStore"
 import { useAgentSocket } from "../hooks/useAgentSocket"
 import Markdown from "./Markdown"
 
-function MessageBubble({ msg }) {
+function MessageBubble({ msg, onRetry }) {
   const isUser   = msg.role === "user"
   const isTool   = msg.role === "tool_start" || msg.role === "tool_end"
   const isSystem = msg.role === "system"
+
+  // Rate limit error: highly visible block
+  if (msg.role === "error" && msg.error_type === "rate_limit") {
+    return (
+      <div className="flex flex-col gap-2 p-4 rounded-xl bg-orange-500/20 border border-orange-500/50 text-orange-200 self-stretch my-2 shadow-[0_0_20px_rgba(249,115,22,0.15)]">
+        <div className="flex items-center gap-2 font-bold text-orange-400">
+          <Zap size={16} className="fill-orange-400" />
+          <span>Rate Limit Exceeded</span>
+        </div>
+        <div className="text-[13px] leading-relaxed">
+          <Markdown text={msg.content} />
+        </div>
+        {onRetry && (
+          <button onClick={() => {
+              const msgs = useChatStore.getState().messages;
+              const lastUser = [...msgs].reverse().find(m => m.role === "user");
+              if(lastUser) onRetry(lastUser.content);
+            }} 
+            className="mt-2 self-start flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-500/20 hover:bg-orange-500/40 text-orange-300 text-xs font-medium transition-colors border border-orange-500/30"
+          >
+            <RefreshCw size={12} />
+            Retry
+          </button>
+        )}
+      </div>
+    )
+  }
+
+  // Generic error
+  if (msg.role === "error") {
+      return (
+        <div className="flex flex-col gap-2 p-3.5 rounded-xl bg-red-900/20 border border-red-500/30 text-red-300 self-stretch my-2 shadow-sm">
+          <div className="flex items-center gap-2 font-semibold text-red-400">
+            <AlertCircle size={14} className="text-red-400" />
+            <span>Agent Error</span>
+          </div>
+          <div className="text-[12px] leading-relaxed opacity-90">
+             <Markdown text={msg.content} />
+          </div>
+          {onRetry && (
+            <button onClick={() => {
+                const msgs = useChatStore.getState().messages;
+                const lastUser = [...msgs].reverse().find(m => m.role === "user");
+                if(lastUser) onRetry(lastUser.content);
+              }} 
+              className="mt-1 self-start flex items-center gap-1.5 px-3 py-1 rounded border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 text-red-300 text-xs transition-colors"
+            >
+              <RefreshCw size={12} />
+              Retry
+            </button>
+          )}
+        </div>
+      )
+  }
 
   // System messages: slim horizontal notification bar, not a bubble
   if (isSystem) {
@@ -58,6 +112,17 @@ export default function ChatPanel() {
   const [input, setInput] = useState("")
   const bottomRef = useRef(null)
 
+  const [selectedModel, setSelectedModel] = useState("llama-3.3-70b-versatile")
+  const supportedModels = [
+    "llama-3.3-70b-versatile",
+    "llama-3.1-8b-instant",
+    "deepseek-r1-distill-llama-70b",
+    "openai/gpt-oss-20b",
+    "openai/gpt-oss-120b",
+    "meta-llama/llama-4-scout-17b-16e-instruct",
+    "qwen/qwen3-32b"
+  ]
+
   useEffect(() => {
     if (project) connect()
   }, [project?.id, connect])
@@ -70,12 +135,16 @@ export default function ChatPanel() {
     const text = input.trim()
     if (!text || isStreaming) return
     setInput("")
-    sendMessage(text)
+    sendMessage(text, selectedModel)
 
     const textarea = document.getElementById("chat-input-textarea")
     if (textarea) {
         textarea.style.height = 'auto'
     }
+  }
+
+  const handleRetry = (text) => {
+    sendMessage(text, selectedModel)
   }
 
   return (
@@ -86,9 +155,28 @@ export default function ChatPanel() {
           <Sparkles size={14} className="text-editor-accent" />
         </div>
         <span className="text-[13px] font-bold text-white tracking-wide uppercase">AI Assistant</span>
+        
+        <select 
+          className="ml-auto bg-editor-bg border border-editor-border text-[11px] text-editor-muted rounded px-2 py-0.5 outline-none hover:border-editor-accent/50 focus:border-editor-accent/80 transition-colors max-w-[140px] truncate cursor-pointer"
+          value={selectedModel}
+          onChange={(e) => setSelectedModel(e.target.value)}
+        >
+          {supportedModels.map(m => (
+            <option key={m} value={m}>{m}</option>
+          ))}
+        </select>
+
         {isStreaming && (
-          <span className="ml-auto text-[10px] font-mono text-editor-accent animate-pulse uppercase tracking-widest bg-editor-accent/10 px-2 py-0.5 rounded-full border border-editor-accent/20">Thinking</span>
+          <span className="ml-2 text-[10px] font-mono text-editor-accent animate-pulse uppercase tracking-widest bg-editor-accent/10 px-2 py-0.5 rounded-full border border-editor-accent/20">Thinking</span>
         )}
+
+        <button
+          onClick={() => useChatStore.getState().clearChat()}
+          className="ml-2 flex items-center justify-center w-6 h-6 rounded hover:bg-editor-highlight text-editor-muted hover:text-white transition-colors"
+          title="New Chat"
+        >
+          <PlusSquare size={14} />
+        </button>
       </div>
 
       {/* Messages */}
@@ -102,8 +190,32 @@ export default function ChatPanel() {
             </p>
           </div>
         )}
-        {messages.map((msg) => <MessageBubble key={msg.id} msg={msg} />)}
+        {messages.map((msg) => <MessageBubble key={msg.id} msg={msg} onRetry={handleRetry} />)}
         
+        {/* Thinking shimmer: shown only while waiting for first token */}
+        {isStreaming && !streamBuffer && (
+          <div className="flex items-start gap-3 px-3.5 py-3 rounded-2xl rounded-tl-sm max-w-[92%] bg-editor-highlight/50 backdrop-blur-md text-editor-text self-start border border-editor-border/50 shadow-sm">
+            <div className="mt-0.5 shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-editor-accent/10">
+              <Bot size={14} className="text-editor-accent" />
+            </div>
+            <div className="flex-1 min-w-0 space-y-2 py-1">
+              <div className="flex items-center gap-2 text-[11px] text-editor-accent/70 font-medium tracking-wide">
+                <span className="flex gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-editor-accent animate-bounce [animation-delay:0ms]"></span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-editor-accent animate-bounce [animation-delay:150ms]"></span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-editor-accent animate-bounce [animation-delay:300ms]"></span>
+                </span>
+                <span className="animate-pulse">Thinking</span>
+              </div>
+              <div className="space-y-1.5">
+                <div className="h-2.5 bg-editor-muted/20 rounded-full w-3/4 animate-pulse"></div>
+                <div className="h-2.5 bg-editor-muted/20 rounded-full w-1/2 animate-pulse [animation-delay:200ms]"></div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Streaming content: shown once first token arrives */}
         {streamBuffer && (
           <div className="flex items-start gap-3 px-3.5 py-2.5 rounded-2xl rounded-tl-sm max-w-[92%] bg-editor-highlight/50 backdrop-blur-md text-editor-text self-start border border-editor-border/50 shadow-sm">
             <div className="mt-0.5 shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-editor-accent/10">

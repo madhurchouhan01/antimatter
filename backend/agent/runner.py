@@ -6,6 +6,9 @@ from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 from db.models import Conversation, Message, Project
 from agent.graph import build_graph
 from agent.context_builder import build_rag_context
+from core.logger import get_logger
+
+log = get_logger(__name__)
 
 async def get_or_create_conversation(
     db: AsyncSession,
@@ -58,6 +61,7 @@ async def run_agent_streaming(
     send_json,   # async callable — the WebSocket send function
     open_files: list[str] = [],
     emit_fn=None,  # async callable for file.patch proposals
+    model_name: str = "llama-3.3-70b-versatile",
 ):
     conv = await get_or_create_conversation(db, project.id, conversation_id)
     history = await load_history(db, conv.id)
@@ -66,82 +70,100 @@ async def run_agent_streaming(
     db.add(Message(conversation_id=conv.id, role="user", content=user_message))
     await db.flush()
 
-    # Build RAG context for this turn
-    rag_context = await build_rag_context(
-        db           = db,
-        project_id   = project.id,
-        user_id      = project.owner_id,
-        query        = user_message,
-        open_files   = open_files,
-    )
-    print(f"RAG Context: {rag_context}")
-    # Prepend RAG context to user message
-    enriched_message = user_message
-    if rag_context:
-        enriched_message = (
-            f"<codebase_context>\n{rag_context}\n</codebase_context>\n\n"
-            f"{user_message}"
+    try:
+        # Build RAG context for this turn
+        rag_context = await build_rag_context(
+            db           = db,
+            project_id   = project.id,
+            user_id      = project.owner_id,
+            query        = user_message,
+            open_files   = open_files,
         )
+        log.debug("RAG context built", chunks=rag_context.count("\n") if rag_context else 0)
+        # Prepend RAG context to user message
+        enriched_message = user_message
+        if rag_context:
+            enriched_message = (
+                f"<codebase_context>\n{rag_context}\n</codebase_context>\n\n"
+                f"{user_message}"
+            )
 
-    graph = build_graph(str(project.id), str(project.owner_id), emit_fn=emit_fn)
-    state = {"messages": history + [HumanMessage(content=enriched_message)]}
+        graph = build_graph(str(project.id), str(project.owner_id), emit_fn=emit_fn, model_name=model_name)
+        state = {"messages": history + [HumanMessage(content=enriched_message)]}
 
-    initial_msg_count = len(state["messages"])
+        initial_msg_count = len(state["messages"])
 
-    # Stream token by token
-    async for event in graph.astream_events(state, version="v2"):
-        kind = event["event"]
+        # Stream token by token
+        async for event in graph.astream_events(state, version="v2"):
+            kind = event["event"]
 
-        if kind == "on_chat_model_stream":
-            chunk = event["data"]["chunk"]
-            token = chunk.content
-            if token:
-                await send_json({"type": "token", "content": token})
-            
-            # Stream tool call chunks if present
-            if chunk.tool_call_chunks:
-                for tcc in chunk.tool_call_chunks:
-                    await send_json({
-                        "type": "tool_call_chunk",
-                        "tool": tcc.get("name"),
-                        "args": tcc.get("args")
-                    })
-
-        elif kind == "on_tool_start":
-            await send_json({
-                "type": "tool_start",
-                "tool": event["name"],
-                "input": event["data"].get("input", {}),
-            })
-
-        elif kind == "on_tool_end":
-            await send_json({
-                "type": "tool_end",
-                "tool": event["name"],
-                "output": str(event["data"].get("output", "")),
-            })
-            
-        elif kind == "on_chain_end" and event["name"] == "LangGraph":
-            # The top-level graph finished. We can grab the final state to save everything accurately!
-            final_messages = event["data"].get("output", {}).get("messages", [])
-            new_messages = final_messages[initial_msg_count:]
-            
-            for m in new_messages:
-                role = "assistant" if isinstance(m, AIMessage) else "tool"
-                content = m.content if isinstance(m.content, str) else str(m.content)
-                tool_calls = None
+            if kind == "on_chat_model_stream":
+                chunk = event["data"]["chunk"]
+                token = chunk.content
+                if token:
+                    await send_json({"type": "token", "content": token})
                 
-                if isinstance(m, AIMessage) and m.tool_calls:
-                    tool_calls = m.tool_calls
-                elif isinstance(m, ToolMessage):
-                    tool_calls = {"id": m.tool_call_id, "name": m.name}
+                # Stream tool call chunks if present
+                if chunk.tool_call_chunks:
+                    for tcc in chunk.tool_call_chunks:
+                        await send_json({
+                            "type": "tool_call_chunk",
+                            "tool": tcc.get("name"),
+                            "args": tcc.get("args")
+                        })
+
+            elif kind == "on_tool_start":
+                log.info("Tool start", tool=event["name"], project=str(project.id))
+                await send_json({
+                    "type": "tool_start",
+                    "tool": event["name"],
+                    "input": event["data"].get("input", {}),
+                })
+
+            elif kind == "on_tool_end":
+                log.info("Tool end", tool=event["name"], project=str(project.id))
+                await send_json({
+                    "type": "tool_end",
+                    "tool": event["name"],
+                    "output": str(event["data"].get("output", "")),
+                })
+                
+            elif kind == "on_chain_end" and event["name"] == "LangGraph":
+                # The top-level graph finished. We can grab the final state to save everything accurately!
+                final_messages = event["data"].get("output", {}).get("messages", [])
+                new_messages = final_messages[initial_msg_count:]
+                
+                for m in new_messages:
+                    role = "assistant" if isinstance(m, AIMessage) else "tool"
+                    content = m.content if isinstance(m.content, str) else str(m.content)
+                    tool_calls = None
                     
-                db.add(Message(
-                    conversation_id=conv.id,
-                    role=role,
-                    content=content,
-                    tool_calls=tool_calls
-                ))
-            await db.commit()
+                    if isinstance(m, AIMessage) and m.tool_calls:
+                        tool_calls = m.tool_calls
+                    elif isinstance(m, ToolMessage):
+                        tool_calls = {"id": m.tool_call_id, "name": m.name}
+                        
+                    db.add(Message(
+                        conversation_id=conv.id,
+                        role=role,
+                        content=content,
+                        tool_calls=tool_calls
+                    ))
+                await db.commit()
+    except Exception as e:
+        error_msg = str(e).lower()
+        if "429" in error_msg or "rate limit" in error_msg:
+            log.warning("Rate limit hit", model=model_name, project=str(project.id))
+            await send_json({
+                "type": "error",
+                "error_type": "rate_limit",
+                "message": "You have exhausted your rate limits. Please try again later or choose a different Model 🫠"
+            })
+        else:
+            log.error("Agent execution failed", project=str(project.id), exc_info=True)
+            await send_json({
+                "type": "error",
+                "message": "An unexpected error occurred while processing your request. The execution was aborted."
+            })
 
     await send_json({"type": "done", "conversation_id": str(conv.id)})

@@ -19,6 +19,8 @@ export const authApi = {
     api.post("/api/auth/login", { email, password }),
   logout: (refresh_token) =>
     api.post("/api/auth/logout", { refresh_token }),
+  getGithubLoginUrl: () =>
+    api.get("/api/auth/github/login"),
 }
 
 // Project endpoints

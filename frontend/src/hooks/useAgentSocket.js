@@ -41,12 +41,8 @@ export function useAgentSocket(projectId) {
           return
       }
       if (msg.type === "file.patch") {
-          // AI proposed a file change — show the diff viewer overlay
-          useDiffStore.getState().setPendingDiff({
-            path:     msg.path,
-            original: msg.original,
-            modified: msg.modified,
-          })
+          // AI proposed a file change — add to pendingDiffs
+          useDiffStore.getState().addPendingDiff(msg.path, msg.original, msg.modified)
           return
       }
       if (msg.type === "token") {
@@ -70,8 +66,12 @@ export function useAgentSocket(projectId) {
       } else if (msg.type === "done") {
         flushBuffer()
         setConversationId(msg.conversation_id)
+        // If any diffs arrived during this turn, mark agent as done so UI shows review panel
+        if (Object.keys(useDiffStore.getState().pendingDiffs).length > 0) {
+          useDiffStore.getState().setAgentDone()
+        }
       } else if (msg.type === "error") {
-        addMessage({ id: crypto.randomUUID(), role: "error", content: msg.message })
+        addMessage({ id: crypto.randomUUID(), role: "error", content: msg.message, error_type: msg.error_type })
       }
     }
 
@@ -87,13 +87,18 @@ export function useAgentSocket(projectId) {
     }
   }, [projectId, token, addMessage, appendToken, flushBuffer, setConversationId, setStreaming])
 
-  const sendMessage = useCallback((text) => {
+  const sendMessage = useCallback((text, model = "llama-3.3-70b-versatile", options = {}) => {
       const { conversationId } = useChatStore.getState()
       const openFiles = useEditorStore.getState().openFiles.map((f) => f.path)
 
-      addMessage({ id: crypto.randomUUID(), role: "user", content: text })
+      if (!options.hidden) {
+        addMessage({ id: crypto.randomUUID(), role: options.role || "user", content: text })
+      }
+      // Reset any previous done-state so the banner hides while agent works
+      useDiffStore.getState().resetAgentDone()
       const payload = {
           message:         text,
+          model:           model,
           conversation_id: conversationId,
           open_files:      openFiles,
       }
