@@ -7,16 +7,21 @@ from api.routes import git
 from db.session import init_db
 from core.config import get_settings
 from core.tracing import setup_tracing
+from core.logger import configure_logging, get_logger
 from sandbox.manager import sandbox_manager
 import asyncio
 
 settings = get_settings()
+log = get_logger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    configure_logging(level="INFO")
+    log.info("AntiMatter API starting", env=settings.environment, port=1842)
     setup_tracing()
     await init_db()
+    log.info("Database initialized")
 
     # Background task — clean up idle containers every 5 minutes
     async def idle_cleanup():

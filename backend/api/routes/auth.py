@@ -6,6 +6,7 @@ from pydantic import BaseModel, EmailStr
 from db.session import get_db
 from db.models import User, RefreshToken
 from core.security import hash_password, verify_password, create_access_token, create_refresh_token
+from core.logger import get_logger
 from datetime import datetime, timezone, timedelta
 from core.config import get_settings
 import uuid
@@ -13,6 +14,7 @@ import httpx
 
 router = APIRouter()
 settings = get_settings()
+log = get_logger(__name__)
 
 class RegisterRequest(BaseModel):
     email: EmailStr
@@ -32,6 +34,7 @@ class TokenResponse(BaseModel):
 async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
     existing = await db.execute(select(User).where(User.email == body.email))
     if existing.scalar_one_or_none():
+        log.warning("Registration failed — email already exists", email=body.email)
         raise HTTPException(status_code=400, detail="Email already registered")
 
     user = User(email=body.email, hashed_password=hash_password(body.password), name=body.name)
@@ -45,7 +48,7 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
     )
     db.add(refresh)
     await db.commit()
-
+    log.info("User registered", email=body.email, user_id=str(user.id))
     return TokenResponse(access_token=create_access_token(str(user.id)), refresh_token=refresh.token)
 
 @router.post("/login", response_model=TokenResponse)
@@ -53,6 +56,7 @@ async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).where(User.email == body.email))
     user = result.scalar_one_or_none()
     if not user or not verify_password(body.password, user.hashed_password):
+        log.warning("Login failed — invalid credentials", email=body.email)
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     refresh = RefreshToken(
@@ -62,6 +66,7 @@ async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
     )
     db.add(refresh)
     await db.commit()
+    log.info("User logged in", email=body.email, user_id=str(user.id))
     return TokenResponse(access_token=create_access_token(str(user.id)), refresh_token=refresh.token)
 
 @router.post("/logout")

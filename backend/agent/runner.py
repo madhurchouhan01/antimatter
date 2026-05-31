@@ -6,6 +6,9 @@ from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 from db.models import Conversation, Message, Project
 from agent.graph import build_graph
 from agent.context_builder import build_rag_context
+from core.logger import get_logger
+
+log = get_logger(__name__)
 
 async def get_or_create_conversation(
     db: AsyncSession,
@@ -76,7 +79,7 @@ async def run_agent_streaming(
             query        = user_message,
             open_files   = open_files,
         )
-        print(f"RAG Context: {rag_context}")
+        log.debug("RAG context built", chunks=rag_context.count("\n") if rag_context else 0)
         # Prepend RAG context to user message
         enriched_message = user_message
         if rag_context:
@@ -110,6 +113,7 @@ async def run_agent_streaming(
                         })
 
             elif kind == "on_tool_start":
+                log.info("Tool start", tool=event["name"], project=str(project.id))
                 await send_json({
                     "type": "tool_start",
                     "tool": event["name"],
@@ -117,6 +121,7 @@ async def run_agent_streaming(
                 })
 
             elif kind == "on_tool_end":
+                log.info("Tool end", tool=event["name"], project=str(project.id))
                 await send_json({
                     "type": "tool_end",
                     "tool": event["name"],
@@ -148,12 +153,14 @@ async def run_agent_streaming(
     except Exception as e:
         error_msg = str(e).lower()
         if "429" in error_msg or "rate limit" in error_msg:
+            log.warning("Rate limit hit", model=model_name, project=str(project.id))
             await send_json({
                 "type": "error",
                 "error_type": "rate_limit",
                 "message": "You have exhausted your rate limits. Please try again later or choose a different Model 🫠"
             })
         else:
+            log.error("Agent execution failed", project=str(project.id), exc_info=True)
             await send_json({
                 "type": "error",
                 "message": "An unexpected error occurred while processing your request. The execution was aborted."

@@ -6,21 +6,23 @@ from sqlalchemy import select
 from db.session import get_db, AsyncSessionLocal
 from db.models import User, Project
 from core.security import decode_access_token
+from core.logger import get_logger
 from agent.runner import run_agent_streaming
 from jose import JWTError
 from core.broadcaster import manager
 from context.watcher import workspace_watcher
 from context.indexer import code_indexer
-import asyncio  
+import asyncio
 
 router = APIRouter()
+log = get_logger(__name__)
 
 async def get_user_from_token(token: str, db: AsyncSession) -> User | None:
     try:
         user_id = decode_access_token(token)
-        print("DECODED USER ID:", user_id)
+        log.debug("Token decoded", user_id=user_id)
     except JWTError as e:
-        print("JWT ERROR:", e)
+        log.warning("JWT decode failed", error=str(e))
         return None
     result = await db.execute(select(User).where(User.id == uuid.UUID(user_id)))
     return result.scalar_one_or_none()
@@ -70,11 +72,19 @@ async def agent_ws(
                 data = await websocket.receive_json()
                 user_message = data.get("message", "").strip()
                 conversation_id = data.get("conversation_id") or conversation_id
-                open_files   = data.get("open_files", []) 
+                open_files   = data.get("open_files", [])
                 model        = data.get("model", "llama-3.3-70b-versatile")
-                
+
                 if not user_message:
                     continue
+
+                log.info(
+                    "Agent request received",
+                    project=str(project_id),
+                    model=model,
+                    open_files=len(open_files),
+                    msg_preview=user_message[:80],
+                )
 
                 await run_agent_streaming(
                     user_message=user_message,
