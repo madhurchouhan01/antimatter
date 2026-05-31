@@ -71,7 +71,7 @@ export function useAgentSocket(projectId) {
         flushBuffer()
         setConversationId(msg.conversation_id)
       } else if (msg.type === "error") {
-        addMessage({ id: crypto.randomUUID(), role: "error", content: msg.message })
+        addMessage({ id: crypto.randomUUID(), role: "error", content: msg.message, error_type: msg.error_type })
       }
     }
 

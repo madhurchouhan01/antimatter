@@ -1,14 +1,68 @@
 import { useEffect, useRef, useState } from "react"
-import { Send, Wrench, Bot, User, AlertCircle, Sparkles, Info } from "lucide-react"
+import { Send, Wrench, Bot, User, AlertCircle, Sparkles, Info, Zap, PlusSquare, RefreshCw } from "lucide-react"
 import { useChatStore } from "../stores/chatStore"
 import { useProjectStore } from "../stores/projectStore"
 import { useAgentSocket } from "../hooks/useAgentSocket"
 import Markdown from "./Markdown"
 
-function MessageBubble({ msg }) {
+function MessageBubble({ msg, onRetry }) {
   const isUser   = msg.role === "user"
   const isTool   = msg.role === "tool_start" || msg.role === "tool_end"
   const isSystem = msg.role === "system"
+
+  // Rate limit error: highly visible block
+  if (msg.role === "error" && msg.error_type === "rate_limit") {
+    return (
+      <div className="flex flex-col gap-2 p-4 rounded-xl bg-orange-500/20 border border-orange-500/50 text-orange-200 self-stretch my-2 shadow-[0_0_20px_rgba(249,115,22,0.15)]">
+        <div className="flex items-center gap-2 font-bold text-orange-400">
+          <Zap size={16} className="fill-orange-400" />
+          <span>Rate Limit Exceeded</span>
+        </div>
+        <div className="text-[13px] leading-relaxed">
+          <Markdown text={msg.content} />
+        </div>
+        {onRetry && (
+          <button onClick={() => {
+              const msgs = useChatStore.getState().messages;
+              const lastUser = [...msgs].reverse().find(m => m.role === "user");
+              if(lastUser) onRetry(lastUser.content);
+            }} 
+            className="mt-2 self-start flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-500/20 hover:bg-orange-500/40 text-orange-300 text-xs font-medium transition-colors border border-orange-500/30"
+          >
+            <RefreshCw size={12} />
+            Retry
+          </button>
+        )}
+      </div>
+    )
+  }
+
+  // Generic error
+  if (msg.role === "error") {
+      return (
+        <div className="flex flex-col gap-2 p-3.5 rounded-xl bg-red-900/20 border border-red-500/30 text-red-300 self-stretch my-2 shadow-sm">
+          <div className="flex items-center gap-2 font-semibold text-red-400">
+            <AlertCircle size={14} className="text-red-400" />
+            <span>Agent Error</span>
+          </div>
+          <div className="text-[12px] leading-relaxed opacity-90">
+             <Markdown text={msg.content} />
+          </div>
+          {onRetry && (
+            <button onClick={() => {
+                const msgs = useChatStore.getState().messages;
+                const lastUser = [...msgs].reverse().find(m => m.role === "user");
+                if(lastUser) onRetry(lastUser.content);
+              }} 
+              className="mt-1 self-start flex items-center gap-1.5 px-3 py-1 rounded border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 text-red-300 text-xs transition-colors"
+            >
+              <RefreshCw size={12} />
+              Retry
+            </button>
+          )}
+        </div>
+      )
+  }
 
   // System messages: slim horizontal notification bar, not a bubble
   if (isSystem) {
@@ -89,6 +143,10 @@ export default function ChatPanel() {
     }
   }
 
+  const handleRetry = (text) => {
+    sendMessage(text, selectedModel)
+  }
+
   return (
     <div className="flex flex-col h-full bg-editor-sidebar/95 backdrop-blur-xl border-l border-editor-border/50 shadow-[-8px_0_24px_rgba(0,0,0,0.2)] z-30 relative">
       {/* Header */}
@@ -111,6 +169,14 @@ export default function ChatPanel() {
         {isStreaming && (
           <span className="ml-2 text-[10px] font-mono text-editor-accent animate-pulse uppercase tracking-widest bg-editor-accent/10 px-2 py-0.5 rounded-full border border-editor-accent/20">Thinking</span>
         )}
+
+        <button
+          onClick={() => useChatStore.getState().clearChat()}
+          className="ml-2 flex items-center justify-center w-6 h-6 rounded hover:bg-editor-highlight text-editor-muted hover:text-white transition-colors"
+          title="New Chat"
+        >
+          <PlusSquare size={14} />
+        </button>
       </div>
 
       {/* Messages */}
@@ -124,7 +190,7 @@ export default function ChatPanel() {
             </p>
           </div>
         )}
-        {messages.map((msg) => <MessageBubble key={msg.id} msg={msg} />)}
+        {messages.map((msg) => <MessageBubble key={msg.id} msg={msg} onRetry={handleRetry} />)}
         
         {streamBuffer && (
           <div className="flex items-start gap-3 px-3.5 py-2.5 rounded-2xl rounded-tl-sm max-w-[92%] bg-editor-highlight/50 backdrop-blur-md text-editor-text self-start border border-editor-border/50 shadow-sm">
