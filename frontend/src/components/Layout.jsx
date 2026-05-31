@@ -8,6 +8,8 @@ import Terminal    from "./Terminal"
 import GitPanel    from "./GitPanel"
 import IndexingNotification from "./IndexingNotification"
 import GlobalDiffPanel from "./GlobalDiffPanel"
+import ShortcutsOverlay from "./ShortcutsOverlay"
+import { useShortcuts } from "../hooks/useShortcuts"
 import { useTerminalStore } from "../stores/terminalStore"
 import { useProjectStore } from "../stores/projectStore"
 import { useAuthStore } from "../stores/authStore"
@@ -26,6 +28,7 @@ export default function Layout() {
   const [sidebarWidth, setSidebarWidth] = useState(280) // default 280px
   const [chatWidth, setChatWidth]       = useState(380) // default 380px
   const [termHeight, setTermHeight]     = useState(192) // default 192px
+  const [showShortcuts, setShowShortcuts] = useState(false)
 
   const termOpen = useTerminalStore((s) => s.termOpen)
   const setTermOpen = useTerminalStore((s) => s.setTermOpen)
@@ -48,6 +51,16 @@ export default function Layout() {
     if (project) connect()
     return () => disconnect()
   }, [project?.id, connect, disconnect])
+
+  // Bind global shortcuts
+  useShortcuts({
+    toggleSidebar: () => setSidebarOpen(prev => !prev),
+    toggleChat: () => setChatOpen(prev => !prev),
+    toggleTerminal: () => setTermOpen(!termOpen),
+    setSidebarTab,
+    openShortcutsHelp: () => setShowShortcuts(true),
+    closeShortcutsHelp: () => setShowShortcuts(false),
+  })
 
   const handleLogout = () => {
     if (window.confirm("Are you sure you want to log out?")) {
@@ -115,7 +128,8 @@ export default function Layout() {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-editor-bg text-editor-text">
-
+      {showShortcuts && <ShortcutsOverlay onClose={() => setShowShortcuts(false)} />}
+      
       {/* Left sidebar */}
       {sidebarOpen && (
         <>

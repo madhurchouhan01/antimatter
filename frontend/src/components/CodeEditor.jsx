@@ -10,6 +10,7 @@ import { useChatStore } from "../stores/chatStore"
 import { useDiffStore } from "../stores/diffStore"
 import { useAgentSocket } from "../hooks/useAgentSocket"
 import { useGhostStore } from "../stores/ghostStore"
+import InlineChatWidget from "./InlineChatWidget"
 
 /** Extract the first fenced code block from markdown text */
 function extractCodeBlock(text) {
