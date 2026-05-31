@@ -66,6 +66,10 @@ export function useAgentSocket(projectId) {
       } else if (msg.type === "done") {
         flushBuffer()
         setConversationId(msg.conversation_id)
+        // If any diffs arrived during this turn, mark agent as done so UI shows review panel
+        if (Object.keys(useDiffStore.getState().pendingDiffs).length > 0) {
+          useDiffStore.getState().setAgentDone()
+        }
       } else if (msg.type === "error") {
         addMessage({ id: crypto.randomUUID(), role: "error", content: msg.message, error_type: msg.error_type })
       }
@@ -90,6 +94,8 @@ export function useAgentSocket(projectId) {
       if (!options.hidden) {
         addMessage({ id: crypto.randomUUID(), role: options.role || "user", content: text })
       }
+      // Reset any previous done-state so the banner hides while agent works
+      useDiffStore.getState().resetAgentDone()
       const payload = {
           message:         text,
           model:           model,

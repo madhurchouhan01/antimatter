@@ -84,6 +84,7 @@ export default function CodeEditor() {
   const ghost = useGhostStore((s) => s.ghost)
   
   const pendingDiffs = useDiffStore((s) => s.pendingDiffs)
+  const reviewingFile = useDiffStore((s) => s.reviewingFile)
   const removePendingDiff = useDiffStore((s) => s.removePendingDiff)
   const { sendMessage } = useAgentSocket(project?.id)
 
@@ -248,7 +249,8 @@ export default function CodeEditor() {
     </>
   )
 
-  const pendingDiff = file ? pendingDiffs[file.path] : null
+  // Only show the diff editor when the user explicitly clicks a file to review
+  const pendingDiff = (file && reviewingFile === file.path) ? pendingDiffs[file.path] : null
 
   const handleAcceptDiff = async () => {
     if (!pendingDiff || !project || !file) return
@@ -257,6 +259,7 @@ export default function CodeEditor() {
       updateContent(file.path, pendingDiff.modified)
       markSaved(file.path)
       removePendingDiff(file.path)
+      useDiffStore.getState().setReviewingFile(null)
       sendMessage(`SYSTEM: The user accepted the changes for ${file.path}.`, "llama-3.3-70b-versatile", { hidden: true })
     } catch (e) {
       console.error("Failed to accept diff", e)
@@ -266,6 +269,7 @@ export default function CodeEditor() {
   const handleRejectDiff = () => {
     if (!file) return
     removePendingDiff(file.path)
+    useDiffStore.getState().setReviewingFile(null)
     sendMessage(`SYSTEM: The user rejected the changes for ${file.path}.`, "llama-3.3-70b-versatile", { hidden: true })
   }
 
