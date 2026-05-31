@@ -71,6 +71,7 @@ async def agent_ws(
                 user_message = data.get("message", "").strip()
                 conversation_id = data.get("conversation_id") or conversation_id
                 open_files   = data.get("open_files", []) 
+                model        = data.get("model", "llama-3.3-70b-versatile")
                 
                 if not user_message:
                     continue
@@ -83,6 +84,7 @@ async def agent_ws(
                     send_json=websocket.send_json,
                     open_files=open_files,
                     emit_fn=websocket.send_json,
+                    model_name=model,
                 )
 
         except (WebSocketDisconnect, RuntimeError):

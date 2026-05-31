@@ -87,13 +87,14 @@ export function useAgentSocket(projectId) {
     }
   }, [projectId, token, addMessage, appendToken, flushBuffer, setConversationId, setStreaming])
 
-  const sendMessage = useCallback((text) => {
+  const sendMessage = useCallback((text, model = "llama-3.3-70b-versatile") => {
       const { conversationId } = useChatStore.getState()
       const openFiles = useEditorStore.getState().openFiles.map((f) => f.path)
 
       addMessage({ id: crypto.randomUUID(), role: "user", content: text })
       const payload = {
           message:         text,
+          model:           model,
           conversation_id: conversationId,
           open_files:      openFiles,
       }

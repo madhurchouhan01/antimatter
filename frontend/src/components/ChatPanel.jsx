@@ -58,6 +58,17 @@ export default function ChatPanel() {
   const [input, setInput] = useState("")
   const bottomRef = useRef(null)
 
+  const [selectedModel, setSelectedModel] = useState("llama-3.3-70b-versatile")
+  const supportedModels = [
+    "llama-3.3-70b-versatile",
+    "llama-3.1-8b-instant",
+    "deepseek-r1-distill-llama-70b",
+    "openai/gpt-oss-20b",
+    "openai/gpt-oss-120b",
+    "meta-llama/llama-4-scout-17b-16e-instruct",
+    "qwen/qwen3-32b"
+  ]
+
   useEffect(() => {
     if (project) connect()
   }, [project?.id, connect])
@@ -70,7 +81,7 @@ export default function ChatPanel() {
     const text = input.trim()
     if (!text || isStreaming) return
     setInput("")
-    sendMessage(text)
+    sendMessage(text, selectedModel)
 
     const textarea = document.getElementById("chat-input-textarea")
     if (textarea) {
@@ -86,8 +97,19 @@ export default function ChatPanel() {
           <Sparkles size={14} className="text-editor-accent" />
         </div>
         <span className="text-[13px] font-bold text-white tracking-wide uppercase">AI Assistant</span>
+        
+        <select 
+          className="ml-auto bg-editor-bg border border-editor-border text-[11px] text-editor-muted rounded px-2 py-0.5 outline-none hover:border-editor-accent/50 focus:border-editor-accent/80 transition-colors max-w-[140px] truncate cursor-pointer"
+          value={selectedModel}
+          onChange={(e) => setSelectedModel(e.target.value)}
+        >
+          {supportedModels.map(m => (
+            <option key={m} value={m}>{m}</option>
+          ))}
+        </select>
+
         {isStreaming && (
-          <span className="ml-auto text-[10px] font-mono text-editor-accent animate-pulse uppercase tracking-widest bg-editor-accent/10 px-2 py-0.5 rounded-full border border-editor-accent/20">Thinking</span>
+          <span className="ml-2 text-[10px] font-mono text-editor-accent animate-pulse uppercase tracking-widest bg-editor-accent/10 px-2 py-0.5 rounded-full border border-editor-accent/20">Thinking</span>
         )}
       </div>
 
