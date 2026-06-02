@@ -4,7 +4,7 @@
 
 ---
 
-## 1. Project Identity
+## 1. Project Identity.
 
 **Name:** ANTIMATTER  
 **Type:** AI-powered web-based code editor (browser frontend + Python backend)  
