@@ -1,4 +1,4 @@
-# ANTIMATTER — AI-Powered Code Editor
+# ANTIMATTER
 ---
 
 ## 1. Project Identity
@@ -14,524 +14,320 @@
 
 ---
 
-## 2. Repository Structure
+## Why ANTIMATTER
 
-```
-antimatter/
-│
-├── frontend/
-│   └── index.html              # Entire frontend — single file, Vanilla JS + Monaco Editor CDN
-│
-├── backend/
-│   └── main.py                 # FastAPI app — all HTTP endpoints
-│
-├── ai_engine/
-│   ├── __init__.py             # Empty, required for Python imports
-│   ├── rag.py                  # Codebase indexing + RAG retrieval + context builder
-│   ├── agents.py               # Multi-agent pipeline: Planner, Executor, Critic, Memory Manager
-│   └── patch_engine.py         # Surgical patch generation + line localization
-│
-├── memory/
-│   ├── chromadb/               # ChromaDB persistent vector store (auto-created)
-│   ├── antimatter.db           # SQLite database for agent memory (auto-created)
-│   └── sandbox.db              # SQLite database mapping Users to Docker Containers (auto-created)
-│
-└── .env                        # GROQ_API_KEY, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, JWT_SECRET
-```
+Traditional editors and copilots often stop at single-file completion, struggle with repo-scale context, and offer limited review workflows. ANTIMATTER brings agent-driven planning, RAG-based reasoning, and developer-controlled patch review into a lightweight local editor.
 
----
+Target users:
 
-## 3. Frontend Architecture (`frontend/index.html`)
+- AI engineers exploring agentic workflows
+- developers who want repo-aware code editing
+- teams prototyping autonomous dev tools
+- researchers validating multi-agent code pipelines
 
-Single HTML file. No build step. No framework. Monaco Editor loaded via CDN AMD loader.
+## Key Features
 
-### 3.1 Layout
+### Agent Capabilities
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  TOPBAR: logo · file badge · Index Project · Smart Fix · Clear │
-├──────────────┬──────────────────────────┬───────┬───────────┤
-│   SIDEBAR    │     MONACO EDITOR        │Resizer│ AI PANEL  │
-│  (220px)     │     (flex: 1)            │ (4px) │  (380px)  │
-│  file tree   │  tabs · editor · footer  │       │           │
-│  upload zone │                          │       │           │
-└──────────────┴──────────────────────────┴───────┴───────────┘
-```
+- Repository understanding through codebase retrieval
+- Multi-file editing with planned patch proposals
+- Task planning, execution, and critic review
+- Memory persistence for cross-session agent context
+- Tool calling for terminal, git, and search
+- Context compression via semantic chunking
 
-### 3.2 State Variables
+### Development Tools
 
-```javascript
-const BACKEND = 'http://localhost:1842';
-let editor = null;              // Monaco editor instance
-let files = {};                 // { filename: content } — all open files in memory
-let activeFile = null;          // currently open filename string
-let isStreaming = false;        // prevents concurrent requests
-let conversationHistory = [];   // [{ role, content }] — last 10 turns for chat context
-let currentMode = 'chat';       // 'chat' | 'agent'
-let pendingDiffCode = '';       // code staged in diff modal waiting for apply/discard
+- Browser-accessible terminal / sandbox support
+- Git-aware workflows and patch generation
+- FastAPI backend with streaming agent responses
+- Local RAG index using ChromaDB
+- Monaco Editor frontend for code review and diffs
 
-// Patch system state
-let patchState = {
-  task: '',
-  results: [],    // raw /patch endpoint response
-  cards: [],      // [{ fileIdx, patchIdx, status, patch, file }]
-};
+### User Experience
 
-// Code picker state
-let pickerBlocks = [];          // extracted code blocks from executor output
-let pickerSelected = -1;        // index of selected block in picker
+- Natural language task prompts
+- Agent and chat workflows in one UI
+- Review-first patch approval
+- Session history and execution trace
+
+## Architecture Overview
+
+```text
+User
+  └─> Browser UI
+        └─> Agent Router
+              ├─> Planner
+              ├─> Tool Router
+              │     ├─> File System
+              │     ├─> Terminal / Sandbox
+              │     ├─> Git
+              │     └─> Search / RAG Index
+              └─> LLM Provider
 ```
 
-### 3.3 Mode System
-
-Two modes toggled by `.mode-toggle` buttons:
-
-**Chat mode** (`currentMode = 'chat'`):
-- Shows `#messages` div
-- Hides `#agent-panel`
-- `sendMessage()` calls `POST /chat`
-- AI response streams into message bubble
-- Each AI message gets Apply + Diff buttons if response contains code blocks
-
-**Agent mode** (`currentMode = 'agent'`):
-- Hides `#messages` div  
-- Shows `#agent-panel` with 4 expandable cards (Planner, Executor, Critic, Memory)
-- `sendMessage()` calls `sendAgentTask()` → `POST /agent`
-- Streams SSE-tagged events, parsed and routed to agent cards
-
-### 3.4 Key Functions
-
-| Function | Purpose |
-|---|---|
-| `loadFiles(event)` | FileReader API → populates `files{}` → calls `openFile()` |
-| `openFile(name)` | Sets `activeFile`, creates Monaco model, updates tabs/context bar |
-| `sendMessage()` | Router: chat mode → `/chat`, agent mode → `sendAgentTask()` |
-| `sendAgentTask(text)` | Streams from `/agent`, parses `[TAG]...[/TAG]` events, updates agent cards |
-| `indexProject()` | POSTs all `files{}` to `/index-project`, shows chunk count |
-| `openSmartFix()` | Opens floating Smart Fix input bar |
-| `runSmartFix()` | POSTs to `/patch`, opens patch review modal with animated loading steps |
-| `showDiff(newCode)` | Opens diff modal comparing `files[activeFile]` vs `newCode` |
-| `applyDiff()` | Applies `pendingDiffCode` to Monaco editor + `files{}` |
-| `openCodePicker(text)` | Extracts all code blocks → shows picker if >1 block, skips to diff if 1 |
-| `applyAcceptedPatches()` | Applies accepted patches bottom-up per file using `editor.executeEdits()` |
-| `applySmartEdit(code)` | Smart apply: detects full-file vs partial, uses Monaco range edit for partial |
-| `formatMessage(text)` | Converts markdown (code blocks, bold, inline code) to HTML |
-| `extractAllCodeBlocks(text)` | Regex extracts all ` ``` ` blocks with lang + line count + type classification |
-| `localize_patch` | (frontend side of patch) — applies resolved patches bottom-up |
-
-### 3.5 Streaming Protocol (Agent Mode)
-
-The `/agent` endpoint streams plain text with custom event tags. Frontend parses these from a rolling `buffer` string:
-
-```
-[PLANNER_START]
-[PLANNER_RESULT]{...json...}[/PLANNER_RESULT]
-[EXECUTOR_START]
-[EXECUTOR_CHUNK]...text...[/EXECUTOR_CHUNK]
-[EXECUTOR_CHUNK]...text...[/EXECUTOR_CHUNK]
-[EXECUTOR_DONE]
-[CRITIC_START]
-[CRITIC_RESULT]{...json...}[/CRITIC_RESULT]
-[MEMORY_SAVED]
-[PIPELINE_DONE]
-```
-
-`EXECUTOR_CHUNK` tags are consumed and cleared from buffer on each iteration to prevent re-processing. All other tags are checked with `buffer.includes()`.
-
-### 3.6 Modals
-
-Three overlay modals, all `position: fixed; z-index: 1000+`:
-
-| Modal | ID | Trigger | Purpose |
-|---|---|---|---|
-| Diff viewer | `#diff-modal` | Apply/Diff buttons on AI messages | Side-by-side old vs new |
-| Code picker | `#picker-modal` | Executor done with >1 code block | Select which block to apply |
-| Patch review | `#patch-modal` | Smart Fix submit | Per-patch GitHub-style accept/reject |
-| Smart Fix bar | `#smart-fix-overlay` | ⟐ Smart Fix button | Floating task input |
-
-All modals close on `Escape` key.
-
----
-
-## 4. Backend Architecture (`backend/main.py`)
-
-FastAPI app. CORS open (`allow_origins=["*"]`). All endpoints return JSON except `/chat` and `/agent` which return `StreamingResponse(media_type="text/plain")`.
-
-### 4.1 Global Instances
-
-```python
-client  = Groq(api_key=os.getenv("GROQ_API_KEY"))   # Groq LLM client
-index   = CodebaseIndex(persist_dir="./memory/chromadb")  # RAG index
-memory  = MemoryManager(db_path="./memory/antimatter.db") # SQLite agent memory
-```
-
-### 4.2 Endpoints
-
-| Method | Path | Purpose | Returns |
-|---|---|---|---|
-| `POST` | `/chat` | RAG-augmented chat with streaming | `StreamingResponse` text |
-| `POST` | `/agent` | Full multi-agent pipeline with streaming | `StreamingResponse` tagged events |
-| `POST` | `/patch` | Surgical patch generation + line resolution | JSON patch results |
-| `POST` | `/index-project` | Index files dict into ChromaDB | `{ files_indexed, chunks_created }` |
-| `POST` | `/index-clear` | Wipe ChromaDB collection | `{ status }` |
-| `GET` | `/index-stats` | ChromaDB chunk count | `{ total_chunks }` |
-| `GET` | `/memory/stats` | SQLite run/decision counts | `{ total_runs, total_decisions }` |
-| `GET` | `/memory/runs` | Last 10 agent runs | Array of run objects |
-| `GET` | `/memory/file/{filename}` | Decisions for a specific file | Array of decision objects |
-| `GET` | `/auth/github/login` | Redirect to GitHub OAuth | Redirects |
-| `GET` | `/auth/github/callback` | OAuth exchange, issues JWT | Sets HttpOnly cookie |
-| `GET` | `/auth/me` | Validates JWT, returns user info | `{ username, avatar_url }` |
-| `POST` | `/auth/logout` | Clears JWT cookie | `{ status }` |
-| `WS` | `/terminal` | Docker sandbox connection (Persistent volume per user) | WebSocket stream |
-| `GET` | `/health` | Status + index stats + memory stats | JSON |
-
-### 4.3 Request Models
-
-```python
-class ChatRequest(BaseModel):
-    message: str
-    file_content: str = ""
-    filename: str = ""
-    model: str = "llama-3.1-8b-instant"
-    history: Optional[List[HistoryMessage]] = []
-    use_rag: bool = True
-    cursor_line: int = None          # Monaco cursor line for surgical context
-
-class AgentRequest(BaseModel):
-    task: str
-    file_content: str = ""
-    filename: str = ""
-    available_files: List[str] = []
-    model: str = "llama-3.1-8b-instant"
-    cursor_line: int = None
-
-class PatchRequest(BaseModel):
-    task: str
-    open_filename: str = ""
-    open_file_content: str = ""
-    all_files: Dict[str, str] = {}   # all open files { filename: content }
-    model: str = "llama-3.1-8b-instant"
-
-class IndexRequest(BaseModel):
-    files: dict                       # { filename: content }
-```
-
----
-
-## 5. RAG Engine (`ai_engine/rag.py`)
-
-### 5.1 Chunking Strategy
-
-**Python files** → AST-based chunking via `ast.parse()`. Walks the tree, extracts every `FunctionDef`, `AsyncFunctionDef`, and `ClassDef` node at any nesting level. Each node becomes one chunk. Falls back to line-based if `SyntaxError`.
-
-**All other files** → Sliding window line-based chunks of 60 lines with 10-line overlap.
-
-Each chunk has metadata: `{ filepath, filename, type, name, start_line, end_line }`.
-
-Chunks are upserted into ChromaDB in batches of 50 using MD5 hash of `filepath:start:end` as ID (enables safe re-indexing without duplicates).
-
-### 5.2 Embedding
-
-Uses ChromaDB's `DefaultEmbeddingFunction` (sentence-transformers `all-MiniLM-L6-v2`). Downloads ~90MB on first run. No external API key needed.
-
-### 5.3 Context Builder (`build_context`)
-
-Called before every `/chat` and `/agent` request:
-
-```
-1. Include open file (full, up to 60% of token budget)
-   → If file > budget: truncate to first 100 lines
-2. ChromaDB semantic search (n=6 results)
-   → Skip chunks from the already-included open file
-   → Add chunks until token budget exhausted
-3. Return (context_string, retrieved_chunks)
-```
-
-Token counting via `tiktoken` (`cl100k_base` encoding). Max context: 6000 tokens.
-
-### 5.4 Surgical Context Builder (`build_context_surgical`)
-
-Enhanced version that uses cursor line position:
-
-```
-1. Extract the specific function/class at cursor_line via AST
-2. Inject ONLY that symbol as primary context
-3. Include full file as collapsed background reference
-4. RAG retrieval for cross-file chunks
-```
-
-Returns `(context_string, retrieved_chunks, symbol_metadata)` where `symbol_metadata` includes `{ name, start_line, end_line, type, full_file }`.
-
----
-
-## 6. Multi-Agent System (`ai_engine/agents.py`)
-
-### 6.1 Architecture
-
-```
-User task
-    │
-    ▼
-[Planner Agent]
-    │  produces: { understanding, complexity, files_needed,
-    │              approach, steps[], warnings[] }
-    ▼
-[Executor Agent]  ← receives plan + open file + RAG context
-    │  produces: streaming markdown with code blocks
-    ▼
-[Critic Agent]    ← receives task + executor output + original file
-    │  produces: { verdict, score/10, issues[], improvements[], summary }
-    ▼
-[Memory Manager]  ← saves run to SQLite
-    │  saves: agent_runs table + code_decisions table
-    ▼
-[PIPELINE_DONE]
-```
-
-### 6.2 Agent Prompts Summary
-
-**Planner:** Outputs pure JSON only. No markdown. Analyzes task + open file (first 80 lines) + available filenames + memory summary from past sessions. Temperature: 0.2.
-
-**Executor:** Receives Planner's steps + open file (up to 6000 chars) + RAG context (up to 3000 chars). Outputs streaming markdown with code. Temperature: 0.25. Instructed to output ONLY the modified symbol (not full file) for small targeted fixes.
-
-**Critic:** Reviews executor output against original file. Outputs pure JSON. Temperature: 0.2. Score 0-10. Verdict: `approved | needs_revision | rejected`.
-
-### 6.3 Memory Manager (SQLite)
-
-Three tables:
-
-```sql
-agent_runs (id, task, plan, result, critique, files_involved, model, created_at)
-code_decisions (id, filename, decision, context, created_at)
-project_patterns (id, pattern_type, description, example, created_at)
-```
-
-`get_memory_summary()` returns last 3 runs formatted as string — injected into Planner's context for cross-session awareness.
-
-### 6.4 Streaming Generator
-
-`run_agent_pipeline()` is a Python generator that yields tagged strings. FastAPI wraps it in `StreamingResponse`. The generator runs all three agents sequentially — no async, no parallelism. Each stage yields start/result/done tags so the frontend can update in real time.
-
----
-
-## 7. Patch Engine (`ai_engine/patch_engine.py`)
-
-### 7.1 Step 1 — File Identification
-
-`identify_target_files(task, rag_chunks, available_files, planner_files)`:
-
-```
-1. Extract filenames from RAG chunks (sorted by relevance)
-2. If planner_files ∩ rag_files is non-empty → return intersection (high confidence)
-3. Else → LLM call with all evidence → returns JSON array of filenames
-4. Fallback → return planner_files
-```
-
-### 7.2 Step 2 — Patch Generation
-
-`generate_patches(task, filename, file_content, rag_context)`:
-
-Sends strict prompt instructing LLM to output JSON patch object. Critical rule: `original` field must be character-perfect copy from file. Temperature: 0.15 (lowest, for maximum consistency).
-
-Output schema:
-```json
-{
-  "file": "filename.py",
-  "patches": [
-    {
-      "original": "exact text from file",
-      "replacement": "new text",
-      "explanation": "why"
-    }
-  ],
-  "summary": "overall description"
-}
-```
-
-If `full_rewrite: true` → single patch with full file content.
-
-### 7.3 Step 3 — Line Localization
-
-`localize_patch(original_text, file_content)` — 4-level fallback chain:
-
-```
-Level 1: Exact line match          → fastest, handles perfect copies
-Level 2: Stripped exact match      → handles indentation differences
-Level 3: Fuzzy sliding window      → threshold 0.65, handles minor rewording
-Level 4: First-line anchor search  → finds start line, expands by patch length
-```
-
-Returns `(start_line, end_line)` 1-indexed or `None`.
-
-### 7.4 Patch Application (Frontend)
-
-Patches are applied **bottom-up** (sorted by `start_line` descending) to prevent line offset drift when multiple patches modify the same file. Uses Monaco's `editor.executeEdits()` for surgical range replacement — not `editor.setValue()`.
-
----
-
-## 8. Data Flows
-
-### 8.1 Chat Mode Flow
-
-```
-User types message
-    → frontend: build { message, file_content, filename, history, use_rag, cursor_line }
-    → POST /chat
-    → backend: build_context() → ChromaDB search → inject into system prompt
-    → Groq streaming API call
-    → StreamingResponse → frontend ReadableStream reader
-    → characters appended to bubble innerHTML
-    → if response contains ``` → show Apply + Diff buttons
-```
-
-### 8.2 Agent Mode Flow
-
-```
-User types task
-    → frontend: build { task, file_content, filename, available_files, model }
-    → POST /agent
-    → backend: build_context() for RAG
-    → run_agent_pipeline() generator starts
-    → yields [PLANNER_START] → frontend: card status = running
-    → planner_agent() call → yields [PLANNER_RESULT]{json}[/PLANNER_RESULT]
-    → frontend: renderPlan(json) → card status = done
-    → executor_agent() streaming → yields [EXECUTOR_CHUNK]token[/EXECUTOR_CHUNK] per token
-    → frontend: appends to exec-output div
-    → [EXECUTOR_DONE] → frontend: show code block picker or Apply+Diff buttons
-    → critic_agent() call → [CRITIC_RESULT]{json}[/CRITIC_RESULT]
-    → frontend: renderCritique(json) → score bar + issues
-    → memory.save_run() → [MEMORY_SAVED] → [PIPELINE_DONE]
-```
-
-### 8.3 Smart Fix Flow
-
-```
-User clicks ⟐ Smart Fix → types task → submits
-    → openPatchModal(task) → animated loading steps
-    → POST /patch with { task, open_filename, open_file_content, all_files }
-    → backend:
-        1. build_context() → rag_chunks
-        2. identify_target_files() → target_files[]
-        3. generate_surgical_patches() per file:
-           a. generate_patches() → LLM JSON patch
-           b. resolve_patches() → localize each patch → attach line numbers
-        4. return { success, target_files, results[] }
-    → frontend: renderPatchReview(data)
-        → per patch: buildPatchDiff() → side-by-side HTML diff
-        → Accept/Reject buttons per card
-    → user accepts/rejects
-    → applyAcceptedPatches():
-        → group by file
-        → sort patches bottom-up per file
-        → splice lines array
-        → editor.setValue() for active file
-```
-
----
-
-## 9. Known Issues & Design Decisions
-
-### 9.1 Full File vs Surgical Output
-
-**Problem:** LLM mirrors context — if given full file, outputs full file.  
-**Current state:** Partially addressed via executor prompt instructing symbol-only output for small fixes.  
-**Proper fix:** `build_context_surgical()` + cursor_line injection + `applySmartEdit()` for Monaco range edits. Infrastructure exists, needs wiring end-to-end.
-
-### 9.2 Patch Localization Failures ("location unknown")
-
-**Problem:** LLM paraphrases `original` text instead of copying verbatim.  
-**Fixes applied:** 4-level fallback chain in `localize_patch()`. Stricter prompt language. Fuzzy threshold lowered to 0.65.  
-**Remaining failure rate:** ~5% on complex multiline originals with deepseek-r1.  
-**Workaround:** `manualSearch()` opens Monaco find widget with first line of failed patch.
-
-### 9.3 Agent Panel Apply/Diff Buttons
-
-**Problem:** Buttons were missing or inconsistent in agent mode vs chat mode.  
-**Fix applied:** Code block picker modal (`#picker-modal`) with `extractAllCodeBlocks()`. Single block → skip to diff. Multiple blocks → picker with language/line/type metadata cards.
-
-### 9.4 ChromaDB First Run
-
-Downloads sentence-transformers model (~90MB) on first `index_files()` call. Subsequent runs use cached model. No API key needed.
-
-### 9.5 Line Offset Drift
-
-When applying multiple patches to one file, higher-line patches shift lower-line patches. Fixed by always applying patches sorted by `start_line` descending (bottom-up).
-
----
-
-## 10. Quick Start
+- **User**: developer interacting with the frontend.
+- **Browser UI**: Monaco-based editor, chat, and agent panel.
+- **Agent Router**: decides between chat and agent execution.
+- **Planner**: decomposes tasks into actionable steps.
+- **Tool Router**: routes file, terminal, git, and search actions.
+- **File System**: maintains workspace state and open file content.
+- **Terminal**: sandboxed command execution channel.
+- **Git**: repository-aware change management.
+- **LLM Provider**: external model service for reasoning.
+- **Search**: RAG index for relevant code retrieval.
+
+## Installation
+
+### Prerequisites
+
+- Python 3.11+
+- Node.js 18+ / npm
+- Git
+- Docker (optional for sandbox terminal)
+
+### Clone repository
 
 ```bash
-# 1. Clone and setup
-cd antimatter
-python -m venv .venv
-.venv\Scripts\activate          # Windows
-# source .venv/bin/activate     # Mac/Linux
-
-# 2. Install dependencies
-pip install fastapi "uvicorn[standard]" groq chromadb python-dotenv websockets tiktoken sentence-transformers
-
-# 3. Add API key
-echo "GROQ_API_KEY=your_key_here" > .env
-
-# 4. Create required empty file
-echo "" > ai_engine/__init__.py
-
-# 5. Run backend
-uvicorn backend.main:app --reload --port 1842
-
-# 6. Open frontend
-# Double-click frontend/index.html in file explorer (Chrome/Edge)
+git clone https://github.com/<your-org>/AntiMatter.git
+cd AntiMatter
 ```
 
----
+### Backend dependencies
 
-## 11. Environment & Dependencies
+```bash
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r backend/requirements.txt
+```
 
-| Package | Purpose |
+### Frontend dependencies
+
+```bash
+cd frontend
+npm install
+cd ..
+```
+
+### Environment setup
+
+Create a `.env` file in the repository root:
+
+```env
+GROQ_API_KEY=your_groq_api_key
+GITHUB_CLIENT_ID=your_github_client_id
+GITHUB_CLIENT_SECRET=your_github_client_secret
+JWT_SECRET=your_jwt_secret
+```
+
+### Run locally
+
+```bash
+cd backend
+uvicorn main:app --reload --host 0.0.0.0 --port 1842
+```
+
+Open `frontend/index.html` in a browser or serve it with a static file server.
+
+## Quick Start
+
+1. Start the backend server:
+
+```bash
+cd backend
+.venv\Scripts\activate
+uvicorn main:app --reload --host 0.0.0.0 --port 1842
+```
+
+2. Open `frontend/index.html`.
+3. Load your files or workspace.
+4. Ask the agent for code work, for example:
+
+```text
+Fix the failing unit test for `calculate_discount`.
+Refactor the payment flow into a reusable helper.
+Generate regression tests for `order_summary`.
+```
+
+5. Review proposed patches and apply them when ready.
+
+## Configuration
+
+### Environment variables
+
+- `GROQ_API_KEY`: Groq provider key.
+- `GITHUB_CLIENT_ID`: GitHub OAuth app client ID.
+- `GITHUB_CLIENT_SECRET`: GitHub OAuth secret.
+- `JWT_SECRET`: JWT signing key.
+- `BACKEND_URL` (optional): backend base URL.
+
+### Model selection
+
+Configure model choice in backend request payloads or provider settings.
+
+### Provider setup
+
+The repository is configured for Groq. To switch to another provider, update backend model integration.
+
+### Tool configuration
+
+- `backend/main.py`: API routes and execution router.
+- `frontend/index.html`: UI, streaming, and patch workflows.
+
+### Sample `.env`
+
+```env
+GROQ_API_KEY=sk-xxxxxx
+GITHUB_CLIENT_ID=abcd1234
+GITHUB_CLIENT_SECRET=efgh5678
+JWT_SECRET=super-secret-value
+```
+
+## Agent Permissions & Safety
+
+| Capability | Supported |
 |---|---|
-| `fastapi` | HTTP framework |
-| `uvicorn[standard]` | ASGI server |
-| `groq` | LLM API client |
-| `chromadb` | Vector database for RAG |
-| `sentence-transformers` | ChromaDB default embeddings |
-| `python-dotenv` | `.env` file loading |
-| `tiktoken` | Token counting for context management |
-| `websockets` | WebSocket support for sandbox terminal |
-| `docker` | Docker SDK for Python (Sandbox orchestration) |
-| `PyJWT` | JWT token generation and validation |
-| `httpx` | Async HTTP client (OAuth token exchange) |
-| `difflib` | Built-in — fuzzy patch localization |
-| `ast` | Built-in — Python AST chunking |
-| `sqlite3` | Built-in — agent memory persistence and sandbox user mapping |
+| Read files | ✅ |
+| Write files | ✅ (after review) |
+| Run tests | ✅ |
+| Execute commands | ✅ (sandboxed) |
+| Git operations | ✅ |
+| Internet access | Optional |
 
-**Frontend CDN dependencies** (no npm, no build):
-- Monaco Editor `0.44.0` via `cdnjs.cloudflare.com`
-- RequireJS `2.3.6` via `cdnjs.cloudflare.com`
-- Google Fonts: JetBrains Mono + DM Sans
+### Safety mechanisms
 
----
+- Agent actions are reviewed before applying patches.
+- Backend mediates all file and terminal operations.
+- Sandbox mode isolates terminal execution when enabled.
+- Secrets live in `.env` and are not committed.
 
-## 12. Feature Roadmap (not yet built)
+## Examples
 
-- **LSP integration** — Pyright/ESLint → exact error locations → feed to patch engine
-- **Selection-based editing** — user selects lines in Monaco → AI edits only selection
-- **Multi-selection patches** — Ctrl+click multiple ranges → independent patch per range
-- **Inline comment intent markers** — `# ANTIMATTER: change this` → auto-detected and patched
-- **Git integration** — show real git diff, commit accepted patches directly
-- **Project-wide refactor** — rename symbol across all files using AST + patch engine
-- **Test generation pipeline** — dedicated agent that writes + runs tests via Docker
+### Bug fixing
 
----
+**Prompt**: Fix `calculate_discount` so negative values are rejected.
+**Plan**: locate function, add validation, update tests.
+**Actions**: patch code, create regression test, review diff.
+**Outcome**: a targeted fix with human approval.
 
-## 13. Design Philosophy
+### Refactoring
 
-ANTIMATTER is intentionally built as a **learning + portfolio project** that demonstrates:
+**Prompt**: Extract shared validation from the payment workflow.
+**Plan**: identify duplicated logic, create helper, update call sites.
+**Actions**: modify multiple files, generate diff, review and apply.
+**Outcome**: cleaner shared logic and safer code.
 
-1. **RAG over codebases** — not just documents. AST-aware chunking makes retrieval structurally meaningful.
-2. **Multi-agent orchestration** — Planner/Executor/Critic pattern with visible reasoning, not a black box.
-3. **Persistent agent memory** — cross-session SQLite storage means the editor learns your codebase over time.
-4. **Surgical code editing** — moving away from full-file replacement toward line-precise patches.
-5. **Streaming-first UX** — every long operation streams in real time. No loading spinners on blank screens.
+### Test generation
 
-The stack is deliberately simple (no React, no TypeScript, no Docker required for core features) so the AI architecture is the complexity, not the infrastructure.
+**Prompt**: Add regression tests for `order_summary`.
+**Plan**: inspect route, infer behavior, write assertions.
+**Actions**: add new test file and expected cases.
+**Outcome**: reproducible tests ready for review.
+
+## Supported Models
+
+| Provider | Model | Support level | Notes |
+|---|---|---|---|
+| Groq | `llama-3.1-8b-instant` | Primary | Default configuration |
+| Groq | `deepseek-r1-distill-llama-70b` | Supported | Higher reasoning capacity |
+| Local | custom model | Experimental | Requires backend adapter |
+| GPT / Anthropic | custom | Optional | Change provider integration manually |
+
+## Project Structure
+
+```text
+backend/      - FastAPI server and agent router
+frontend/     - Browser UI, Monaco editor, and streaming client
+ai_engine/    - RAG, planner, executor, critic, patch engine
+memory/       - ChromaDB index and SQLite persistence
+antimatter-env/ - optional local Python virtual environment
+```
+
+- `backend/`: server entrypoint, request models, tool orchestration.
+- `frontend/`: static editor experience and patch review UI.
+- `ai_engine/`: AI orchestration, retrieval, and editing logic.
+- `memory/`: local vector store and agent memory.
+
+## Development Guide
+
+### Running tests
+
+No formal test suite is configured in this repository.
+
+### Linting
+
+```bash
+npm run lint --prefix frontend
+```
+
+### Formatting
+
+Use your editor or `prettier` if installed.
+
+### Building
+
+No production frontend build is required for the current setup.
+
+### Local workflow
+
+1. Start backend: `uvicorn main:app --reload --host 0.0.0.0 --port 1842`
+2. Open `frontend/index.html`
+3. Load files and issue prompts
+4. Review and apply proposed patches
+
+## Evaluation & Benchmarks
+
+No formal benchmark data is available in this repository.
+
+## Limitations
+
+- Experimental project with prototype-quality UX.
+- Frontend is a single-file proof of concept.
+- Current provider integration is Groq-specific.
+- Not all agent workflows are fully hardened.
+- No automated backend/frontend test coverage yet.
+
+## Roadmap
+
+- [ ] Add automated backend and frontend tests.
+- [ ] Support GPT and Anthropic providers.
+- [ ] Add persistent session history.
+- [ ] Harden sandbox terminal execution.
+- [ ] Add git diff and commit integration.
+
+## FAQ
+
+**Which model should I use?**
+Use `llama-3.1-8b-instant` for fast responses and `deepseek-r1-distill-llama-70b` for more complex reasoning.
+
+**Can I use local models?**
+Yes, but local providers need backend integration.
+
+**Does code leave my machine?**
+Only if you configure an external LLM provider. Code and indexes remain local by default.
+
+**Is internet access required?**
+Yes for Groq and GitHub OAuth. The editor can run locally.
+
+**How much does it cost?**
+Cost depends on your LLM provider. This repo does not include billing.
+
+## Contributing
+
+1. Fork the repository.
+2. Create a feature branch.
+3. Open a pull request with a clear description.
+
+Keep changes focused and document new behavior.
+
+## License
+
+MIT License
+
+## Community & Support
+
+- Documentation: TBD
+- Discord: TBD
+- GitHub Issues: https://github.com/<your-org>/AntiMatter/issues
+- Discussions: https://github.com/<your-org>/AntiMatter/discussions
+- Website: TBD
