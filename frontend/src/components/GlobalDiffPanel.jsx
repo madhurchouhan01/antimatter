@@ -1,4 +1,4 @@
-import { ChevronDown, Check, X, Eye, CheckCheck, Sparkles } from "lucide-react"
+import { ChevronDown, Check, X, Eye, CheckCheck, Sparkles, Plus, Minus } from "lucide-react"
 import { useDiffStore } from "../stores/diffStore"
 import { useProjectStore } from "../stores/projectStore"
 import { useEditorStore } from "../stores/editorStore"
@@ -9,6 +9,7 @@ import { useState } from "react"
 export default function GlobalDiffPanel() {
   const pendingDiffs    = useDiffStore((s) => s.pendingDiffs)
   const agentDone       = useDiffStore((s) => s.agentDone)
+  const summary         = useDiffStore((s) => s.summary)
   const reviewingFile   = useDiffStore((s) => s.reviewingFile)
   const removePendingDiff  = useDiffStore((s) => s.removePendingDiff)
   const clearAll           = useDiffStore((s) => s.clearAll)
@@ -30,47 +31,28 @@ export default function GlobalDiffPanel() {
     openFile(path, diff.original)
   }
 
-  const handleAcceptAll = async () => {
-    if (!project) return
-    for (const [path, diff] of entries) {
-      try {
-        await filesApi.write(project.id, path, diff.modified)
-        updateContent(path, diff.modified)
-        markSaved(path)
-        sendMessage(`SYSTEM: The user accepted the changes for ${path}.`, "llama-3.3-70b-versatile", { hidden: true })
-      } catch (e) {
-        console.error("Failed to accept diff for", path, e)
-      }
-    }
-    clearAll()
-  }
-
-  const handleRejectAll = () => {
+  const handleAcceptAll = () => {
+    const { acceptPendingDiff } = useDiffStore.getState()
     for (const [path] of entries) {
-      sendMessage(`SYSTEM: The user rejected the changes for ${path}.`, "llama-3.3-70b-versatile", { hidden: true })
+      acceptPendingDiff(path)
+      markSaved(path)
     }
-    clearAll()
+    sendMessage(`SYSTEM: The user accepted all changes.`, "llama-3.3-70b-versatile", { hidden: true })
   }
 
-  const handleAcceptOne = async (e, path, diff) => {
-    e.stopPropagation()
+  const handleUndoAll = async () => {
     if (!project) return
     try {
-      await filesApi.write(project.id, path, diff.modified)
-      updateContent(path, diff.modified)
-      markSaved(path)
-      removePendingDiff(path)
-      sendMessage(`SYSTEM: The user accepted the changes for ${path}.`, "llama-3.3-70b-versatile", { hidden: true })
+      // Revert all changes to original
+      for (const [path, diff] of entries) {
+        await filesApi.write(project.id, path, diff.original)
+        updateContent(path, diff.original)
+        sendMessage(`SYSTEM: The user undid the changes for ${path}.`, "llama-3.3-70b-versatile", { hidden: true })
+      }
+      clearAll()
     } catch (err) {
-      console.error("Failed to accept diff for", path, err)
+      console.error("Failed to undo all changes:", err)
     }
-  }
-
-  const handleRejectOne = (e, path) => {
-    e.stopPropagation()
-    if (reviewingFile === path) setReviewingFile(null)
-    removePendingDiff(path)
-    sendMessage(`SYSTEM: The user rejected the changes for ${path}.`, "llama-3.3-70b-versatile", { hidden: true })
   }
 
   return (
@@ -82,6 +64,44 @@ export default function GlobalDiffPanel() {
           Task complete — review {entries.length} proposed change{entries.length > 1 ? "s" : ""}
         </span>
       </div>
+
+      {/* Summary statistics panel */}
+      {summary && (
+        <div className="px-3 py-2 bg-editor-highlight/20 border-b border-editor-border/30">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1">
+              <Plus size={12} className="text-green-400" />
+              <span className="text-[11px] text-green-300 font-medium">{summary.totalLinesAdded}</span>
+              <span className="text-[10px] text-editor-muted">added</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <Minus size={12} className="text-red-400" />
+              <span className="text-[11px] text-red-300 font-medium">{summary.totalLinesRemoved}</span>
+              <span className="text-[10px] text-editor-muted">removed</span>
+            </div>
+            <div className="text-[10px] text-editor-muted ml-auto">
+              Across {summary.filesChanged} file{summary.filesChanged > 1 ? "s" : ""}
+            </div>
+          </div>
+          
+          {/* Brief file breakdown */}
+          {summary.fileChanges.length > 0 && (
+            <div className="mt-1.5 pt-1.5 border-t border-editor-border/20 flex flex-wrap gap-2">
+              {summary.fileChanges.map(file => (
+                <div key={file.path} className="text-[10px] text-editor-muted px-1.5 py-0.5 rounded bg-editor-highlight/40">
+                  <span className="font-medium">{file.filename}</span>
+                  {(file.added > 0 || file.removed > 0) && (
+                    <span>
+                      {file.added > 0 && <span className="text-green-400"> +{file.added}</span>}
+                      {file.removed > 0 && <span className="text-red-400"> -{file.removed}</span>}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Collapsible file list */}
       <div className="bg-[#12131a]">
@@ -100,10 +120,10 @@ export default function GlobalDiffPanel() {
 
           <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
             <button
-              onClick={handleRejectAll}
+              onClick={handleUndoAll}
               className="text-[11px] text-editor-muted hover:text-red-400 transition-colors font-medium px-2 py-0.5 rounded hover:bg-editor-highlight/50"
             >
-              Reject all
+              Undo all
             </button>
             <button
               onClick={handleAcceptAll}
@@ -120,44 +140,52 @@ export default function GlobalDiffPanel() {
             {entries.map(([path, diff]) => {
               const filename = path.split("/").pop()
               const isReviewing = reviewingFile === path
+              const isAccepted = diff.accepted
               return (
                 <div
                   key={path}
                   className={`group flex items-center justify-between px-3 py-1.5 cursor-pointer transition-colors ${
-                    isReviewing
+                    isAccepted
+                      ? "bg-green-500/10 border-l-2 border-green-500"
+                      : isReviewing
                       ? "bg-blue-500/10 border-l-2 border-blue-500"
                       : "hover:bg-editor-highlight/30 border-l-2 border-transparent"
                   }`}
                   onClick={() => handleReviewFile(path, diff)}
                 >
                   <div className="flex items-center gap-2 overflow-hidden min-w-0">
-                    <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${isReviewing ? "bg-blue-400" : "bg-amber-400"}`} />
-                    <span className={`text-[12px] truncate font-medium ${isReviewing ? "text-blue-300" : "text-editor-text"}`}>
+                    <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${isAccepted ? "bg-green-400" : isReviewing ? "bg-blue-400" : "bg-amber-400"}`} />
+                    <span className={`text-[12px] truncate font-medium ${isAccepted ? "text-green-300 line-through opacity-70" : isReviewing ? "text-blue-300" : "text-editor-text"}`}>
                       {filename}
                     </span>
+                    {isAccepted && (
+                      <span className="text-[10px] text-green-400 font-semibold ml-1 shrink-0">✓ Accepted</span>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-1 shrink-0 ml-2">
                     {/* Eye icon always visible for current reviewing file */}
                     {isReviewing && <Eye size={11} className="text-blue-400 mr-1" />}
 
-                    {/* Accept/Reject only on hover */}
-                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button
-                        onClick={(e) => handleRejectOne(e, path)}
-                        className="p-1 rounded text-editor-muted hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                        title="Reject this change"
-                      >
-                        <X size={12} />
-                      </button>
-                      <button
-                        onClick={(e) => handleAcceptOne(e, path, diff)}
-                        className="p-1 rounded text-editor-muted hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
-                        title="Accept this change"
-                      >
-                        <Check size={12} />
-                      </button>
-                    </div>
+                    {/* Undo/Accept buttons only on hover */}
+                    {!isAccepted && (
+                      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={(e) => handleUndoOne(e, path, diff)}
+                          className="p-1 rounded text-editor-muted hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                          title="Undo this change"
+                        >
+                          <X size={12} />
+                        </button>
+                        <button
+                          onClick={(e) => handleAcceptOne(e, path)}
+                          className="p-1 rounded text-editor-muted hover:text-green-400 hover:bg-green-500/10 transition-colors"
+                          title="Accept and confirm this change"
+                        >
+                          <Check size={12} />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               )

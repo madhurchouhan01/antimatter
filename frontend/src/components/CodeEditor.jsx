@@ -3,7 +3,7 @@ import { useEditorStore } from "../stores/editorStore"
 import { useProjectStore } from "../stores/projectStore"
 import { filesApi } from "../lib/api"
 import { useRef, useEffect, useState } from "react"
-import { FolderOpen, GitBranch } from "lucide-react"
+import { FolderOpen, GitBranch, Sparkles } from "lucide-react"
 import { useFileTreeStore } from "../stores/fileTreeStore"
 import { useTerminalStore } from "../stores/terminalStore"
 import { useChatStore } from "../stores/chatStore"
@@ -77,6 +77,9 @@ export default function CodeEditor() {
   const editorRef  = useRef(null)
   const monacoRef  = useRef(null)
   const [inlineChat, setInlineChat] = useState(null)
+  const [selection, setSelection] = useState(null)
+  const [selectionButtonPos, setSelectionButtonPos] = useState({ top: 0, left: 0, visible: false })
+  const selectionDebounceRef = useRef(null)  // debounce timer for selection stabilization
   const lastMsgIdRef = useRef(null)   // last processed assistant msg id
   const acceptingRef = useRef(false)  // flag: currently accepting ghost
   const providerRef  = useRef(null)   // inline completions provider disposable
@@ -124,9 +127,12 @@ export default function CodeEditor() {
     return () => clearTimeout(t)
   }, [ghost])
 
-  // Cleanup provider on unmount
+  // Cleanup provider and debounce on unmount
   useEffect(() => () => {
     providerRef.current?.dispose()
+    if (selectionDebounceRef.current) {
+      clearTimeout(selectionDebounceRef.current)
+    }
     useGhostStore.getState().clearGhost()
   }, [])
 
@@ -560,15 +566,52 @@ export default function CodeEditor() {
           editor.addCommand(
             monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK,
             () => {
-              const selection     = editor.getSelection()
-              const pos           = editor.getPosition()
+              const sel          = editor.getSelection()
+              const pos          = editor.getPosition()
               if (!pos) return
-              const selectedText  = (selection && !selection.isEmpty())
-                ? editor.getModel()?.getValueInRange(selection) ?? ""
+              const selectedText = (sel && !sel.isEmpty())
+                ? editor.getModel()?.getValueInRange(sel) ?? ""
                 : ""
               setInlineChat({ line: pos.lineNumber, selectedText })
             }
           )
+
+          // Track selection changes to show "Send to Agent" button
+          editor.onDidChangeCursorSelection((e) => {
+            // Clear any pending debounce timer
+            if (selectionDebounceRef.current) {
+              clearTimeout(selectionDebounceRef.current)
+            }
+
+            const sel = editor.getSelection()
+            if (sel && !sel.isEmpty()) {
+              const selectedText = editor.getModel()?.getValueInRange(sel) ?? ""
+              
+              // Debounce: only show button after user stops selecting for 200ms
+              selectionDebounceRef.current = setTimeout(() => {
+                setSelection({
+                  text: selectedText,
+                  line: sel.startLineNumber,
+                  column: sel.startColumn,
+                  isEmpty: false,
+                })
+                
+                // Compute button position at the end of selection
+                const editorLayout = editor.getLayoutInfo()
+                const pos = editor.getScrolledVisiblePosition({ lineNumber: sel.endLineNumber, column: sel.endColumn })
+                if (pos) {
+                  setSelectionButtonPos({
+                    top: pos.top + 24,
+                    left: Math.min(pos.left, editorLayout.width - 180),
+                    visible: true,
+                  })
+                }
+              }, 200)
+            } else {
+              setSelection(null)
+              setSelectionButtonPos((prev) => ({ ...prev, visible: false }))
+            }
+          })
         }}
       />
 
@@ -583,6 +626,28 @@ export default function CodeEditor() {
           filePath={file.path}
           onClose={() => setInlineChat(null)}
         />
+      )}
+
+      {/* "Send to Agent" button — appears when text is selected */}
+      {selection && selection.text.trim() && selectionButtonPos.visible && !inlineChat && (
+        <div
+          className="absolute z-30 pointer-events-auto animate-in fade-in duration-200"
+          style={{
+            top: `${selectionButtonPos.top}px`,
+            left: `${selectionButtonPos.left}px`,
+          }}
+        >
+          <button
+            onClick={() => {
+              setInlineChat({ line: selection.line, selectedText: selection.text })
+            }}
+            className="group flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white text-sm font-semibold rounded-lg shadow-lg hover:shadow-2xl hover:shadow-blue-500/40 transition-all duration-150 transform hover:scale-105 active:scale-95 border border-blue-400/30"
+            title="Send selected code to agent (Ctrl+K)"
+          >
+            <Sparkles size={16} className="group-hover:rotate-12 transition-transform duration-300" />
+            <span>Ask AI</span>
+          </button>
+        </div>
       )}
     </div>
   )

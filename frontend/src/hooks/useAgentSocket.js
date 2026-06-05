@@ -4,6 +4,45 @@ import { useAuthStore } from "../stores/authStore"
 import { useEditorStore } from "../stores/editorStore"
 import { useFileTreeStore } from "../stores/fileTreeStore"
 import { useDiffStore } from "../stores/diffStore"
+import { filesApi } from "../lib/api"
+
+/** Calculate line diff stats and generate a summary */
+function generateSummary(pendingDiffs) {
+  const entries = Object.entries(pendingDiffs)
+  if (entries.length === 0) return null
+
+  let totalLinesAdded = 0
+  let totalLinesRemoved = 0
+  const fileChanges = []
+
+  for (const [path, diff] of entries) {
+    const originalLines = diff.original.split("\n").length
+    const modifiedLines = diff.modified.split("\n").length
+    const added = Math.max(0, modifiedLines - originalLines)
+    const removed = Math.max(0, originalLines - modifiedLines)
+    
+    totalLinesAdded += added
+    totalLinesRemoved += removed
+    
+    const filename = path.split("/").pop()
+    fileChanges.push({
+      filename,
+      path,
+      added,
+      removed,
+    })
+  }
+
+  // Sort by most changes first
+  fileChanges.sort((a, b) => (b.added + b.removed) - (a.added + a.removed))
+
+  return {
+    filesChanged: entries.length,
+    totalLinesAdded,
+    totalLinesRemoved,
+    fileChanges,
+  }
+}
 
 let globalWs = null
 const messageQueue = []
@@ -41,8 +80,21 @@ export function useAgentSocket(projectId) {
           return
       }
       if (msg.type === "file.patch") {
-          // AI proposed a file change — add to pendingDiffs
-          useDiffStore.getState().addPendingDiff(msg.path, msg.original, msg.modified)
+          // AI proposed a file change — add to pendingDiffs, apply immediately, and auto-save
+          const { addPendingDiff } = useDiffStore.getState()
+          const { updateContent } = useEditorStore.getState()
+          
+          // Add to pending diffs (for review UI)
+          addPendingDiff(msg.path, msg.original, msg.modified)
+          
+          // Apply change to editor immediately (without waiting for approval)
+          updateContent(msg.path, msg.modified)
+          
+          // Auto-save to workspace
+          filesApi.write(projectId, msg.path, msg.modified).catch(err => {
+            console.error(`Failed to auto-save ${msg.path}:`, err)
+          })
+          
           return
       }
       if (msg.type === "token") {
@@ -67,7 +119,10 @@ export function useAgentSocket(projectId) {
         flushBuffer()
         setConversationId(msg.conversation_id)
         // If any diffs arrived during this turn, mark agent as done so UI shows review panel
-        if (Object.keys(useDiffStore.getState().pendingDiffs).length > 0) {
+        const diffs = useDiffStore.getState().pendingDiffs
+        if (Object.keys(diffs).length > 0) {
+          const summary = generateSummary(diffs)
+          useDiffStore.getState().setSummary(summary)
           useDiffStore.getState().setAgentDone()
         }
       } else if (msg.type === "error") {
