@@ -27,7 +27,7 @@ Target users:
 
 ## Key Features
 
-### Agent Capabilities
+### Agent Capabilities.
 
 - Repository understanding through codebase retrieval
 - Multi-file editing with planned patch proposals
