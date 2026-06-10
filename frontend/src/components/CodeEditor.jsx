@@ -8,7 +8,6 @@ import { useFileTreeStore } from "../stores/fileTreeStore"
 import { useTerminalStore } from "../stores/terminalStore"
 import { useChatStore } from "../stores/chatStore"
 import { useDiffStore } from "../stores/diffStore"
-import { useAgentSocket } from "../hooks/useAgentSocket"
 import { useGhostStore } from "../stores/ghostStore"
 import InlineChatWidget from "./InlineChatWidget"
 
@@ -90,7 +89,6 @@ export default function CodeEditor() {
   const pendingDiffs = useDiffStore((s) => s.pendingDiffs)
   const reviewingFile = useDiffStore((s) => s.reviewingFile)
   const removePendingDiff = useDiffStore((s) => s.removePendingDiff)
-  const { sendMessage } = useAgentSocket(project?.id)
 
   // ── Subscribe to chatStore outside React to avoid batching issues ──────────
   useEffect(() => {
@@ -267,7 +265,6 @@ export default function CodeEditor() {
       markSaved(file.path)
       removePendingDiff(file.path)
       useDiffStore.getState().setReviewingFile(null)
-      sendMessage(`SYSTEM: The user accepted the changes for ${file.path}.`, "llama-3.3-70b-versatile", { hidden: true })
     } catch (e) {
       console.error("Failed to accept diff", e)
     }
@@ -277,7 +274,6 @@ export default function CodeEditor() {
     if (!file) return
     removePendingDiff(file.path)
     useDiffStore.getState().setReviewingFile(null)
-    sendMessage(`SYSTEM: The user rejected the changes for ${file.path}.`, "llama-3.3-70b-versatile", { hidden: true })
   }
 
   return (

@@ -80,20 +80,12 @@ export function useAgentSocket(projectId) {
           return
       }
       if (msg.type === "file.patch") {
-          // AI proposed a file change — add to pendingDiffs, apply immediately, and auto-save
+          // AI proposed a file change — add to pendingDiffs for user review
+          // DO NOT apply or save until user explicitly accepts
           const { addPendingDiff } = useDiffStore.getState()
-          const { updateContent } = useEditorStore.getState()
           
-          // Add to pending diffs (for review UI)
+          // Add to pending diffs for review UI only
           addPendingDiff(msg.path, msg.original, msg.modified)
-          
-          // Apply change to editor immediately (without waiting for approval)
-          updateContent(msg.path, msg.modified)
-          
-          // Auto-save to workspace
-          filesApi.write(projectId, msg.path, msg.modified).catch(err => {
-            console.error(`Failed to auto-save ${msg.path}:`, err)
-          })
           
           return
       }

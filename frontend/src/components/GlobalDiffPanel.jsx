@@ -2,7 +2,6 @@ import { ChevronDown, Check, X, Eye, CheckCheck, Sparkles, Plus, Minus } from "l
 import { useDiffStore } from "../stores/diffStore"
 import { useProjectStore } from "../stores/projectStore"
 import { useEditorStore } from "../stores/editorStore"
-import { useAgentSocket } from "../hooks/useAgentSocket"
 import { filesApi } from "../lib/api"
 import { useState } from "react"
 
@@ -16,7 +15,6 @@ export default function GlobalDiffPanel() {
   const setReviewingFile   = useDiffStore((s) => s.setReviewingFile)
   const { openFile, updateContent, markSaved } = useEditorStore()
   const project = useProjectStore((s) => s.activeProject)
-  const { sendMessage } = useAgentSocket(project?.id)
 
   const [expanded, setExpanded] = useState(true)
 
@@ -37,7 +35,7 @@ export default function GlobalDiffPanel() {
       acceptPendingDiff(path)
       markSaved(path)
     }
-    sendMessage(`SYSTEM: The user accepted all changes.`, "llama-3.3-70b-versatile", { hidden: true })
+    // Agent run stops here — user must send a new message to continue
   }
 
   const handleUndoAll = async () => {
@@ -47,9 +45,9 @@ export default function GlobalDiffPanel() {
       for (const [path, diff] of entries) {
         await filesApi.write(project.id, path, diff.original)
         updateContent(path, diff.original)
-        sendMessage(`SYSTEM: The user undid the changes for ${path}.`, "llama-3.3-70b-versatile", { hidden: true })
       }
       clearAll()
+      // Agent run stops here — user must send a new message to continue
     } catch (err) {
       console.error("Failed to undo all changes:", err)
     }

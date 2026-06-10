@@ -40,3 +40,38 @@ body { margin: 0; background: #1a1b26; color: #a9b1d6; }
   pointer-events: none;
   user-select: none;
 }
+
+/* Thinking word: slide-up blur entrance */
+@keyframes wordSlideUp {
+  0%   { opacity: 0; transform: translateY(8px); filter: blur(6px); }
+  100% { opacity: 1; transform: translateY(0px); filter: blur(0px); }
+}
+.word-slide-up {
+  animation: wordSlideUp 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* Ambient glow orb drift */
+@keyframes orbDrift {
+  0%   { transform: translate(0%, 0%) scale(1); opacity: 0.5; }
+  33%  { transform: translate(10%, -12%) scale(1.1); opacity: 0.7; }
+  66%  { transform: translate(-8%, 10%) scale(0.93); opacity: 0.55; }
+  100% { transform: translate(0%, 0%) scale(1); opacity: 0.5; }
+}
+.orb-drift { animation: orbDrift 5s ease-in-out infinite; }
+
+/* Shimmer sweep for skeleton bars */
+@keyframes shimmerSweep {
+  0%   { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+.skeleton-bar {
+  background: linear-gradient(90deg,
+    rgba(122,162,247,0.05) 25%,
+    rgba(122,162,247,0.2) 50%,
+    rgba(122,162,247,0.05) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmerSweep 1.8s linear infinite;
+  border-radius: 9999px;
+}
+

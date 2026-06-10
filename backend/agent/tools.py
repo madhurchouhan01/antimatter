@@ -1,96 +1,3 @@
-# import asyncio
-# from typing import Callable, Awaitable, Optional
-# from langchain_core.tools import tool
-# from services.file_service import FileService, SecurityError
-# from sandbox.manager import sandbox_manager
-
-# # Each tool receives project context at call time via a closure factory
-# # emit_fn: optional async callback used by write_file to propose a diff instead of writing directly
-# def make_tools(
-#     project_id: str,
-#     user_id: str,
-#     emit_fn: Optional[Callable[[dict], Awaitable[None]]] = None,
-# ):
-#     fs = FileService(project_id, user_id)
-
-#     @tool
-#     async def read_file(path: str) -> str:
-#         """Read the contents of a file at the given path inside the project workspace."""
-#         try:
-#             return await fs.read(path)
-#         except FileNotFoundError:
-#             return f"ERROR: File not found: {path}"
-#         except SecurityError:
-#             return "ERROR: Path traversal attempt blocked."
-
-#     @tool
-#     async def write_file(path: str, content: str) -> str:
-#         """
-#         Propose a change to a file. The user must review and accept the diff before
-#         it is written to disk. Do NOT call this multiple times for the same file —
-#         wait for the user to accept or reject before proposing further changes.
-#         """
-#         try:
-#             # Read current content to compute the diff
-#             try:
-#                 original = await fs.read(path)
-#             except FileNotFoundError:
-#                 original = ""  # new file
-
-#             if emit_fn:
-#                 # Emit a patch proposal to the frontend — do NOT write to disk
-#                 await emit_fn({
-#                     "type": "file.patch",
-#                     "path": path,
-#                     "original": original,
-#                     "modified": content,
-#                 })
-#                 return f"PENDING: Diff proposed for {path}. Waiting for user approval."
-#             else:
-#                 # Fallback: write directly (used in tests / non-WS contexts)
-#                 await fs.write(path, content)
-#                 return f"OK: Written to {path}"
-#         except SecurityError:
-#             return "ERROR: Path traversal attempt blocked."
-
-#     @tool
-#     async def list_files(path: str = "") -> str:
-#         """List files and directories at a path inside the workspace. Default is root."""
-#         try:
-#             entries = await fs.list_dir(path)
-#             lines = [
-#                 f"{'[DIR] ' if e['is_dir'] else '[FILE]'} {e['path']}"
-#                 for e in entries
-#             ]
-#             return "\n".join(lines) if lines else "(empty directory)"
-#         except FileNotFoundError as e:
-#             return f"ERROR: {e}"
-
-#     @tool
-#     async def run_command(command: str) -> str:
-#         """Run a shell command inside the project sandbox container."""
-#         try:
-#             sandbox = await sandbox_manager.get_or_create(project_id, user_id)
-#             sandbox.touch()
-#             result = sandbox.exec_run(
-#                 ["/bin/bash", "-c", command],
-#                 workdir="/workspace",
-#                 demux=True,
-#             )
-#             stdout, stderr = result.output
-#             output = ""
-#             if stdout:
-#                 output += stdout.decode("utf-8", errors="replace")
-#             if stderr:
-#                 output += stderr.decode("utf-8", errors="replace")
-#             return output[:4000] if len(output) > 4000 else output
-#         except Exception as e:
-#             return f"ERROR: {e}"
-
-#     return [read_file, write_file, list_files, run_command]
-
-
-
 import asyncio
 import fnmatch
 import re
@@ -174,7 +81,7 @@ def make_tools(
 
     @tool
     async def read_file(path: str) -> str:
-        """Read the contents of a file at the given path inside the project workspace."""
+        """Read the contents of a file at the given workspace-relative path (e.g., 'src/main.py'). Always read a file before editing it."""
         try:
             return await fs.read(path)
         except FileNotFoundError:
@@ -188,26 +95,7 @@ def make_tools(
 
     @tool
     async def write_file(path: str, content: str) -> str:
-        """
-        Propose a change to a file.
-
-        Behaviour depends on whether emit_fn was provided at factory construction:
-
-        • With emit_fn (normal production use):
-            A ``file.patch`` diff event is sent to the frontend. The file is NOT
-            written to disk. Returns PENDING. The agent must stop and wait for the
-            user to accept or reject before making any further changes to this path.
-
-        • Without emit_fn (tests / CLI / non-WebSocket contexts):
-            The file is written to disk immediately. Returns OK.
-
-        Constraints
-        -----------
-        - Maximum content size: 512 KB (UTF-8 encoded). Larger payloads are rejected.
-        - Content must be valid UTF-8.
-        - Do NOT call this multiple times for the same path without waiting for the
-          user to resolve the previous pending diff.
-        """
+        """Propose creating a new file or overwriting an entire file at 'path' (must be workspace-relative, e.g. 'src/main.py'). Wait for user approval before making more edits to this path."""
         # --- size guard -------------------------------------------------------
         try:
             encoded = content.encode("utf-8")
@@ -248,18 +136,7 @@ def make_tools(
 
     @tool
     async def list_files(path: str = "", max_depth: int = 2) -> str:
-        """
-        List files and directories at *path* inside the workspace.
-
-        Parameters
-        ----------
-        path      : Relative path inside the workspace. Defaults to the root.
-        max_depth : How many directory levels to recurse (1 = immediate children
-                    only, up to 10). Defaults to 2.
-
-        Symlinks are listed with a ``[LINK]`` prefix and are not followed, so
-        circular links cannot cause infinite recursion.
-        """
+        """List files and directories at a workspace-relative 'path' (defaults to root ''). 'max_depth' controls recursion depth (1 to 10, default 2)."""
         max_depth = max(1, min(max_depth, LIST_FILES_MAX_DEPTH))
 
         try:
@@ -290,17 +167,7 @@ def make_tools(
 
     @tool
     async def run_command(command: str, timeout: int = DEFAULT_COMMAND_TIMEOUT) -> str:
-        """
-        Run a shell command inside the project sandbox container.
-
-        Parameters
-        ----------
-        command : The bash command to execute.
-        timeout : Maximum seconds to wait before the command is killed (default 30,
-                  max 300). Use a higher value only for known long-running builds.
-
-        The combined stdout+stderr is returned, capped at 4 000 characters.
-        """
+        """Execute a synchronous, blocking shell command inside the project sandbox. Do NOT use for long-running servers or background processes."""
         timeout = max(1, min(timeout, 300))
         try:
             return await _exec_in_sandbox(command, timeout)
@@ -321,25 +188,7 @@ def make_tools(
         case_sensitive: bool = False,
         max_results: int = 50,
     ) -> str:
-        """
-        Search the workspace for files or symbols.
-
-        Parameters
-        ----------
-        query          : The search term. For ``content`` mode this is a regex
-                         pattern (ripgrep syntax). For ``filename`` mode it is a
-                         glob pattern (e.g. ``*.py``, ``test_*``).
-        mode           : ``"content"``  — search inside file contents (default).
-                         ``"filename"`` — search by file name / glob pattern.
-        path           : Subdirectory to scope the search (defaults to workspace root).
-        case_sensitive : Honour case in the pattern (default False).
-        max_results    : Cap the number of matching lines/files returned (default 50).
-
-        Returns
-        -------
-        For ``content`` mode: matching lines in ``filepath:line_no: text`` format.
-        For ``filename`` mode: list of matching relative file paths.
-        """
+        """Search the workspace. 'query' is regex for 'content' mode, glob pattern for 'filename' mode. 'path' is workspace-relative scope."""
         mode = mode.strip().lower()
         if mode not in ("content", "filename"):
             return "ERROR: mode must be 'content' or 'filename'."
@@ -401,19 +250,7 @@ def make_tools(
 
     @tool
     async def install_packages(packages: list[str], manager: str = "auto") -> str:
-        """
-        Install one or more packages inside the project sandbox.
-
-        Parameters
-        ----------
-        packages : List of package specifiers, e.g. ``["requests", "numpy==1.26"]``.
-        manager  : ``"pip"``, ``"npm"``, or ``"auto"`` (default). When set to
-                   ``"auto"`` the tool inspects the workspace for ``package.json``
-                   (→ npm) or ``requirements.txt`` / ``pyproject.toml`` (→ pip),
-                   falling back to pip if neither is conclusive.
-
-        Returns the combined install output, truncated to 4 000 characters.
-        """
+        """Install packages in the sandbox. 'packages' is a list of package specifiers. 'manager' is 'pip', 'npm', or 'auto'."""
         if not packages:
             return "ERROR: No packages specified."
 
@@ -461,24 +298,7 @@ def make_tools(
         extra_args: str = "",
         timeout: int = DEFAULT_TEST_TIMEOUT,
     ) -> str:
-        """
-        Run the pytest test suite inside the project sandbox and return a
-        structured summary of the results.
-
-        Parameters
-        ----------
-        path       : File or directory to scope the test run (e.g. ``tests/``
-                     or ``tests/test_auth.py``). Defaults to auto-discovery.
-        extra_args : Additional pytest flags, e.g. ``"-k payment -x --tb=short"``.
-        timeout    : Max seconds before the test run is killed (default 120).
-
-        Output format
-        -------------
-        Returns pytest's terminal output (stdout + stderr), including the
-        short test summary, pass/fail counts, and any assertion errors.
-        Output is capped at 4 000 characters; if truncated, the tail is
-        preserved so that the failure summary is always visible.
-        """
+        """Execute pytest inside the project sandbox and return the results. 'path' is relative test path scope."""
         timeout = max(1, min(timeout, 600))
 
         scope = path.strip() or ""
@@ -509,9 +329,7 @@ def make_tools(
 
     @tool
     async def replace_file_content(path: str, target_content: str, replacement_content: str, allow_multiple: bool = False) -> str:
-        """
-        Replace a specific contiguous block of text in a file and propose a change.
-        """
+        """Replace a contiguous block of text in a file. 'path' is relative. 'target_content' must match file content EXACTLY (including indentation)."""
         try:
             try:
                 original = await fs.read(path)
@@ -546,10 +364,7 @@ def make_tools(
 
     @tool
     async def multi_replace_file_content(path: str, replacements: list[dict]) -> str:
-        """
-        Replace multiple separate blocks of text in a file and propose a change.
-        replacements should be a list of dicts: [{"target_content": "...", "replacement_content": "..."}]
-        """
+        """Replace multiple non-contiguous blocks of text in a file. 'path' is relative. 'replacements' is list of {'target_content': '...', 'replacement_content': '...'}. Matches must be exact."""
         try:
             try:
                 original = await fs.read(path)
@@ -586,7 +401,7 @@ def make_tools(
     
     @tool
     async def search_web(query: str) -> str:
-        """Search the web using the Serper API."""
+        """Search the web using the Serper API and return top results."""
         import os, aiohttp
         api_key = os.getenv("SERPER_API_KEY")
         if not api_key:
@@ -618,7 +433,7 @@ def make_tools(
 
     @tool
     async def generate_image(prompt: str) -> str:
-        """Generate an image using the KIE AI API."""
+        """Generate an image or UI mockup from a text prompt and return its URL."""
         import os, aiohttp
         api_key = os.getenv("KIE_API_KEY")
         if not api_key:
@@ -647,7 +462,7 @@ def make_tools(
 
     @tool
     async def run_background_command(command: str) -> str:
-        """Run a shell command in the background and return its ID."""
+        """Run a command in the background (e.g. servers, watch tasks) and return its command ID."""
         try:
             sandbox = await sandbox_manager.get_or_create(project_id, user_id)
             cmd_id = await sandbox.run_background(command)
@@ -657,7 +472,7 @@ def make_tools(
 
     @tool
     async def command_status(cmd_id: str) -> str:
-        """Get the status of a background command."""
+        """Get status and stdout/stderr output logs of a background command by its command ID."""
         try:
             sandbox = await sandbox_manager.get_or_create(project_id, user_id)
             status = sandbox.get_background_status(cmd_id)
@@ -672,7 +487,7 @@ def make_tools(
 
     @tool
     async def send_command_input(cmd_id: str, input_data: str) -> str:
-        """Send stdin to a running background command."""
+        """Send standard input (stdin) text to a running background command by its command ID."""
         try:
             sandbox = await sandbox_manager.get_or_create(project_id, user_id)
             return await sandbox.send_background_input(cmd_id, input_data)

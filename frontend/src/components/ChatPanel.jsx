@@ -123,6 +123,32 @@ export default function ChatPanel() {
     "qwen/qwen3-32b"
   ]
 
+  const THINKING_WORDS = [
+    "reasoning", "deducing", "inducing", "extrapolating",
+    "analyzing", "synthesizing", "categorizing", "deciphering",
+    "assessing", "verifying", "postulating",
+  ]
+  const [wordIndex, setWordIndex] = useState(0)
+  const [isWaiting, setIsWaiting] = useState(false)
+  const cyclingWord = THINKING_WORDS[wordIndex]
+
+  // Stop waiting once the agent sends its first real response
+  useEffect(() => {
+    if (!isStreaming && isWaiting) {
+      setIsWaiting(false)
+      setWordIndex(0)
+    }
+  }, [isStreaming])
+
+  // Cycle words every 1.5 s while waiting
+  useEffect(() => {
+    if (!isWaiting) return
+    const id = setInterval(() => {
+      setWordIndex((i) => (i + 1) % THINKING_WORDS.length)
+    }, 1500)
+    return () => clearInterval(id)
+  }, [isWaiting])
+
   useEffect(() => {
     if (project) connect()
   }, [project?.id, connect])
@@ -135,6 +161,8 @@ export default function ChatPanel() {
     const text = input.trim()
     if (!text || isStreaming) return
     setInput("")
+    setIsWaiting(true)
+    setWordIndex(0)
     sendMessage(text, selectedModel)
 
     const textarea = document.getElementById("chat-input-textarea")
@@ -166,9 +194,6 @@ export default function ChatPanel() {
           ))}
         </select>
 
-        {isStreaming && (
-          <span className="ml-2 text-[10px] font-mono text-editor-accent animate-pulse uppercase tracking-widest bg-editor-accent/10 px-2 py-0.5 rounded-full border border-editor-accent/20">Thinking</span>
-        )}
 
         <button
           onClick={() => useChatStore.getState().clearChat()}
@@ -192,24 +217,92 @@ export default function ChatPanel() {
         )}
         {messages.map((msg) => <MessageBubble key={msg.id} msg={msg} onRetry={handleRetry} />)}
         
-        {/* Thinking shimmer: shown only while waiting for first token */}
-        {isStreaming && !streamBuffer && (
-          <div className="flex items-start gap-3 px-3.5 py-3 rounded-2xl rounded-tl-sm max-w-[92%] bg-editor-highlight/50 backdrop-blur-md text-editor-text self-start border border-editor-border/50 shadow-sm">
-            <div className="mt-0.5 shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-editor-accent/10">
-              <Bot size={14} className="text-editor-accent" />
-            </div>
-            <div className="flex-1 min-w-0 space-y-2 py-1">
-              <div className="flex items-center gap-2 text-[11px] text-editor-accent/70 font-medium tracking-wide">
-                <span className="flex gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-editor-accent animate-bounce [animation-delay:0ms]"></span>
-                  <span className="w-1.5 h-1.5 rounded-full bg-editor-accent animate-bounce [animation-delay:150ms]"></span>
-                  <span className="w-1.5 h-1.5 rounded-full bg-editor-accent animate-bounce [animation-delay:300ms]"></span>
-                </span>
-                <span className="animate-pulse">Thinking</span>
+        {/* ── Thinking shimmer — premium cycling word card ── */}
+        {isWaiting && !streamBuffer && !messages.find(m => m.role === "tool_start") && (
+          <div className="self-start max-w-[92%] relative">
+            {/* Ambient drifting glow behind the card */}
+            <div
+              className="orb-drift absolute -inset-3 rounded-3xl pointer-events-none"
+              style={{
+                background: "radial-gradient(ellipse at 40% 50%, rgba(122,162,247,0.18) 0%, rgba(187,154,247,0.1) 50%, transparent 75%)",
+                filter: "blur(12px)",
+              }}
+            />
+
+            {/* Card */}
+            <div
+              className="relative overflow-hidden rounded-2xl rounded-tl-sm px-4 py-3.5"
+              style={{
+                background: "linear-gradient(135deg, rgba(26,27,38,0.95) 0%, rgba(36,40,59,0.9) 100%)",
+                border: "1px solid rgba(122,162,247,0.18)",
+                boxShadow: "0 0 0 1px rgba(122,162,247,0.06) inset, 0 8px 32px rgba(0,0,0,0.3)",
+                backdropFilter: "blur(20px)",
+              }}
+            >
+              {/* Inner shimmer layer */}
+              <div
+                className="absolute inset-0 pointer-events-none"
+                style={{
+                  background: "linear-gradient(105deg, transparent 40%, rgba(122,162,247,0.04) 50%, transparent 60%)",
+                  backgroundSize: "200% 100%",
+                  animation: "shimmerSweep 3s linear infinite",
+                }}
+              />
+
+              <div className="relative flex items-center gap-3">
+                {/* Pulsing icon ring */}
+                <div className="relative shrink-0">
+                  <div
+                    className="absolute inset-0 rounded-full animate-ping"
+                    style={{ background: "rgba(122,162,247,0.15)", animationDuration: "2s" }}
+                  />
+                  <div
+                    className="w-7 h-7 rounded-full flex items-center justify-center"
+                    style={{
+                      background: "linear-gradient(135deg, rgba(122,162,247,0.2), rgba(187,154,247,0.15))",
+                      border: "1px solid rgba(122,162,247,0.3)",
+                    }}
+                  >
+                    <Bot size={13} className="text-editor-accent" />
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2 flex-1 min-w-0">
+                  {/* Cycling word */}
+                  <span
+                    key={cyclingWord}
+                    className="word-slide-up text-[13px] font-semibold tracking-wide"
+                    style={{
+                      background: "linear-gradient(90deg, #7aa2f7, #bb9af7, #7dcfff)",
+                      WebkitBackgroundClip: "text",
+                      WebkitTextFillColor: "transparent",
+                      backgroundClip: "text",
+                    }}
+                  >
+                    {cyclingWord}…
+                  </span>
+
+                  {/* Skeleton bars with shimmer sweep */}
+                  <div className="flex flex-col gap-1.5">
+                    <div className="skeleton-bar h-2" style={{ width: "72%" }} />
+                    <div className="skeleton-bar h-2" style={{ width: "48%", animationDelay: "0.3s" }} />
+                  </div>
+                </div>
               </div>
-              <div className="space-y-1.5">
-                <div className="h-2.5 bg-editor-muted/20 rounded-full w-3/4 animate-pulse"></div>
-                <div className="h-2.5 bg-editor-muted/20 rounded-full w-1/2 animate-pulse [animation-delay:200ms]"></div>
+
+              {/* Dot pulse row */}
+              <div className="flex gap-1 mt-3 ml-10">
+                {[0, 180, 360].map((delay) => (
+                  <span
+                    key={delay}
+                    className="w-1 h-1 rounded-full animate-bounce"
+                    style={{
+                      background: "rgba(122,162,247,0.6)",
+                      animationDelay: `${delay}ms`,
+                      animationDuration: "1.2s",
+                    }}
+                  />
+                ))}
               </div>
             </div>
           </div>

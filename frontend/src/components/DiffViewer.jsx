@@ -26,12 +26,9 @@ export default function DiffViewer() {
     try {
       await filesApi.applyPatch(project.id, pendingDiff.path, pendingDiff.modified)
 
-      // Sync the open editor tab if this file is open
-      const openFile = openFiles.find((f) => f.path === pendingDiff.path)
-      if (openFile) {
-        updateContent(pendingDiff.path, pendingDiff.modified)
-        markSaved(pendingDiff.path)
-      }
+      // Always sync the editor (open or not)
+      updateContent(pendingDiff.path, pendingDiff.modified)
+      markSaved(pendingDiff.path)
 
       addMessage({
         id:      crypto.randomUUID(),
