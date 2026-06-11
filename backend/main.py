@@ -1,5 +1,6 @@
 
-from api.routes import auth, projects, files, agent, conversations, terminal, lsp, git, settings
+from api.routes import auth, projects, files, agent, conversations, terminal, lsp, git
+from api.routes import settings as settings_router
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -53,7 +54,7 @@ app.include_router(terminal.router, prefix="/api/terminal", tags=["terminal"])
 app.include_router(lsp.router,      prefix="/api/lsp",      tags=["lsp"])
 app.include_router(git.router,      prefix="/api/git",      tags=["git"])
 app.include_router(conversations.router, prefix="/api/projects", tags=["conversations"])
-app.include_router(settings.router,      tags=["settings"])
+app.include_router(settings_router.router, tags=["settings"])
 
 @app.get("/health")
 async def health(): return {"status": "ok"}
