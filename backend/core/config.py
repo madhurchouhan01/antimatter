@@ -12,9 +12,24 @@ class Settings(BaseSettings):
     workspace_root: str = "/users"
     environment: str = "development"
     echo : bool = False
-    # LLM
+    # LLM — Groq (default provider)
     groq_api_key: str = ""
     groq_model: str = "llama-3.3-70b-versatile"
+
+    # GitHub Marketplace (Azure AI Inference)
+    github_pat: str = ""
+
+    # OpenAI
+    openai_api_key: str = ""
+
+    # OpenRouter
+    openrouter_api_key: str = ""
+
+    # Anthropic
+    anthropic_api_key: str = ""
+
+    # Google Gemini
+    gemini_api_key: str = ""
 
     # LangSmith (optional — leave blank to disable)
     langchain_api_key: str = ""

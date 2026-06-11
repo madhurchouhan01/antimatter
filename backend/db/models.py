@@ -17,6 +17,7 @@ class User(Base):
     plan: Mapped[str] = mapped_column(String(50), default="free")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     projects: Mapped[list["Project"]] = relationship(back_populates="owner")
+    settings: Mapped["UserSettings | None"] = relationship(back_populates="user", uselist=False)
 
 class RefreshToken(Base):
     __tablename__ = "refresh_tokens"
@@ -84,3 +85,14 @@ class CodeChunk(Base):
     __table_args__ = (
         UniqueConstraint("project_id", "file_path", "start_line", "end_line"),
     )
+
+
+class UserSettings(Base):
+    __tablename__ = "user_settings"
+    id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID, ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False)
+    provider: Mapped[str] = mapped_column(String(50), default="groq")
+    model: Mapped[str] = mapped_column(String(255), default="llama-3.3-70b-versatile")
+    api_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    user: Mapped["User"] = relationship(back_populates="settings")

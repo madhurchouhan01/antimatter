@@ -4,6 +4,7 @@ import { useAuthStore } from "../stores/authStore"
 import { useEditorStore } from "../stores/editorStore"
 import { useFileTreeStore } from "../stores/fileTreeStore"
 import { useDiffStore } from "../stores/diffStore"
+import { useSettingsStore } from "../stores/settingsStore"
 import { filesApi } from "../lib/api"
 
 /** Calculate line diff stats and generate a summary */
@@ -143,9 +144,14 @@ export function useAgentSocket(projectId) {
       }
       // Reset any previous done-state so the banner hides while agent works
       useDiffStore.getState().resetAgentDone()
+
+      // Read the active provider from settingsStore at send-time
+      const provider = useSettingsStore.getState().provider || "groq"
+
       const payload = {
           message:         text,
           model:           model,
+          provider:        provider,
           conversation_id: conversationId,
           open_files:      openFiles,
       }

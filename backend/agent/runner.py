@@ -62,6 +62,8 @@ async def run_agent_streaming(
     open_files: list[str] = [],
     emit_fn=None,  # async callable for file.patch proposals
     model_name: str = "llama-3.3-70b-versatile",
+    provider: str = "groq",
+    api_key: str | None = None,
 ):
     conv = await get_or_create_conversation(db, project.id, conversation_id)
     history = await load_history(db, conv.id)
@@ -88,7 +90,14 @@ async def run_agent_streaming(
                 f"{user_message}"
             )
 
-        graph = build_graph(str(project.id), str(project.owner_id), emit_fn=emit_fn, model_name=model_name)
+        graph = build_graph(
+            str(project.id),
+            str(project.owner_id),
+            emit_fn=emit_fn,
+            model_name=model_name,
+            provider=provider,
+            api_key=api_key,
+        )
         state = {"messages": history + [HumanMessage(content=enriched_message)]}
 
         initial_msg_count = len(state["messages"])
