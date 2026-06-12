@@ -1,333 +1,642 @@
-# ANTIMATTER
+<div align="center">
+
+# ⚡ AntiMatter
+
+### An AI-native code editor built around an agentic loop — not a chat box
+
+[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![LangGraph](https://img.shields.io/badge/LangGraph-0.2-FF6B35?style=flat-square)](https://github.com/langchain-ai/langgraph)
+[![React](https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16+pgvector-336791?style=flat-square&logo=postgresql&logoColor=white)](https://www.postgresql.org)
+[![Docker](https://img.shields.io/badge/Docker-required-2496ED?style=flat-square&logo=docker&logoColor=white)](https://docker.com)
+[![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
+
+</div>
+
 ---
 
-## 1. Project Identity
+AntiMatter is a self-hosted, web-based code editor where the AI agent can **read, write, search, and execute code** in an isolated Docker sandbox — and every proposed file change requires your approval before it lands on disk.
 
-**Name:** ANTIMATTER  
-**Type:** AI-powered web-based code editor (browser frontend + Python backend)  
-**Port:** `1842`  
-**Stack:** Vanilla JS + Monaco Editor (frontend) · FastAPI + Groq SDK + Docker (backend) · ChromaDB + SQLite (memory/sandboxes)  
-**Auth:** GitHub OAuth + JWT (HttpOnly Cookies)  
-**LLM provider:** Groq API (not Anthropic) — models: `llama-3.1-8b-instant`, `deepseek-r1-distill-llama-70b` 
-**Developer:** Madhur — Data Scientist transitioning to GenAI/Agentic AI Engineering  
-**Goal:** Portfolio-grade project demonstrating RAG pipelines, multi-agent orchestration, and agentic code editing  
+The agent runs as a proper [LangGraph](https://github.com/langchain-ai/langgraph) ReAct loop with 14 real tools, backed by a hybrid RAG pipeline (semantic search + BM25 + Reciprocal Rank Fusion) over your entire codebase. It supports Groq, Anthropic, OpenAI, Gemini, and OpenRouter from a single provider abstraction layer.
 
 ---
 
-## Why ANTIMATTER
+## Table of Contents
 
-Traditional editors and copilots often stop at single-file completion, struggle with repo-scale context, and offer limited review workflows. ANTIMATTER brings agent-driven planning, RAG-based reasoning, and developer-controlled patch review into a lightweight local editor.
+- [Why AntiMatter](#why-antimatter)
+- [Features](#features)
+- [Architecture](#architecture)
+- [Quick Start](#quick-start)
+- [Installation](#installation)
+- [Docker Setup](#docker-setup)
+- [Environment Variables](#environment-variables)
+- [Usage](#usage)
+- [API Reference](#api-reference)
+- [Project Structure](#project-structure)
+- [Roadmap](#roadmap)
+- [Contributing](#contributing)
+- [Troubleshooting](#troubleshooting)
+- [FAQ](#faq)
+- [License](#license)
 
-Target users:
+---
 
-- AI engineers exploring agentic workflows
-- developers who want repo-aware code editing
-- teams prototyping autonomous dev tools
-- researchers validating multi-agent code pipelines
+## Why AntiMatter
 
-## Key Features
+Most AI coding tools are glorified autocomplete — they suggest text in a single context window and stop there. AntiMatter takes a different approach:
 
-### Agent Capabilities.
+- **The agent acts, it doesn't just suggest.** It calls tools in a loop: read files, run commands, search the codebase, install packages, run tests — until the task is done.
+- **Nothing touches disk without your approval.** File writes are proposed as diffs via WebSocket. You accept or reject each one.
+- **Context is codebase-aware, not file-aware.** A hybrid retriever combines semantic vector search with BM25 keyword search, fused via Reciprocal Rank Fusion, so the agent finds relevant code even when it doesn't know the exact filename.
+- **Your sandbox is isolated.** Every user gets a dedicated Docker container for code execution. The host filesystem is never touched.
 
-- Repository understanding through codebase retrieval
-- Multi-file editing with planned patch proposals
-- Task planning, execution, and critic review
-- Memory persistence for cross-session agent context
-- Tool calling for terminal, git, and search
-- Context compression via semantic chunking
+---
 
-### Development Tools
+## Features
 
-- Browser-accessible terminal / sandbox support
-- Git-aware workflows and patch generation
-- FastAPI backend with streaming agent responses
-- Local RAG index using ChromaDB
-- Monaco Editor frontend for code review and diffs
+### 🤖 Agentic Loop
+- **LangGraph StateGraph** with `agent → tools → agent` cycle, terminating when the model stops calling tools
+- **14 built-in tools**: `read_file`, `write_file`, `list_files`, `replace_file_content`, `multi_replace_file_content`, `run_command`, `search_files`, `install_packages`, `run_tests`, `search_web`, `generate_image`, `run_background_command`, `command_status`, `send_command_input`
+- **Human-in-the-loop diff approval**: `write_file` and edit tools emit a `file.patch` event and wait — the agent never writes without your confirmation
 
-### User Experience
+### 🔍 Hybrid RAG Pipeline
+- **Tree-sitter chunking** for Python, JavaScript, TypeScript, and TSX — extracts functions and classes as semantic units rather than fixed line windows
+- **VoyageAI embeddings** stored in PostgreSQL with the `pgvector` extension
+- **BM25 keyword search** alongside semantic search for exact identifier matching
+- **Reciprocal Rank Fusion (RRF)** to merge both result lists into a single ranked context
+- **File watcher** auto-reindexes changed files in the background
 
-- Natural language task prompts
-- Agent and chat workflows in one UI
-- Review-first patch approval
-- Session history and execution trace
+### 🏗 Multi-LLM Support
+- Unified provider interface: **Groq**, **Anthropic (Claude)**, **OpenAI**, **Google Gemini**, **OpenRouter**
+- Switchable at runtime per conversation — no restart required
+- Streaming-first: tokens arrive via WebSocket as they are generated
 
-## Architecture Overview
+### 🖥 Editor
+- **Monaco Editor** (the engine behind VS Code) with syntax highlighting, IntelliSense, and multi-tab support
+- **Inline Chat** (Cmd+K / Ctrl+K) — select code, ask a question, get an inline diff
+- **Git panel** — stage, commit, view diffs, manage branches from the UI
+- **Integrated terminal** — connected directly to your project's Docker sandbox
+- **LSP support** — real diagnostics from `pylsp` wired into Monaco
 
-```text
-User
-  └─> Browser UI
-        └─> Agent Router
-              ├─> Planner
-              ├─> Tool Router
-              │     ├─> File System
-              │     ├─> Terminal / Sandbox
-              │     ├─> Git
-              │     └─> Search / RAG Index
-              └─> LLM Provider
+### 🔐 Auth & Projects
+- **GitHub OAuth** login with JWT (HttpOnly cookies, refresh token rotation)
+- Per-project workspaces with isolated sandboxes and independent RAG indexes
+- Conversation history persisted to PostgreSQL with full tool call round-trips
+
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Browser (React + Monaco)                  │
+│                                                                   │
+│  FileTree · CodeEditor · ChatPanel · Terminal · GitPanel         │
+│       │                    │ WebSocket                           │
+└───────┼────────────────────┼─────────────────────────────────────┘
+        │ REST                │ WS /api/agent
+        ▼                    ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                        FastAPI Backend                           │
+│                                                                   │
+│  /api/auth   /api/projects   /api/files   /api/git   /api/lsp   │
+│                                                                   │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │                    Agent Runner                           │   │
+│  │                                                           │   │
+│  │  HumanMessage + RAG context                              │   │
+│  │          │                                               │   │
+│  │          ▼                                               │   │
+│  │  ┌─────────────────────────────────┐                    │   │
+│  │  │       LangGraph StateGraph      │                    │   │
+│  │  │                                 │                    │   │
+│  │  │  agent_node ──► ToolNode ──┐    │                    │   │
+│  │  │      ▲                     │    │                    │   │
+│  │  │      └─────────────────────┘    │                    │   │
+│  │  │  (loops until no tool_calls)    │                    │   │
+│  │  └─────────────────────────────────┘                    │   │
+│  │                                                           │   │
+│  │  Streams: token · tool_start · tool_end · file.patch     │   │
+│  └──────────────────────────────────────────────────────────┘   │
+│                                                                   │
+│  ┌─────────────────┐   ┌──────────────────┐   ┌─────────────┐  │
+│  │   RAG Pipeline  │   │   Sandbox Mgr    │   │  LSP Server │  │
+│  │                 │   │                  │   │             │  │
+│  │ Tree-sitter     │   │  Docker per-user │   │  pylsp      │  │
+│  │ chunk_file()    │   │  exec_run()      │   │  WebSocket  │  │
+│  │                 │   │  run_background()│   │  bridge     │  │
+│  │ VoyageAI embed  │   │  cleanup_idle()  │   │             │  │
+│  │ pgvector store  │   └──────────────────┘   └─────────────┘  │
+│  │ BM25 + RRF      │                                            │
+│  └─────────────────┘                                            │
+└─────────────────────────────────────────────────────────────────┘
+        │                    │                    │
+        ▼                    ▼                    ▼
+  PostgreSQL+pgvector      Redis              Docker Engine
+  (embeddings, history)   (sessions)         (sandboxes)
 ```
 
-- **User**: developer interacting with the frontend.
-- **Browser UI**: Monaco-based editor, chat, and agent panel.
-- **Agent Router**: decides between chat and agent execution.
-- **Planner**: decomposes tasks into actionable steps.
-- **Tool Router**: routes file, terminal, git, and search actions.
-- **File System**: maintains workspace state and open file content.
-- **Terminal**: sandboxed command execution channel.
-- **Git**: repository-aware change management.
-- **LLM Provider**: external model service for reasoning.
-- **Search**: RAG index for relevant code retrieval.
+### Key Design Decisions
+
+| Decision | Rationale |
+|---|---|
+| LangGraph over raw function loops | Explicit state machine — easy to add nodes (planner, critic) without rewriting control flow |
+| Tree-sitter over regex/AST chunking | Language-agnostic, handles partial parses, correct for JS/TS/JSX |
+| pgvector over a hosted vector DB | One less external service; PostgreSQL already handles auth data |
+| RRF fusion over weighted sums | Rank-based — avoids score normalization problems across two different similarity metrics |
+| Diff proposal over direct writes | The agent optimizing for task completion ≠ the user wanting every file changed |
+| Per-user Docker containers | Prevents cross-user command execution; natural resource limits via Docker |
+
+---
+
+## Quick Start
+
+The fastest path to a running instance using Docker Compose:
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/madhurchouhan01/antimatter.git
+cd antimatter
+
+# 2. Copy and fill in environment variables
+cp .env.example .env
+# At minimum, set: GROQ_API_KEY and SECRET_KEY (see Environment Variables below)
+
+# 3. Build the sandbox image (required for code execution)
+docker build -f backend/sandbox/Dockerfile.sandbox -t antimatter-sandbox:latest .
+
+# 4. Start all services
+docker compose up --build
+
+# 5. Run database migrations
+docker compose exec api alembic upgrade head
+
+# 6. Open the editor
+# Frontend dev server: http://localhost:5173
+# API:                 http://localhost:1842
+# API docs:            http://localhost:1842/docs
+```
+
+> **First login**: Click "Sign in with GitHub" — you'll need a GitHub OAuth App configured (see [Environment Variables](#environment-variables)).
+
+---
 
 ## Installation
 
 ### Prerequisites
 
-- Python 3.11+
-- Node.js 18+ / npm
-- Git
-- Docker (optional for sandbox terminal)
+| Requirement | Version | Notes |
+|---|---|---|
+| Python | 3.11+ | Backend runtime |
+| Node.js | 18+ | Frontend dev server |
+| Docker | 24+ | Sandbox execution + Compose |
+| PostgreSQL | 16 with pgvector | Included in Compose |
+| Redis | 7 | Included in Compose |
 
-### Clone repository
+### Manual Setup (without Docker Compose)
 
-```bash
-git clone https://github.com/<your-org>/AntiMatter.git
-cd AntiMatter
-```
-
-### Backend dependencies
+**Backend:**
 
 ```bash
+cd backend
+
+# Create and activate a virtual environment
 python -m venv .venv
+# Windows
 .venv\Scripts\activate
-pip install -r backend/requirements.txt
+# macOS/Linux
+source .venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Copy environment file
+cp ../.env.example ../.env
+# Edit .env with your values
+
+# Apply database migrations
+alembic upgrade head
+
+# Start the API server
+uvicorn main:app --host 0.0.0.0 --port 1842 --reload
 ```
 
-### Frontend dependencies
+**Frontend:**
 
 ```bash
 cd frontend
+
+# Install Node dependencies
 npm install
-cd ..
+
+# Start the Vite dev server
+npm run dev
+# Runs on http://localhost:5173
 ```
 
-### Environment setup
-
-Create a `.env` file in the repository root:
-
-```env
-GROQ_API_KEY=your_groq_api_key
-GITHUB_CLIENT_ID=your_github_client_id
-GITHUB_CLIENT_SECRET=your_github_client_secret
-JWT_SECRET=your_jwt_secret
-```
-
-### Run locally
+**Sandbox image** (required for the agent's `run_command` and terminal tools):
 
 ```bash
-cd backend
-uvicorn main:app --reload --host 0.0.0.0 --port 1842
+docker build -f backend/sandbox/Dockerfile.sandbox -t antimatter-sandbox:latest .
 ```
 
-Open `frontend/index.html` in a browser or serve it with a static file server.
+---
 
-## Quick Start
+## Docker Setup
 
-1. Start the backend server:
+The `docker-compose.yml` spins up four services:
+
+| Service | Port | Description |
+|---|---|---|
+| `api` | `1842` | FastAPI backend, hot-reloads from `./backend` |
+| `postgres` | `5432` | PostgreSQL 16 with pgvector extension |
+| `redis` | `6379` | Session cache |
+| *(sandbox)* | dynamic | Per-user containers spawned by the API at runtime |
 
 ```bash
-cd backend
-.venv\Scripts\activate
-uvicorn main:app --reload --host 0.0.0.0 --port 1842
+# Start all services
+docker compose up
+
+# Start detached
+docker compose up -d
+
+# View logs for the API
+docker compose logs -f api
+
+# Apply migrations after first start
+docker compose exec api alembic upgrade head
+
+# Stop and remove containers
+docker compose down
+
+# Full teardown including volumes (deletes all data)
+docker compose down -v
 ```
 
-2. Open `frontend/index.html`.
-3. Load your files or workspace.
-4. Ask the agent for code work, for example:
+> **Docker socket**: The API container mounts `/var/run/docker.sock` so it can spawn per-user sandbox containers. On Linux, you may need to add your user to the `docker` group. On Docker Desktop (Mac/Windows), this works out of the box.
 
-```text
-Fix the failing unit test for `calculate_discount`.
-Refactor the payment flow into a reusable helper.
-Generate regression tests for `order_summary`.
-```
+---
 
-5. Review proposed patches and apply them when ready.
+## Environment Variables
 
-## Configuration
+Copy `.env.example` to `.env` and set the following:
 
-### Environment variables
+### Required
 
-- `GROQ_API_KEY`: Groq provider key.
-- `GITHUB_CLIENT_ID`: GitHub OAuth app client ID.
-- `GITHUB_CLIENT_SECRET`: GitHub OAuth secret.
-- `JWT_SECRET`: JWT signing key.
-- `BACKEND_URL` (optional): backend base URL.
+| Variable | Example | Description |
+|---|---|---|
+| `DATABASE_URL` | `postgresql+asyncpg://aicoder:aicoder@postgres:5432/aicoder` | PostgreSQL connection string (asyncpg driver) |
+| `REDIS_URL` | `redis://redis:6379` | Redis connection string |
+| `SECRET_KEY` | `openssl rand -hex 32` | JWT signing key — generate a random 32-byte hex string |
+| `GROQ_API_KEY` | `gsk_...` | Groq API key — get one at [console.groq.com](https://console.groq.com) |
+| `GITHUB_CLIENT_ID` | `Iv1.abc123` | GitHub OAuth App client ID |
+| `GITHUB_CLIENT_SECRET` | `abc123...` | GitHub OAuth App client secret |
+| `WORKSPACE_ROOT` | `/workspaces` | Host path where project files are stored |
 
-### Model selection
+### Optional — Additional LLM Providers
 
-Configure model choice in backend request payloads or provider settings.
-
-### Provider setup
-
-The repository is configured for Groq. To switch to another provider, update backend model integration.
-
-### Tool configuration
-
-- `backend/main.py`: API routes and execution router.
-- `frontend/index.html`: UI, streaming, and patch workflows.
-
-### Sample `.env`
-
-```env
-GROQ_API_KEY=sk-xxxxxx
-GITHUB_CLIENT_ID=abcd1234
-GITHUB_CLIENT_SECRET=efgh5678
-JWT_SECRET=super-secret-value
-```
-
-## Agent Permissions & Safety
-
-| Capability | Supported |
+| Variable | Description |
 |---|---|
-| Read files | ✅ |
-| Write files | ✅ (after review) |
-| Run tests | ✅ |
-| Execute commands | ✅ (sandboxed) |
-| Git operations | ✅ |
-| Internet access | Optional |
+| `ANTHROPIC_API_KEY` | Enables Claude models (claude-sonnet-4-5, etc.) |
+| `OPENAI_API_KEY` | Enables GPT-4o and other OpenAI models |
+| `GEMINI_API_KEY` | Enables Gemini 1.5 Pro / Flash |
+| `OPENROUTER_API_KEY` | Enables any model via OpenRouter |
+| `VOYAGE_API_KEY` | VoyageAI embeddings (higher quality than defaults) |
 
-### Safety mechanisms
+### Optional — Observability
 
-- Agent actions are reviewed before applying patches.
-- Backend mediates all file and terminal operations.
-- Sandbox mode isolates terminal execution when enabled.
-- Secrets live in `.env` and are not committed.
+| Variable | Default | Description |
+|---|---|---|
+| `LANGCHAIN_TRACING_V2` | `false` | Enable LangSmith tracing |
+| `LANGCHAIN_API_KEY` | — | LangSmith API key |
+| `LANGCHAIN_PROJECT` | `ai-code-editor` | LangSmith project name |
+| `ENVIRONMENT` | `development` | `development` or `production` |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `1500` | JWT access token lifetime |
+| `REFRESH_TOKEN_EXPIRE_DAYS` | `30` | JWT refresh token lifetime |
 
-## Examples
+### Setting up GitHub OAuth
 
-### Bug fixing
+1. Go to **GitHub → Settings → Developer settings → OAuth Apps → New OAuth App**
+2. Set **Authorization callback URL** to `http://localhost:1842/api/auth/github/callback`
+3. Copy the **Client ID** and generate a **Client Secret**
+4. Add both to your `.env`
 
-**Prompt**: Fix `calculate_discount` so negative values are rejected.
-**Plan**: locate function, add validation, update tests.
-**Actions**: patch code, create regression test, review diff.
-**Outcome**: a targeted fix with human approval.
+---
 
-### Refactoring
+## Usage
 
-**Prompt**: Extract shared validation from the payment workflow.
-**Plan**: identify duplicated logic, create helper, update call sites.
-**Actions**: modify multiple files, generate diff, review and apply.
-**Outcome**: cleaner shared logic and safer code.
+### Starting a Session
 
-### Test generation
+1. Open `http://localhost:5173` and sign in with GitHub
+2. Create a new project or open an existing one
+3. Upload files via the file tree or clone a repo through the terminal
+4. The project is automatically indexed for RAG on first open
 
-**Prompt**: Add regression tests for `order_summary`.
-**Plan**: inspect route, infer behavior, write assertions.
-**Actions**: add new test file and expected cases.
-**Outcome**: reproducible tests ready for review.
+### Chatting with the Agent
 
-## Supported Models
+Type a task in the chat panel. The agent will:
+1. Build context from your codebase using hybrid RAG
+2. Enter the agentic loop — reasoning, calling tools, observing results
+3. Stream tokens and tool activity back to you in real time
+4. Propose any file changes as diffs — you approve or reject each one
 
-| Provider | Model | Support level | Notes |
-|---|---|---|---|
-| Groq | `llama-3.1-8b-instant` | Primary | Default configuration |
-| Groq | `deepseek-r1-distill-llama-70b` | Supported | Higher reasoning capacity |
-| Local | custom model | Experimental | Requires backend adapter |
-| GPT / Anthropic | custom | Optional | Change provider integration manually |
+**Example tasks:**
+```
+"Add input validation to the create_user endpoint"
+"Write pytest tests for the FileService class"
+"Refactor the chunker to support Go files using tree-sitter"
+"Find everywhere we use raw SQL strings and replace with SQLAlchemy"
+"Install httpx and add a retry wrapper around the external API call"
+```
+
+### Inline Chat (Cmd+K)
+
+Select lines in the editor → press `Ctrl+K` (or `Cmd+K` on macOS) → type your instruction. The agent receives the selected code as explicit context and proposes a targeted diff.
+
+### Switching Models
+
+Click the settings icon in the chat panel. Select a provider and model. The change applies to the next message — no reload needed.
+
+Currently supported models include:
+- **Groq**: `llama-3.3-70b-versatile`, `llama-3.1-8b-instant`, `mixtral-8x7b-32768`
+- **Anthropic**: `claude-sonnet-4-5`, `claude-3-haiku`
+- **OpenAI**: `gpt-4o`, `gpt-4o-mini`
+- **Gemini**: `gemini-1.5-pro`, `gemini-1.5-flash`
+- **OpenRouter**: any model string the API accepts
+
+### Terminal
+
+The terminal tab connects directly to your project's Docker sandbox. Run commands, start dev servers, inspect output — all isolated from the host.
+
+```bash
+# Inside the sandbox terminal
+python manage.py runserver
+npm run dev
+pytest tests/ -v
+```
+
+---
+
+## API Reference
+
+The FastAPI server exposes interactive docs at `http://localhost:1842/docs`.
+
+### Authentication
+
+All endpoints except `/health` and `/api/auth/*` require a valid JWT cookie set by the GitHub OAuth flow.
+
+### Core Endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/health` | Returns `{"status": "ok"}` |
+| `GET` | `/api/auth/github/login` | Redirects to GitHub OAuth |
+| `GET` | `/api/auth/github/callback` | Handles OAuth callback, sets cookie |
+| `GET` | `/api/auth/me` | Returns current user info |
+| `POST` | `/api/auth/logout` | Clears the session cookie |
+| `GET` | `/api/projects` | List all projects for current user |
+| `POST` | `/api/projects` | Create a new project |
+| `DELETE` | `/api/projects/{project_id}` | Delete a project |
+| `GET` | `/api/files/{project_id}` | List files in a project |
+| `GET` | `/api/files/{project_id}/content` | Read file content |
+| `PUT` | `/api/files/{project_id}/content` | Write file content |
+| `GET` | `/api/git/{project_id}/status` | Git status for project |
+| `POST` | `/api/git/{project_id}/commit` | Stage and commit changes |
+| `GET` | `/api/git/{project_id}/log` | Git log |
+
+### Agent WebSocket
+
+```
+WS /api/agent/{project_id}
+```
+
+Send a JSON message:
+```json
+{
+  "message": "Add error handling to the payment endpoint",
+  "conversation_id": "uuid-or-null",
+  "open_files": ["backend/payments/views.py"],
+  "model_name": "llama-3.3-70b-versatile",
+  "provider": "groq"
+}
+```
+
+Receive a stream of JSON events:
+
+| Event type | Payload | Description |
+|---|---|---|
+| `token` | `{"content": "..."}` | LLM text token |
+| `tool_start` | `{"tool": "read_file", "input": {...}}` | Agent called a tool |
+| `tool_end` | `{"tool": "read_file", "output": "..."}` | Tool returned |
+| `file.patch` | `{"path": "...", "original": "...", "modified": "..."}` | Proposed file change |
+| `error` | `{"error_type": "rate_limit", "message": "..."}` | Error during execution |
+| `done` | `{"conversation_id": "uuid"}` | Run complete |
+
+---
 
 ## Project Structure
 
-```text
-backend/      - FastAPI server and agent router
-frontend/     - Browser UI, Monaco editor, and streaming client
-ai_engine/    - RAG, planner, executor, critic, patch engine
-memory/       - ChromaDB index and SQLite persistence
-antimatter-env/ - optional local Python virtual environment
+```
+antimatter/
+├── backend/
+│   ├── agent/
+│   │   ├── graph.py          # LangGraph StateGraph definition
+│   │   ├── runner.py         # Streaming agent runner + conversation persistence
+│   │   ├── tools.py          # All 14 agent tools
+│   │   ├── llm.py            # Multi-provider LLM factory
+│   │   └── context_builder.py # RAG context injection
+│   ├── context/
+│   │   ├── chunker.py        # Tree-sitter chunking (Python/JS/TS/TSX)
+│   │   ├── embedder.py       # VoyageAI embedding client
+│   │   ├── indexer.py        # File → chunks → pgvector pipeline
+│   │   ├── retriever.py      # Hybrid search + RRF fusion
+│   │   ├── vector_store.py   # pgvector read/write interface
+│   │   └── watcher.py        # File system watcher for auto-reindex
+│   ├── sandbox/
+│   │   ├── manager.py        # Docker container lifecycle per user
+│   │   ├── background.py     # Background process management
+│   │   └── Dockerfile.sandbox # Sandbox container image
+│   ├── api/routes/
+│   │   ├── agent.py          # WebSocket agent endpoint
+│   │   ├── auth.py           # GitHub OAuth + JWT
+│   │   ├── files.py          # File CRUD
+│   │   ├── projects.py       # Project management
+│   │   ├── git.py            # Git operations
+│   │   ├── terminal.py       # Terminal WebSocket → sandbox
+│   │   └── lsp.py            # LSP WebSocket bridge
+│   ├── db/                   # SQLAlchemy models + async session
+│   ├── core/                 # Config, logging, tracing
+│   ├── lsp/                  # pylsp process management
+│   ├── git_backend/          # GitPython wrappers
+│   ├── alembic/              # Database migrations
+│   ├── main.py               # FastAPI app + lifespan
+│   └── requirements.txt
+├── frontend/
+│   └── src/
+│       ├── components/
+│       │   ├── CodeEditor.jsx      # Monaco editor integration
+│       │   ├── ChatPanel.jsx       # Agent chat + streaming UI
+│       │   ├── FileTree.jsx        # Project file browser
+│       │   ├── Terminal.jsx        # xterm.js terminal
+│       │   ├── GitPanel.jsx        # Git UI
+│       │   ├── DiffViewer.jsx      # File diff approval UI
+│       │   ├── InlineChatWidget.jsx # Cmd+K inline chat
+│       │   └── SettingsModal.jsx   # Model/provider selector
+│       ├── stores/                 # Zustand state management
+│       ├── services/               # API + WebSocket clients
+│       └── hooks/                  # Shared React hooks
+├── docker-compose.yml
+├── .env.example
+└── Makefile
 ```
 
-- `backend/`: server entrypoint, request models, tool orchestration.
-- `frontend/`: static editor experience and patch review UI.
-- `ai_engine/`: AI orchestration, retrieval, and editing logic.
-- `memory/`: local vector store and agent memory.
-
-## Development Guide
-
-### Running tests
-
-No formal test suite is configured in this repository.
-
-### Linting
-
-```bash
-npm run lint --prefix frontend
-```
-
-### Formatting
-
-Use your editor or `prettier` if installed.
-
-### Building
-
-No production frontend build is required for the current setup.
-
-### Local workflow
-
-1. Start backend: `uvicorn main:app --reload --host 0.0.0.0 --port 1842`
-2. Open `frontend/index.html`
-3. Load files and issue prompts
-4. Review and apply proposed patches
-
-## Evaluation & Benchmarks
-
-No formal benchmark data is available in this repository.
-
-## Limitations
-
-- Experimental project with prototype-quality UX.
-- Frontend is a single-file proof of concept.
-- Current provider integration is Groq-specific.
-- Not all agent workflows are fully hardened.
-- No automated backend/frontend test coverage yet.
+---
 
 ## Roadmap
 
-- [ ] Add automated backend and frontend tests.
-- [ ] Support GPT and Anthropic providers.
-- [ ] Add persistent session history.
-- [ ] Harden sandbox terminal execution.
-- [ ] Add git diff and commit integration.
+- [ ] **Multi-agent pipeline** — separate Planner, Executor, and Critic nodes in LangGraph with visible reasoning at each step
+- [ ] **Agent observability UI** — live panel showing every tool call, input, output, and latency for the current run
+- [ ] **Evaluation framework** — run the agent against a task suite and track pass@1 over time
+- [ ] **Agent memory** — store summaries of completed tasks in the vector store; retrieve relevant experiences on new tasks (episodic memory)
+- [ ] **Selection-based editing** — select any range in Monaco → agent edits only that selection
+- [ ] **Project-wide symbol rename** — rename a symbol across all files using Tree-sitter + the patch system
+- [ ] **Test generation agent** — dedicated node that writes pytest tests and verifies they pass via the sandbox
+- [ ] **Inline comment triggers** — `# ANTIMATTER: refactor this` comments detected and auto-patched on save
+- [ ] **Multi-selection patches** — Ctrl+click multiple ranges → one patch per selected region
+- [ ] **Token usage dashboard** — per-conversation and per-project cost tracking
 
-## FAQ
-
-**Which model should I use?**
-Use `llama-3.1-8b-instant` for fast responses and `deepseek-r1-distill-llama-70b` for more complex reasoning.
-
-**Can I use local models?**
-Yes, but local providers need backend integration.
-
-**Does code leave my machine?**
-Only if you configure an external LLM provider. Code and indexes remain local by default.
-
-**Is internet access required?**
-Yes for Groq and GitHub OAuth. The editor can run locally.
-
-**How much does it cost?**
-Cost depends on your LLM provider. This repo does not include billing.
+---
 
 ## Contributing
 
-1. Fork the repository.
-2. Create a feature branch.
-3. Open a pull request with a clear description.
+Contributions are welcome. Please read the following before opening a PR.
 
-Keep changes focused and document new behavior.
+### Setup for Development
+
+```bash
+git clone https://github.com/madhurchouhan01/antimatter.git
+cd antimatter
+cp .env.example .env
+# Fill in at minimum: DATABASE_URL, REDIS_URL, SECRET_KEY, GROQ_API_KEY
+
+docker compose up -d postgres redis
+cd backend && pip install -r requirements.txt
+alembic upgrade head
+uvicorn main:app --reload --port 1842
+
+# In a separate terminal
+cd frontend && npm install && npm run dev
+```
+
+### Linting and Type Checking
+
+```bash
+# Backend
+cd backend
+ruff check .
+mypy .
+
+# Frontend
+cd frontend
+npm run lint
+```
+
+### Running Tests
+
+```bash
+cd backend
+pytest tests/ -v
+```
+
+### Pull Request Guidelines
+
+1. **One concern per PR** — keep scope narrow. A PR that fixes a bug and adds a feature is hard to review.
+2. **Tests for new tools** — if you add an agent tool, add a test in `backend/tests/` that mocks the sandbox and verifies the output format.
+3. **No direct disk writes in tools** — new tools that modify files must go through the `emit_fn` diff proposal path.
+4. **Update `requirements.txt`** if you add a new Python dependency. Pin the major+minor version.
+5. **Open an issue first** for large changes (new LangGraph nodes, new auth providers, schema changes) so the approach can be discussed before implementation.
+
+### Where to Start
+
+Good first issues are labeled [`good first issue`](https://github.com/madhurchouhan01/antimatter/issues?q=label%3A%22good+first+issue%22) on GitHub. The roadmap items above are all unimplemented — pick one that interests you and open an issue before starting.
+
+---
+
+## Troubleshooting
+
+### `alembic upgrade head` fails with "relation does not exist"
+
+The pgvector extension is not installed. Connect to the database and run:
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+```
+Then retry the migration.
+
+### Agent tool calls return "ERROR: Container not found"
+
+The sandbox image is not built. Run:
+```bash
+docker build -f backend/sandbox/Dockerfile.sandbox -t antimatter-sandbox:latest .
+```
+
+### WebSocket disconnects immediately on `/api/agent`
+
+Usually a CORS or authentication issue. Check that:
+- The frontend is running on `http://localhost:5173` or `5174` (the only origins allowed in dev)
+- The `SECRET_KEY` in `.env` hasn't changed since you last logged in (it invalidates existing JWTs)
+
+### `pgvector` import error in Python
+
+```bash
+pip install pgvector==0.3.5
+```
+Also ensure the PostgreSQL server has the extension: `CREATE EXTENSION vector;`
+
+### VoyageAI embedding errors / "VOYAGE_API_KEY not set"
+
+Leave `VOYAGE_API_KEY` blank in `.env` to fall back to a local sentence-transformers model. This is slower and requires ~90 MB download on first run but has no API cost.
+
+### Groq rate limits during long agent runs
+
+The agent handles `429` responses and surfaces them to the frontend. Switch to a different model in the settings panel, or use a provider with higher limits (OpenRouter, Anthropic).
+
+### Monaco editor not loading (blank editor pane)
+
+Clear browser cache and hard-reload. Monaco loads from a CDN; a stale service worker can block it.
+
+---
+
+## FAQ
+
+**Can I use this without Docker?**  
+The core chat and RAG features work without Docker. The agent's `run_command`, `run_tests`, `install_packages`, and terminal tools require Docker to spawn the per-user sandbox. If Docker is unavailable, those tools will return errors but the rest of the agent still functions.
+
+**Is my code sent to external APIs?**  
+Code context is sent to whichever LLM provider you configure (Groq, Anthropic, OpenAI, etc.). Embeddings are sent to VoyageAI if you set an API key; otherwise embedding runs locally via sentence-transformers. No data is sent to the AntiMatter project itself.
+
+**Can multiple users share one instance?**  
+Yes. Each GitHub account gets its own projects, workspaces, Docker sandbox, and conversation history. The PostgreSQL schema is multi-tenant.
+
+**How large a codebase can it index?**  
+Indexing is bounded by your `pgvector` storage and embedding API rate limits. In practice, repositories up to ~50k lines index in under two minutes. Very large monorepos (500k+ lines) should use selective indexing (exclude `node_modules`, build artifacts, etc.).
+
+**Which model is best for coding tasks?**  
+`llama-3.3-70b-versatile` on Groq gives the best latency for most tasks. `claude-sonnet-4-5` (Anthropic) handles complex multi-file refactors more reliably. `gpt-4o` is a strong middle ground. Adjust via the settings panel per task.
+
+**How do I add a new agent tool?**  
+Add a new `@tool`-decorated async function inside the `make_tools()` factory in [`backend/agent/tools.py`](backend/agent/tools.py) and append it to the return list at the bottom of the function. The LangGraph ToolNode picks it up automatically on the next session.
+
+---
 
 ## License
 
-MIT License
+MIT License. See [LICENSE](LICENSE) for the full text.
 
-## Community & Support
+---
 
-- Documentation: TBD
-- Discord: TBD
-- GitHub Issues: https://github.com/<your-org>/AntiMatter/issues
-- Discussions: https://github.com/<your-org>/AntiMatter/discussions
-- Website: TBD
+<div align="center">
+
+Built by [Madhur Chouhan](https://github.com/madhurchouhan01)
+
+</div>
