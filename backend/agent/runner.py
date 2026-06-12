@@ -3,6 +3,7 @@ import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
+from langchain_core.runnables import RunnableConfig
 from db.models import Conversation, Message, Project
 from agent.graph import build_graph
 from agent.context_builder import build_rag_context
@@ -102,8 +103,29 @@ async def run_agent_streaming(
 
         initial_msg_count = len(state["messages"])
 
+        # ── LangSmith trace config ─────────────────────────────────────────
+        # Each agent run gets a descriptive name + metadata so the LangSmith
+        # dashboard shows meaningful entries rather than anonymous traces.
+        run_config = RunnableConfig(
+            run_name=f"antimatter/{provider}/{model_name}",
+            tags=[
+                f"project:{str(project.id)}",
+                f"provider:{provider}",
+                f"model:{model_name}",
+                f"conversation:{str(conv.id)}",
+            ],
+            metadata={
+                "project_id":      str(project.id),
+                "conversation_id": str(conv.id),
+                "provider":        provider,
+                "model":           model_name,
+                "open_files":      open_files,
+                "message_preview": user_message[:120],
+            },
+        )
+
         # Stream token by token
-        async for event in graph.astream_events(state, version="v2"):
+        async for event in graph.astream_events(state, config=run_config, version="v2"):
             kind = event["event"]
 
             if kind == "on_chat_model_stream":
