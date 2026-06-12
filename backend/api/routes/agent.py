@@ -51,17 +51,6 @@ async def agent_ws(
             await websocket.close(code=4004)
             return
 
-        # Load user's LLM settings (provider / model / api_key)
-        settings_result = await db.execute(
-            select(UserSettings).where(UserSettings.user_id == user.id)
-        )
-        user_settings = settings_result.scalar_one_or_none()
-
-        # Defaults if no settings row exists yet
-        default_provider = user_settings.provider if user_settings else "groq"
-        default_model    = user_settings.model    if user_settings else "llama-3.3-70b-versatile"
-        user_api_key     = user_settings.api_key  if user_settings else None
-
         # Register WS for broadcasts
         manager.connect(str(project_id), websocket)
 
@@ -84,13 +73,19 @@ async def agent_ws(
                 conversation_id = data.get("conversation_id") or conversation_id
                 open_files   = data.get("open_files", [])
 
-                # Per-message model override from ChatPanel dropdown
-                # Provider is always taken from saved settings (user can't change it mid-chat without saving)
-                model    = data.get("model", default_model)
-                provider = data.get("provider", default_provider)
 
                 if not user_message:
                     continue
+
+                # Reload user settings on every message so keys saved mid-session
+                # (e.g. via the Settings modal while WS is open) are picked up immediately
+                fresh_settings = await db.execute(
+                    select(UserSettings).where(UserSettings.user_id == user.id)
+                )
+                user_settings = fresh_settings.scalar_one_or_none()
+                provider = data.get("provider") or (user_settings.provider if user_settings else "groq")
+                model    = data.get("model")    or (user_settings.model    if user_settings else "llama-3.3-70b-versatile")
+                user_api_key = user_settings.api_key if user_settings else None
 
                 log.info(
                     "Agent request received",
