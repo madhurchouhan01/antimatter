@@ -23,6 +23,7 @@ Rules:
 
 class AgentState(TypedDict):
     messages: Annotated[list[BaseMessage], operator.add]
+    memory_context: str  # injected before graph run; default ""
 
 def build_graph(
     project_id: str,
@@ -40,6 +41,9 @@ def build_graph(
         if not any(isinstance(m, SystemMessage) for m in messages):
             tools_desc = "\n".join([f"- {t.name}: {t.description}" for t in tools])
             prompt = SYSTEM_PROMPT.replace("{TOOLS_LIST}", tools_desc)
+            memory_context = state.get("memory_context", "")
+            if memory_context:
+                prompt += f"\n\n## Relevant Past Experience\n{memory_context}"
             messages = [SystemMessage(content=prompt)] + messages
         response = llm.invoke(messages)
         return {"messages": [response]}

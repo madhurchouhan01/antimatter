@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import String, Text, ForeignKey, DateTime, Boolean, func, UniqueConstraint
+from sqlalchemy import String, Text, ForeignKey, DateTime, Boolean, Integer, func, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from pgvector.sqlalchemy import Vector
@@ -96,3 +96,33 @@ class UserSettings(Base):
     api_key: Mapped[str | None] = mapped_column(Text, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     user: Mapped["User"] = relationship(back_populates="settings")
+
+
+class AgentMemory(Base):
+    """
+    Episodic memory record for a completed agent task.
+    Scoped per project. Embeddings use voyage-3 (prose-optimised, 1024 dims).
+    """
+    __tablename__ = "agent_memories"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        UUID, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    task_description: Mapped[str] = mapped_column(Text, nullable=False)
+    context_signature: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    what_worked: Mapped[str | None] = mapped_column(Text, nullable=True)
+    what_failed_first: Mapped[str | None] = mapped_column(Text, nullable=True)
+    generalizable_lesson: Mapped[str] = mapped_column(Text, nullable=False)
+    # voyage-3 produces 1024-dim embeddings (same dimensionality as voyage-code-3)
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(1024), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    last_retrieved_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    retrieval_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

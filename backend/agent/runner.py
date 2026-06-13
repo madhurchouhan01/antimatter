@@ -1,15 +1,48 @@
 import json
 import uuid
+import asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 from db.models import Conversation, Message, Project
+from db.session import AsyncSessionLocal
 from agent.graph import build_graph
 from agent.context_builder import build_rag_context
+from agent.memory import retrieve_memories, check_and_write_memory
 from core.logger import get_logger
 
 log = get_logger(__name__)
+
+
+async def _write_memory_bg(
+    project_id: str,
+    user_id: str,
+    task_description: str,
+    final_messages: list,
+    provider: str,
+    model_name: str,
+    api_key: str | None,
+) -> None:
+    """
+    Background coroutine: opens its own DB session so it can safely outlive
+    the request handler's session (which is already committed/closed by the
+    time asyncio.create_task schedules this).
+    """
+    try:
+        async with AsyncSessionLocal() as db:
+            await check_and_write_memory(
+                db=db,
+                project_id=project_id,
+                user_id=user_id,
+                task_description=task_description,
+                final_messages=final_messages,
+                provider=provider,
+                model_name=model_name,
+                api_key=api_key,
+            )
+    except Exception:
+        log.error("Memory background write failed", exc_info=True)
 
 async def get_or_create_conversation(
     db: AsyncSession,
@@ -99,7 +132,20 @@ async def run_agent_streaming(
             provider=provider,
             api_key=api_key,
         )
-        state = {"messages": history + [HumanMessage(content=enriched_message)]}
+
+        # Retrieve relevant past memories and inject into initial state
+        memory_context = await retrieve_memories(
+            db=db,
+            project_id=str(project.id),
+            task_description=user_message,
+        )
+        if memory_context:
+            log.debug("Memory context injected", project=str(project.id))
+
+        state = {
+            "messages": history + [HumanMessage(content=enriched_message)],
+            "memory_context": memory_context,
+        }
 
         initial_msg_count = len(state["messages"])
 
@@ -181,6 +227,20 @@ async def run_agent_streaming(
                         tool_calls=tool_calls
                     ))
                 await db.commit()
+
+                # Fire-and-forget memory write — does NOT delay the 'done' event.
+                # Uses its own DB session to avoid use-after-close.
+                asyncio.create_task(
+                    _write_memory_bg(
+                        project_id=str(project.id),
+                        user_id=str(project.owner_id),
+                        task_description=user_message,
+                        final_messages=final_messages,
+                        provider=provider,
+                        model_name=model_name,
+                        api_key=api_key,
+                    )
+                )
     except Exception as e:
         error_msg = str(e).lower()
         if "429" in error_msg or "rate limit" in error_msg:
