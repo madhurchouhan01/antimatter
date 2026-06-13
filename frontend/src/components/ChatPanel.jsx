@@ -4,6 +4,8 @@ import { useChatStore } from "../stores/chatStore"
 import { useProjectStore } from "../stores/projectStore"
 import { useSettingsStore } from "../stores/settingsStore"
 import { useAgentSocket } from "../hooks/useAgentSocket"
+import { useAgentTraceStore } from "../stores/agentTraceStore"
+import AgentActivityPanel from "./AgentActivityPanel"
 import Markdown from "./Markdown"
 
 function MessageBubble({ msg, onRetry }) {
@@ -204,7 +206,10 @@ export default function ChatPanel() {
 
 
         <button
-          onClick={() => useChatStore.getState().clearChat()}
+          onClick={() => {
+            useChatStore.getState().clearChat()
+            useAgentTraceStore.getState().clear()
+          }}
           className="ml-2 flex items-center justify-center w-6 h-6 rounded hover:bg-editor-highlight text-editor-muted hover:text-white transition-colors"
           title="New Chat"
         >
@@ -330,6 +335,9 @@ export default function ChatPanel() {
         )}
         <div ref={bottomRef} className="h-2 shrink-0" />
       </div>
+
+      {/* ── Agent Activity Panel (live tool-call trace) ── */}
+      <AgentActivityPanel />
 
       {/* Input */}
       <div className="p-4 border-t border-editor-border/50 bg-editor-bg/30 backdrop-blur-md">
