@@ -121,16 +121,22 @@ export function useAgentSocket(projectId) {
           useDiffStore.getState().setAgentDone()
         }
       } else if (msg.type === "error") {
+        setStreaming(false)
+        useAgentTraceStore.getState().endRun()
         addMessage({ id: crypto.randomUUID(), role: "error", content: msg.message, error_type: msg.error_type })
       }
     }
 
     ws.onerror = (e) => {
       console.error("Agent socket error:", e)
+      setStreaming(false)
+      useAgentTraceStore.getState().endRun()
       // addMessage({ id: crypto.randomUUID(), role: "error", content: "WebSocket error" })
     }
 
     ws.onclose = () => {
+      setStreaming(false)
+      useAgentTraceStore.getState().endRun()
       if (globalWs === ws) {
         globalWs = null
       }

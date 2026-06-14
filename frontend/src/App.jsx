@@ -4,6 +4,7 @@ import Login         from "./pages/Login"
 import Register      from "./pages/Register"
 import ProjectPicker from "./pages/ProjectPicker"
 import Layout        from "./components/Layout"
+import Toasts        from "./components/Toasts"
 
 function Protected({ children }) {
   const token = useAuthStore((s) => s.token)
@@ -13,6 +14,7 @@ function Protected({ children }) {
 export default function App() {
   return (
     <BrowserRouter>
+      <Toasts />
       <Routes>
         <Route path="/login"    element={<Login />} />
         <Route path="/register" element={<Register />} />

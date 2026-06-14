@@ -119,6 +119,7 @@ export default function ChatPanel() {
   const isActive  = useAgentTraceStore((s) => s.isActive)
   const [input, setInput] = useState("")
   const bottomRef = useRef(null)
+  const containerRef = useRef(null)
 
   // Pull provider + model from the global settings store
   const provider    = useSettingsStore((s) => s.provider)
@@ -141,20 +142,17 @@ export default function ChatPanel() {
     "assessing", "verifying", "postulating", "thinking", "working"
   ]
   const [wordIndex, setWordIndex] = useState(0)
-  const [isWaiting, setIsWaiting] = useState(false)
   const cyclingWord = THINKING_WORDS[wordIndex]
 
-  // Stop waiting once the agent sends its first real response
-  useEffect(() => {
-    if (!isStreaming && isWaiting) {
-      setIsWaiting(false)
-      setWordIndex(0)
-    }
-  }, [isStreaming])
+  // Derived state: wait if run is active but we haven't started streaming tokens or executing tools
+  const isWaiting = isActive && !isStreaming && !streamBuffer && entries.length === 0
 
   // Cycle words every 1.5 s while waiting
   useEffect(() => {
-    if (!isWaiting) return
+    if (!isWaiting) {
+      setWordIndex(0)
+      return
+    }
     const id = setInterval(() => {
       setWordIndex((i) => (i + 1) % THINKING_WORDS.length)
     }, 1500)
@@ -165,16 +163,31 @@ export default function ChatPanel() {
     if (project) connect()
   }, [project?.id, connect])
 
+  // Instant scroll on stream updates to avoid smooth animation queues/glitches
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [messages, streamBuffer])
+    const container = containerRef.current
+    if (!container || !streamBuffer) return
+    const threshold = 150
+    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight <= threshold
+    if (isNearBottom) {
+      container.scrollTop = container.scrollHeight
+    }
+  }, [streamBuffer])
+
+  // Smooth scroll on new message completions or user submissions
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+    container.scrollTo({
+      top: container.scrollHeight,
+      behavior: "smooth"
+    })
+  }, [messages.length])
 
   const handleSend = () => {
     const text = input.trim()
     if (!text || isStreaming) return
     setInput("")
-    setIsWaiting(true)
-    setWordIndex(0)
     sendMessage(text, model)
 
     const textarea = document.getElementById("chat-input-textarea")
@@ -223,7 +236,10 @@ export default function ChatPanel() {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 scrollbar-thin">
+      <div 
+        ref={containerRef}
+        className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 scrollbar-thin"
+      >
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center px-4 opacity-50">
             <Bot size={48} className="text-editor-muted mb-4" />
