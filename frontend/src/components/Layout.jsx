@@ -9,26 +9,31 @@ import GitPanel    from "./GitPanel"
 import IndexingNotification from "./IndexingNotification"
 import GlobalDiffPanel from "./GlobalDiffPanel"
 import ShortcutsOverlay from "./ShortcutsOverlay"
+import SettingsModal from "./SettingsModal"
 import { useShortcuts } from "../hooks/useShortcuts"
 import { useTerminalStore } from "../stores/terminalStore"
 import { useProjectStore } from "../stores/projectStore"
 import { useAuthStore } from "../stores/authStore"
+import { useSettingsStore } from "../stores/settingsStore"
 import { useAgentSocket } from "../hooks/useAgentSocket"
 import {
   PanelLeftClose, PanelLeftOpen,
   MessageSquare, Terminal as TermIcon,
-  GitBranch, Plus, Maximize2, Minimize2, ChevronDown, LogOut
+  GitBranch, Plus, Maximize2, Minimize2, ChevronDown, LogOut, Settings
 } from "lucide-react"
 
 export default function Layout() {
   const [sidebarTab,  setSidebarTab]  = useState("files")  // "files" | "git"
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [chatOpen,    setChatOpen]    = useState(true)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   
   const [sidebarWidth, setSidebarWidth] = useState(280) // default 280px
   const [chatWidth, setChatWidth]       = useState(380) // default 380px
   const [termHeight, setTermHeight]     = useState(192) // default 192px
   const [showShortcuts, setShowShortcuts] = useState(false)
+
+  const fetchSettings = useSettingsStore((s) => s.fetchSettings)
 
   const termOpen = useTerminalStore((s) => s.termOpen)
   const setTermOpen = useTerminalStore((s) => s.setTermOpen)
@@ -51,6 +56,11 @@ export default function Layout() {
     if (project) connect()
     return () => disconnect()
   }, [project?.id, connect, disconnect])
+
+  // Load user's AI settings from backend on mount
+  useEffect(() => {
+    fetchSettings()
+  }, [])
 
   // Bind global shortcuts
   useShortcuts({
@@ -129,6 +139,7 @@ export default function Layout() {
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-editor-bg text-editor-text">
       {showShortcuts && <ShortcutsOverlay onClose={() => setShowShortcuts(false)} />}
+      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
       
       {/* Left sidebar */}
       {sidebarOpen && (
@@ -205,6 +216,14 @@ export default function Layout() {
               className={`p-2 rounded-lg transition-all ${chatOpen ? 'bg-editor-accent/20 text-editor-accent shadow-inner' : 'text-editor-muted hover:bg-editor-highlight hover:text-editor-text'}`}
             >
               <MessageSquare size={16} />
+            </button>
+
+            <button
+              onClick={() => setSettingsOpen(true)}
+              title="AI Settings"
+              className="p-2 rounded-lg transition-all text-editor-muted hover:bg-editor-highlight hover:text-editor-text"
+            >
+              <Settings size={16} />
             </button>
             
             <div className="w-[1px] h-5 bg-editor-border/50 mx-2"></div>

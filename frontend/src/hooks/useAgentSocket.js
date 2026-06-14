@@ -4,6 +4,8 @@ import { useAuthStore } from "../stores/authStore"
 import { useEditorStore } from "../stores/editorStore"
 import { useFileTreeStore } from "../stores/fileTreeStore"
 import { useDiffStore } from "../stores/diffStore"
+import { useSettingsStore } from "../stores/settingsStore"
+import { useAgentTraceStore } from "../stores/agentTraceStore"
 import { filesApi } from "../lib/api"
 
 /** Calculate line diff stats and generate a summary */
@@ -93,6 +95,8 @@ export function useAgentSocket(projectId) {
         setStreaming(true)
         appendToken(msg.content)
       } else if (msg.type === "tool_start") {
+        // Feed trace store
+        useAgentTraceStore.getState().pushToolStart(msg.tool, msg.input)
         addMessage({
           id:   crypto.randomUUID(),
           role: "tool_start",
@@ -101,6 +105,8 @@ export function useAgentSocket(projectId) {
           input: msg.input,
         })
       } else if (msg.type === "tool_end") {
+        // Feed trace store
+        useAgentTraceStore.getState().pushToolEnd(msg.tool, msg.output)
         addMessage({
           id:      crypto.randomUUID(),
           role:    "tool_end",
@@ -110,6 +116,8 @@ export function useAgentSocket(projectId) {
       } else if (msg.type === "done") {
         flushBuffer()
         setConversationId(msg.conversation_id)
+        // Mark trace run as finished
+        useAgentTraceStore.getState().endRun()
         // If any diffs arrived during this turn, mark agent as done so UI shows review panel
         const diffs = useDiffStore.getState().pendingDiffs
         if (Object.keys(diffs).length > 0) {
@@ -141,11 +149,18 @@ export function useAgentSocket(projectId) {
       if (!options.hidden) {
         addMessage({ id: crypto.randomUUID(), role: options.role || "user", content: text })
       }
+      // Start a fresh trace run for this message
+      useAgentTraceStore.getState().startRun()
       // Reset any previous done-state so the banner hides while agent works
       useDiffStore.getState().resetAgentDone()
+
+      // Read the active provider from settingsStore at send-time
+      const provider = useSettingsStore.getState().provider || "groq"
+
       const payload = {
           message:         text,
           model:           model,
+          provider:        provider,
           conversation_id: conversationId,
           open_files:      openFiles,
       }

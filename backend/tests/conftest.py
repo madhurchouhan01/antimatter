@@ -7,10 +7,17 @@ from db.models import Base
 from db.session import get_db
 from main import app
 
-TEST_DATABASE_URL = "postgresql+asyncpg://aicoder:aicoder@localhost:5432/aicoder_test"
+import os
+from sqlalchemy.engine import make_url
+
+base_db_url = os.getenv("DATABASE_URL", "postgresql+asyncpg://aicoder:aicoder@localhost:5432/aicoder")
+TEST_DATABASE_URL = make_url(base_db_url).set(database="aicoder_test").render_as_string(hide_password=False)
+
+
 
 @pytest_asyncio.fixture
 async def engine():
+    print(f"FIXTURE DEBUG: TEST_DATABASE_URL={TEST_DATABASE_URL}")
     engine = create_async_engine(TEST_DATABASE_URL)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

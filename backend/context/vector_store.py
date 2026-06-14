@@ -86,16 +86,16 @@ class VectorStore:
         query: str,
         top_k: int = 15,
     ) -> list[tuple[CodeChunk, float]]:
-        """Full-text BM25 search via Postgres tsvector."""
+        """Full-text BM25 search via Postgres tsvector (inline, no stored column needed)."""
         result = await db.execute(
             text("""
                 SELECT id, file_path, start_line, end_line,
                        language, chunk_type, content,
-                       ts_rank(content_tsv, query) AS score
+                       ts_rank(to_tsvector('english', content), query) AS score
                 FROM code_chunks,
                      plainto_tsquery('english', :query) query
                 WHERE project_id = :project_id
-                  AND content_tsv @@ query
+                  AND to_tsvector('english', content) @@ query
                 ORDER BY score DESC
                 LIMIT :top_k
             """),

@@ -12,14 +12,48 @@ class Settings(BaseSettings):
     workspace_root: str = "/users"
     environment: str = "development"
     echo : bool = False
-    # LLM
+    # LLM — Groq (default provider)
     groq_api_key: str = ""
     groq_model: str = "llama-3.3-70b-versatile"
 
-    # LangSmith (optional — leave blank to disable)
+    # GitHub Marketplace (Azure AI Inference)
+    github_pat: str = ""
+
+    # OpenAI
+    openai_api_key: str = ""
+
+    # OpenRouter
+    openrouter_api_key: str = ""
+
+    # Anthropic
+    anthropic_api_key: str = ""
+
+    # Google Gemini
+    gemini_api_key: str = ""
+
+    # LangSmith — supports both old LANGCHAIN_* and new LANGSMITH_* naming
+    # New-style keys (preferred, set in .env as LANGSMITH_*)
+    langsmith_api_key: str = ""
+    langsmith_tracing: str = "false"
+    langsmith_endpoint: str = "https://api.smith.langchain.com"
+    langsmith_project: str = "Antimatter"
+    # Legacy aliases — kept for backward compatibility
     langchain_api_key: str = ""
     langchain_tracing_v2: str = "false"
     langchain_project: str = "ai-code-editor"
+
+    @property
+    def effective_langsmith_api_key(self) -> str:
+        """Return whichever key is set — new-style wins over legacy."""
+        return self.langsmith_api_key or self.langchain_api_key
+
+    @property
+    def tracing_enabled(self) -> bool:
+        """True when a key is present and tracing is explicitly enabled."""
+        has_key = bool(self.effective_langsmith_api_key)
+        flag = (self.langsmith_tracing.lower() == "true"
+                or self.langchain_tracing_v2.lower() == "true")
+        return has_key and flag
 
     sandbox_image:   str = "antimatter-sandbox:latest"
     sandbox_network: str = "antimatter-sandbox-net"

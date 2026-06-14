@@ -4,7 +4,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from db.session import get_db, AsyncSessionLocal
-from db.models import User, Project
+from db.models import User, Project, UserSettings
 from core.security import decode_access_token
 from core.logger import get_logger
 from agent.runner import run_agent_streaming
@@ -51,7 +51,6 @@ async def agent_ws(
             await websocket.close(code=4004)
             return
 
-
         # Register WS for broadcasts
         manager.connect(str(project_id), websocket)
 
@@ -73,14 +72,25 @@ async def agent_ws(
                 user_message = data.get("message", "").strip()
                 conversation_id = data.get("conversation_id") or conversation_id
                 open_files   = data.get("open_files", [])
-                model        = data.get("model", "llama-3.3-70b-versatile")
+
 
                 if not user_message:
                     continue
 
+                # Reload user settings on every message so keys saved mid-session
+                # (e.g. via the Settings modal while WS is open) are picked up immediately
+                fresh_settings = await db.execute(
+                    select(UserSettings).where(UserSettings.user_id == user.id)
+                )
+                user_settings = fresh_settings.scalar_one_or_none()
+                provider = data.get("provider") or (user_settings.provider if user_settings else "groq")
+                model    = data.get("model")    or (user_settings.model    if user_settings else "llama-3.3-70b-versatile")
+                user_api_key = user_settings.api_key if user_settings else None
+
                 log.info(
                     "Agent request received",
                     project=str(project_id),
+                    provider=provider,
                     model=model,
                     open_files=len(open_files),
                     msg_preview=user_message[:80],
@@ -95,6 +105,8 @@ async def agent_ws(
                     open_files=open_files,
                     emit_fn=websocket.send_json,
                     model_name=model,
+                    provider=provider,
+                    api_key=user_api_key,
                 )
 
         except (WebSocketDisconnect, RuntimeError):

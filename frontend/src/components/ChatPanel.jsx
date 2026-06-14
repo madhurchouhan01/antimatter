@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from "react"
-import { Send, Wrench, Bot, User, AlertCircle, Sparkles, Info, Zap, PlusSquare, RefreshCw } from "lucide-react"
+import { Send, Wrench, Bot, User, AlertCircle, Sparkles, Info, Zap, PlusSquare, RefreshCw, Settings } from "lucide-react"
 import { useChatStore } from "../stores/chatStore"
 import { useProjectStore } from "../stores/projectStore"
+import { useSettingsStore } from "../stores/settingsStore"
 import { useAgentSocket } from "../hooks/useAgentSocket"
+import { useAgentTraceStore } from "../stores/agentTraceStore"
+import AgentActivityPanel from "./AgentActivityPanel"
 import Markdown from "./Markdown"
 
 function MessageBubble({ msg, onRetry }) {
@@ -112,16 +115,20 @@ export default function ChatPanel() {
   const [input, setInput] = useState("")
   const bottomRef = useRef(null)
 
-  const [selectedModel, setSelectedModel] = useState("llama-3.3-70b-versatile")
-  const supportedModels = [
-    "llama-3.3-70b-versatile",
-    "llama-3.1-8b-instant",
-    "deepseek-r1-distill-llama-70b",
-    "openai/gpt-oss-20b",
-    "openai/gpt-oss-120b",
-    "meta-llama/llama-4-scout-17b-16e-instruct",
-    "qwen/qwen3-32b"
-  ]
+  // Pull provider + model from the global settings store
+  const provider    = useSettingsStore((s) => s.provider)
+  const model       = useSettingsStore((s) => s.model)
+  const setModel    = useSettingsStore((s) => s.setModel)
+  const providerModels = useSettingsStore((s) => s.providerModels) || []
+
+  // Curated model lists per provider (loaded separately from backend)
+  const [modelCatalogue, setModelCatalogue] = useState({})
+  useEffect(() => {
+    import("../lib/api").then(({ default: api }) => {
+      api.get("/api/settings/models").then(r => setModelCatalogue(r.data)).catch(() => {})
+    })
+  }, [])
+  const availableModels = modelCatalogue[provider] || (model ? [model] : [])
 
   const THINKING_WORDS = [
     "reasoning", "deducing", "inducing", "extrapolating",
@@ -163,7 +170,7 @@ export default function ChatPanel() {
     setInput("")
     setIsWaiting(true)
     setWordIndex(0)
-    sendMessage(text, selectedModel)
+    sendMessage(text, model)
 
     const textarea = document.getElementById("chat-input-textarea")
     if (textarea) {
@@ -172,7 +179,7 @@ export default function ChatPanel() {
   }
 
   const handleRetry = (text) => {
-    sendMessage(text, selectedModel)
+    sendMessage(text, model)
   }
 
   return (
@@ -186,17 +193,23 @@ export default function ChatPanel() {
         
         <select 
           className="ml-auto bg-editor-bg border border-editor-border text-[11px] text-editor-muted rounded px-2 py-0.5 outline-none hover:border-editor-accent/50 focus:border-editor-accent/80 transition-colors max-w-[140px] truncate cursor-pointer"
-          value={selectedModel}
-          onChange={(e) => setSelectedModel(e.target.value)}
+          value={model}
+          onChange={(e) => setModel(e.target.value)}
         >
-          {supportedModels.map(m => (
+          {availableModels.map(m => (
             <option key={m} value={m}>{m}</option>
           ))}
+          {model && !availableModels.includes(model) && (
+            <option value={model}>{model}</option>
+          )}
         </select>
 
 
         <button
-          onClick={() => useChatStore.getState().clearChat()}
+          onClick={() => {
+            useChatStore.getState().clearChat()
+            useAgentTraceStore.getState().clear()
+          }}
           className="ml-2 flex items-center justify-center w-6 h-6 rounded hover:bg-editor-highlight text-editor-muted hover:text-white transition-colors"
           title="New Chat"
         >
@@ -322,6 +335,9 @@ export default function ChatPanel() {
         )}
         <div ref={bottomRef} className="h-2 shrink-0" />
       </div>
+
+      {/* ── Agent Activity Panel (live tool-call trace) ── */}
+      <AgentActivityPanel />
 
       {/* Input */}
       <div className="p-4 border-t border-editor-border/50 bg-editor-bg/30 backdrop-blur-md">

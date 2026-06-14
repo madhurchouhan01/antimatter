@@ -1,5 +1,7 @@
 
 from api.routes import auth, projects, files, agent, conversations, terminal, lsp, git
+from api.routes import settings as settings_router
+from api.routes import memories as memories_router
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,8 +19,10 @@ log = get_logger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    configure_logging(level="INFO")
-    log.info("AntiMatter API starting", env=settings.environment, port=1842)
+    import os
+    log_level = os.getenv("LOG_LEVEL", "INFO")
+    configure_logging(level=log_level)
+    log.info("AntiMatter API starting", env=settings.environment, port=1842, log_level=log_level)
     setup_tracing()
     await init_db()
     log.info("Database initialized")
@@ -53,6 +57,8 @@ app.include_router(terminal.router, prefix="/api/terminal", tags=["terminal"])
 app.include_router(lsp.router,      prefix="/api/lsp",      tags=["lsp"])
 app.include_router(git.router,      prefix="/api/git",      tags=["git"])
 app.include_router(conversations.router, prefix="/api/projects", tags=["conversations"])
+app.include_router(settings_router.router, tags=["settings"])
+app.include_router(memories_router.router, tags=["memories"])
 
 @app.get("/health")
 async def health(): return {"status": "ok"}

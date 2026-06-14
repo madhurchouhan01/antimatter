@@ -1,14 +1,49 @@
 import json
 import uuid
+import asyncio
+import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
+from langchain_core.runnables import RunnableConfig
 from db.models import Conversation, Message, Project
+from db.session import AsyncSessionLocal
 from agent.graph import build_graph
 from agent.context_builder import build_rag_context
+from agent.memory import retrieve_memories, check_and_write_memory
 from core.logger import get_logger
 
 log = get_logger(__name__)
+
+
+async def _write_memory_bg(
+    project_id: str,
+    user_id: str,
+    task_description: str,
+    final_messages: list,
+    provider: str,
+    model_name: str,
+    api_key: str | None,
+) -> None:
+    """
+    Background coroutine: opens its own DB session so it can safely outlive
+    the request handler's session (which is already committed/closed by the
+    time asyncio.create_task schedules this).
+    """
+    try:
+        async with AsyncSessionLocal() as db:
+            await check_and_write_memory(
+                db=db,
+                project_id=project_id,
+                user_id=user_id,
+                task_description=task_description,
+                final_messages=final_messages,
+                provider=provider,
+                model_name=model_name,
+                api_key=api_key,
+            )
+    except Exception:
+        log.error("Memory background write failed", exc_info=True)
 
 async def get_or_create_conversation(
     db: AsyncSession,
@@ -62,12 +97,20 @@ async def run_agent_streaming(
     open_files: list[str] = [],
     emit_fn=None,  # async callable for file.patch proposals
     model_name: str = "llama-3.3-70b-versatile",
+    provider: str = "groq",
+    api_key: str | None = None,
 ):
     conv = await get_or_create_conversation(db, project.id, conversation_id)
     history = await load_history(db, conv.id)
 
     # Save user message
-    db.add(Message(conversation_id=conv.id, role="user", content=user_message))
+    now_ = datetime.datetime.now(datetime.timezone.utc)
+    db.add(Message(
+        conversation_id=conv.id,
+        role="user",
+        content=user_message,
+        created_at=now_
+    ))
     await db.flush()
 
     try:
@@ -88,13 +131,54 @@ async def run_agent_streaming(
                 f"{user_message}"
             )
 
-        graph = build_graph(str(project.id), str(project.owner_id), emit_fn=emit_fn, model_name=model_name)
-        state = {"messages": history + [HumanMessage(content=enriched_message)]}
+        graph = build_graph(
+            str(project.id),
+            str(project.owner_id),
+            emit_fn=emit_fn,
+            model_name=model_name,
+            provider=provider,
+            api_key=api_key,
+        )
+
+        # Retrieve relevant past memories and inject into initial state
+        memory_context = await retrieve_memories(
+            db=db,
+            project_id=str(project.id),
+            task_description=user_message,
+        )
+        if memory_context:
+            log.debug("Memory context injected", project=str(project.id))
+
+        state = {
+            "messages": history + [HumanMessage(content=enriched_message)],
+            "memory_context": memory_context,
+        }
 
         initial_msg_count = len(state["messages"])
 
+        # ── LangSmith trace config ─────────────────────────────────────────
+        # Each agent run gets a descriptive name + metadata so the LangSmith
+        # dashboard shows meaningful entries rather than anonymous traces.
+        run_config = RunnableConfig(
+            run_name=f"antimatter/{provider}/{model_name}",
+            tags=[
+                f"project:{str(project.id)}",
+                f"provider:{provider}",
+                f"model:{model_name}",
+                f"conversation:{str(conv.id)}",
+            ],
+            metadata={
+                "project_id":      str(project.id),
+                "conversation_id": str(conv.id),
+                "provider":        provider,
+                "model":           model_name,
+                "open_files":      open_files,
+                "message_preview": user_message[:120],
+            },
+        )
+
         # Stream token by token
-        async for event in graph.astream_events(state, version="v2"):
+        async for event in graph.astream_events(state, config=run_config, version="v2"):
             kind = event["event"]
 
             if kind == "on_chat_model_stream":
@@ -128,28 +212,48 @@ async def run_agent_streaming(
                     "output": str(event["data"].get("output", "")),
                 })
                 
-            elif kind == "on_chain_end" and event["name"] == "LangGraph":
-                # The top-level graph finished. We can grab the final state to save everything accurately!
-                final_messages = event["data"].get("output", {}).get("messages", [])
-                new_messages = final_messages[initial_msg_count:]
-                
-                for m in new_messages:
-                    role = "assistant" if isinstance(m, AIMessage) else "tool"
-                    content = m.content if isinstance(m.content, str) else str(m.content)
-                    tool_calls = None
+            elif kind == "on_chain_end":
+                log.info(f"Chain ended: name={event['name']}")
+                if event["name"].startswith("antimatter/"):
+                    log.debug("I am just before write memory bg:end")
+                    # The top-level graph finished. We can grab the final state to save everything accurately!
+                    final_messages = event["data"].get("output", {}).get("messages", [])
+                    new_messages = final_messages[initial_msg_count:]
                     
-                    if isinstance(m, AIMessage) and m.tool_calls:
-                        tool_calls = m.tool_calls
-                    elif isinstance(m, ToolMessage):
-                        tool_calls = {"id": m.tool_call_id, "name": m.name}
-                        
-                    db.add(Message(
-                        conversation_id=conv.id,
-                        role=role,
-                        content=content,
-                        tool_calls=tool_calls
-                    ))
-                await db.commit()
+                    base_time = datetime.datetime.now(datetime.timezone.utc)
+                    for i, m in enumerate(new_messages):
+                        role = "assistant" if isinstance(m, AIMessage) else "tool"
+                        content = m.content if isinstance(m.content, str) else str(m.content)
+                        tool_calls = None
+                        log.debug(f"I am just before write memory bg:{m}")
+                        if isinstance(m, AIMessage) and m.tool_calls:
+                            tool_calls = m.tool_calls
+                        elif isinstance(m, ToolMessage):
+                            tool_calls = {"id": m.tool_call_id, "name": m.name}
+                            
+                        db.add(Message(
+                            conversation_id=conv.id,
+                            role=role,
+                            content=content,
+                            tool_calls=tool_calls,
+                            created_at=base_time + datetime.timedelta(microseconds=i + 1)
+                        ))
+                    await db.commit()
+
+                    # Fire-and-forget memory write — does NOT delay the 'done' event.
+                    # Uses its own DB session to avoid use-after-close.
+                    log.debug("I am just before write memory bg")
+                    asyncio.create_task(
+                        _write_memory_bg(
+                            project_id=str(project.id),
+                            user_id=str(project.owner_id),
+                            task_description=user_message,
+                            final_messages=final_messages,
+                            provider=provider,
+                            model_name=model_name,
+                            api_key=api_key,
+                        )
+                    )
     except Exception as e:
         error_msg = str(e).lower()
         if "429" in error_msg or "rate limit" in error_msg:

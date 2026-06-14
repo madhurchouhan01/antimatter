@@ -61,4 +61,11 @@ export const conversationsApi = {
     api.get(`/api/projects/${projectId}/conversations/${convId}/messages`),
 }
 
+// Settings endpoints
+export const settingsApi = {
+  get:       ()                           => api.get("/api/settings/"),
+  save:      (provider, model, apiKey)    => api.put("/api/settings/", { provider, model, api_key: apiKey }),
+  getModels: ()                           => api.get("/api/settings/models"),
+}
+
 export default api
