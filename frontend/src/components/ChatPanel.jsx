@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { Send, Wrench, Bot, User, AlertCircle, Sparkles, Info, Zap, PlusSquare, RefreshCw, Settings } from "lucide-react"
+import { Send, Wrench, Bot, User, AlertCircle, Sparkles, Info, Zap, PlusSquare, RefreshCw, Settings, Globe } from "lucide-react"
 import { useChatStore } from "../stores/chatStore"
 import { useProjectStore } from "../stores/projectStore"
 import { useSettingsStore } from "../stores/settingsStore"
@@ -16,16 +16,121 @@ function MessageBubble({ msg, onRetry }) {
   const isTool   = msg.role === "tool_start" || msg.role === "tool_end"
   const isSystem = msg.role === "system"
 
-  // Rate limit error: highly visible block
-  if (msg.role === "error" && msg.error_type === "rate_limit") {
-    return (
-      <div className="flex flex-col gap-2 p-4 rounded-xl bg-orange-500/20 border border-orange-500/50 text-orange-200 self-stretch my-2 shadow-[0_0_20px_rgba(249,115,22,0.15)]">
-        <div className="flex items-center gap-2 font-bold text-orange-400">
-          <Zap size={16} className="fill-orange-400" />
-          <span>Rate Limit Exceeded</span>
+  // Actionable Error Cards
+  if (msg.role === "error") {
+    const errorType = msg.error_type || "generic"
+
+    if (errorType === "rate_limit") {
+      return (
+        <div className="flex flex-col gap-2.5 p-4 rounded-xl bg-orange-500/10 border border-orange-500/30 text-orange-200 self-stretch my-2 shadow-[0_0_24px_rgba(249,115,22,0.08)] animate-in fade-in duration-200">
+          <div className="flex items-center gap-2 font-bold text-orange-400">
+            <Zap size={15} className="fill-orange-400 text-orange-400 animate-pulse" />
+            <span>Rate Limit Exceeded</span>
+          </div>
+          <div className="text-[12.5px] leading-relaxed opacity-95">
+            <Markdown text={msg.content} />
+          </div>
+          {onRetry && (
+            <button onClick={() => {
+                const msgs = useChatStore.getState().messages;
+                const lastUser = [...msgs].reverse().find(m => m.role === "user");
+                if(lastUser) onRetry(lastUser.content);
+              }} 
+              className="mt-1.5 self-start flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-500/20 hover:bg-orange-500/30 border border-orange-500/30 text-orange-300 text-xs font-semibold transition-all duration-200"
+            >
+              <RefreshCw size={11} />
+              Retry Request
+            </button>
+          )}
         </div>
-        <div className="text-[13px] leading-relaxed">
-          <Markdown text={msg.content} />
+      )
+    }
+
+    if (errorType === "token_limit") {
+      return (
+        <div className="flex flex-col gap-2.5 p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 self-stretch my-2 shadow-[0_0_24px_rgba(245,158,11,0.08)] animate-in fade-in duration-200">
+          <div className="flex items-center gap-2 font-bold text-amber-400">
+            <AlertCircle size={15} className="text-amber-400 animate-pulse" />
+            <span>Context Limit Exceeded</span>
+          </div>
+          <div className="text-[12.5px] leading-relaxed opacity-95">
+            <Markdown text={msg.content} />
+          </div>
+          <div className="mt-1.5 border-t border-amber-500/20 pt-2 flex flex-col gap-1.5 text-[11px] text-amber-300/80">
+            <span className="font-semibold text-amber-300 uppercase tracking-wider text-[9px]">Suggested Actions:</span>
+            <span className="flex items-start gap-1">
+              <span className="text-amber-400">•</span>
+              <span>Close open editor tabs that have large file sizes to reduce RAG context.</span>
+            </span>
+            <span className="flex items-start gap-1">
+              <span className="text-amber-400">•</span>
+              <span>Ask a shorter, more specific question.</span>
+            </span>
+            <span className="flex items-start gap-1">
+              <span className="text-amber-400">•</span>
+              <span>Select a model with a larger context window in the top dropdown.</span>
+            </span>
+          </div>
+        </div>
+      )
+    }
+
+    if (errorType === "auth_error") {
+      return (
+        <div className="flex flex-col gap-2.5 p-4 rounded-xl bg-red-950/20 border border-red-500/30 text-red-200 self-stretch my-2 shadow-[0_0_24px_rgba(239,68,68,0.08)] animate-in fade-in duration-200">
+          <div className="flex items-center gap-2 font-bold text-red-400">
+            <AlertCircle size={15} className="text-red-400 animate-pulse" />
+            <span>LLM Authentication Failure</span>
+          </div>
+          <div className="text-[12.5px] leading-relaxed opacity-95">
+            <Markdown text={msg.content} />
+          </div>
+          <button 
+            onClick={() => useSettingsStore.getState().setSettingsOpen(true)}
+            className="mt-1.5 self-start flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-300 text-xs font-semibold transition-all duration-200"
+          >
+            <Settings size={11} />
+            Configure API Keys
+          </button>
+        </div>
+      )
+    }
+
+    if (errorType === "network_error") {
+      return (
+        <div className="flex flex-col gap-2.5 p-4 rounded-xl bg-zinc-800/30 border border-zinc-500/30 text-zinc-300 self-stretch my-2 shadow-sm animate-in fade-in duration-200">
+          <div className="flex items-center gap-2 font-bold text-zinc-400">
+            <Globe size={15} className="text-zinc-400 animate-pulse" />
+            <span>Connection Timeout / Offline</span>
+          </div>
+          <div className="text-[12.5px] leading-relaxed opacity-95">
+            <Markdown text={msg.content} />
+          </div>
+          {onRetry && (
+            <button onClick={() => {
+                const msgs = useChatStore.getState().messages;
+                const lastUser = [...msgs].reverse().find(m => m.role === "user");
+                if(lastUser) onRetry(lastUser.content);
+              }} 
+              className="mt-1.5 self-start flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-500/10 hover:bg-zinc-500/20 border border-zinc-500/25 text-zinc-300 text-xs font-semibold transition-all duration-200"
+            >
+              <RefreshCw size={11} />
+              Retry Request
+            </button>
+          )}
+        </div>
+      )
+    }
+
+    // Generic / fallback error card
+    return (
+      <div className="flex flex-col gap-2 p-3.5 rounded-xl bg-red-950/10 border border-red-500/20 text-red-300 self-stretch my-2 shadow-sm animate-in fade-in duration-200">
+        <div className="flex items-center gap-2 font-semibold text-red-400">
+          <AlertCircle size={14} className="text-red-400 animate-pulse" />
+          <span>Agent Execution Failure</span>
+        </div>
+        <div className="text-[12.5px] leading-relaxed opacity-90">
+           <Markdown text={msg.content} />
         </div>
         {onRetry && (
           <button onClick={() => {
@@ -33,7 +138,7 @@ function MessageBubble({ msg, onRetry }) {
               const lastUser = [...msgs].reverse().find(m => m.role === "user");
               if(lastUser) onRetry(lastUser.content);
             }} 
-            className="mt-2 self-start flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-500/20 hover:bg-orange-500/40 text-orange-300 text-xs font-medium transition-colors border border-orange-500/30"
+            className="mt-1 self-start flex items-center gap-1.5 px-3 py-1 rounded border border-red-500/20 bg-red-500/10 hover:bg-red-500/20 text-red-300 text-xs transition-colors"
           >
             <RefreshCw size={12} />
             Retry
@@ -43,37 +148,10 @@ function MessageBubble({ msg, onRetry }) {
     )
   }
 
-  // Generic error
-  if (msg.role === "error") {
-      return (
-        <div className="flex flex-col gap-2 p-3.5 rounded-xl bg-red-900/20 border border-red-500/30 text-red-300 self-stretch my-2 shadow-sm">
-          <div className="flex items-center gap-2 font-semibold text-red-400">
-            <AlertCircle size={14} className="text-red-400" />
-            <span>Agent Error</span>
-          </div>
-          <div className="text-[12px] leading-relaxed opacity-90">
-             <Markdown text={msg.content} />
-          </div>
-          {onRetry && (
-            <button onClick={() => {
-                const msgs = useChatStore.getState().messages;
-                const lastUser = [...msgs].reverse().find(m => m.role === "user");
-                if(lastUser) onRetry(lastUser.content);
-              }} 
-              className="mt-1 self-start flex items-center gap-1.5 px-3 py-1 rounded border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 text-red-300 text-xs transition-colors"
-            >
-              <RefreshCw size={12} />
-              Retry
-            </button>
-          )}
-        </div>
-      )
-  }
-
   // System messages: slim horizontal notification bar, not a bubble
   if (isSystem) {
     return (
-      <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-editor-highlight/30 border border-editor-border/30 text-editor-muted text-[11px] self-stretch">
+      <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-editor-highlight/30 border border-editor-border/30 text-editor-muted text-[11px] self-stretch animate-in fade-in duration-200">
         <Info size={12} className="shrink-0 text-editor-muted/70" />
         <Markdown text={msg.content} />
       </div>
@@ -97,7 +175,7 @@ function MessageBubble({ msg, onRetry }) {
   }
 
   return (
-    <div className={`flex items-start gap-3 px-3.5 py-2.5 rounded-2xl max-w-[92%] ${styles[msg.role] ?? styles.assistant} ${isUser ? 'rounded-tr-sm' : 'rounded-tl-sm'}`}>
+    <div className={`flex items-start gap-3 px-3.5 py-2.5 rounded-2xl max-w-[92%] ${styles[msg.role] ?? styles.assistant} ${isUser ? 'rounded-tr-sm' : 'rounded-tl-sm'} animate-in fade-in duration-200`}>
       {!isTool && (
         <div className={`mt-0.5 shrink-0 flex items-center justify-center w-6 h-6 rounded-full ${isUser ? 'bg-white/20' : 'bg-editor-accent/10'}`}>
           {icons[msg.role]}
@@ -113,7 +191,7 @@ function MessageBubble({ msg, onRetry }) {
 
 export default function ChatPanel() {
   const project   = useProjectStore((s) => s.activeProject)
-  const { messages, isStreaming, streamBuffer } = useChatStore()
+  const { messages, isStreaming, streamBuffer, isConnected } = useChatStore()
   const { sendMessage, connect, disconnect } = useAgentSocket(project?.id)
   const entries   = useAgentTraceStore((s) => s.entries)
   const isActive  = useAgentTraceStore((s) => s.isActive)
@@ -362,15 +440,32 @@ export default function ChatPanel() {
         <div ref={bottomRef} className="h-2 shrink-0" />
       </div>
 
+      {/* Offline warning banner */}
+      {!isConnected && (
+        <div className="px-4 py-2 bg-red-950/40 border-t border-red-500/20 text-red-300 text-xs flex items-center justify-between animate-in slide-in-from-bottom-2 duration-300">
+          <div className="flex items-center gap-2 font-medium">
+            <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping" />
+            <span>Connection offline. Reconnecting in a few seconds...</span>
+          </div>
+          <button 
+            onClick={() => connect()} 
+            className="px-2 py-0.5 rounded bg-red-500/20 hover:bg-red-500/30 text-red-200 border border-red-500/30 font-medium transition-colors pointer-events-auto"
+          >
+            Retry Now
+          </button>
+        </div>
+      )}
+
       {/* Input */}
       <div className="p-4 border-t border-editor-border/50 bg-editor-bg/30 backdrop-blur-md">
-        <div className="flex gap-2 items-end bg-editor-bg border border-editor-border hover:border-editor-accent/50 focus-within:border-editor-accent/80 focus-within:shadow-[0_0_15px_rgba(122,162,247,0.15)] rounded-xl px-3 py-2.5 transition-all">
+        <div className={`flex gap-2 items-end bg-editor-bg border border-editor-border hover:border-editor-accent/50 focus-within:border-editor-accent/80 focus-within:shadow-[0_0_15px_rgba(122,162,247,0.15)] rounded-xl px-3 py-2.5 transition-all ${!isConnected ? 'opacity-50 pointer-events-none' : ''}`}>
           <textarea
             id="chat-input-textarea"
             className="flex-1 bg-transparent text-white text-[13px] resize-none outline-none max-h-40 min-h-[20px] placeholder:text-editor-muted"
-            placeholder="Message the agent..."
+            placeholder={isConnected ? "Message the agent..." : "Agent is offline..."}
             rows={1}
             value={input}
+            disabled={!isConnected}
             onChange={(e) => {
               setInput(e.target.value)
               e.target.style.height = 'auto'
@@ -385,10 +480,10 @@ export default function ChatPanel() {
           />
           <button
             onClick={handleSend}
-            disabled={isStreaming || !input.trim()}
+            disabled={isStreaming || !input.trim() || !isConnected}
             className="flex items-center justify-center w-8 h-8 rounded-lg bg-editor-accent hover:bg-editor-accentHover text-editor-bg disabled:bg-editor-highlight disabled:text-editor-muted transition-colors shrink-0 mb-0.5 shadow-md disabled:shadow-none"
           >
-            <Send size={14} className={!isStreaming && input.trim() ? "translate-x-px -translate-y-px" : ""} />
+            <Send size={14} className={!isStreaming && input.trim() && isConnected ? "translate-x-px -translate-y-px" : ""} />
           </button>
         </div>
         <div className="flex justify-between items-center mt-2 px-1">

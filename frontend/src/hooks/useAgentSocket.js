@@ -51,7 +51,7 @@ const messageQueue = []
 
 export function useAgentSocket(projectId) {
   const { addMessage, appendToken, flushBuffer,
-          setStreaming, setConversationId } = useChatStore()
+          setStreaming, setConversationId, setConnected } = useChatStore()
   const token = useAuthStore((s) => s.token)
 
   const connect = useCallback(() => {
@@ -64,6 +64,7 @@ export function useAgentSocket(projectId) {
     globalWs = ws
 
     ws.onopen = () => {
+      setConnected(true)
       while (messageQueue.length > 0) {
         const msg = messageQueue.shift()
         ws.send(JSON.stringify(msg))
@@ -129,19 +130,26 @@ export function useAgentSocket(projectId) {
 
     ws.onerror = (e) => {
       console.error("Agent socket error:", e)
+      setConnected(false)
       setStreaming(false)
       useAgentTraceStore.getState().endRun()
-      // addMessage({ id: crypto.randomUUID(), role: "error", content: "WebSocket error" })
     }
 
     ws.onclose = () => {
+      setConnected(false)
       setStreaming(false)
       useAgentTraceStore.getState().endRun()
       if (globalWs === ws) {
         globalWs = null
       }
+      // Auto-reconnect after 5 seconds
+      if (projectId) {
+        setTimeout(() => {
+          connect()
+        }, 5000)
+      }
     }
-  }, [projectId, token, addMessage, appendToken, flushBuffer, setConversationId, setStreaming])
+  }, [projectId, token, addMessage, appendToken, flushBuffer, setConversationId, setStreaming, setConnected])
 
   const sendMessage = useCallback((text, model = "llama-3.3-70b-versatile", options = {}) => {
       const { conversationId } = useChatStore.getState()
@@ -177,7 +185,8 @@ export function useAgentSocket(projectId) {
   const disconnect = useCallback(() => {
     globalWs?.close()
     globalWs = null
-  }, [])
+    setConnected(false)
+  }, [setConnected])
 
   return { sendMessage, connect, disconnect }
 }

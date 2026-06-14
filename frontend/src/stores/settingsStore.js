@@ -11,6 +11,8 @@ export const useSettingsStore = create(
       isLoading: false,
       isSaving: false,
       error: null,
+      settingsOpen: false,
+      setSettingsOpen: (val) => set({ settingsOpen: val }),
 
       /** Load settings from backend on app mount */
       fetchSettings: async () => {

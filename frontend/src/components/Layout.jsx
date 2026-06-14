@@ -26,7 +26,8 @@ export default function Layout() {
   const [sidebarTab,  setSidebarTab]  = useState("files")  // "files" | "git"
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [chatOpen,    setChatOpen]    = useState(true)
-  const [settingsOpen, setSettingsOpen] = useState(false)
+  const settingsOpen = useSettingsStore((s) => s.settingsOpen)
+  const setSettingsOpen = useSettingsStore((s) => s.setSettingsOpen)
   
   const [sidebarWidth, setSidebarWidth] = useState(280) // default 280px
   const [chatWidth, setChatWidth]       = useState(380) // default 380px

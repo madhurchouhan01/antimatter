@@ -292,17 +292,39 @@ async def run_agent_streaming(
                     )
     except Exception as e:
         error_msg = str(e).lower()
-        if "429" in error_msg or "rate limit" in error_msg or "too many requests" in error_msg or e.__class__.__name__ == "RateLimitError":
+        if "context_length" in error_msg or "context length" in error_msg or "token limit" in error_msg or "maximum context" in error_msg or "too many tokens" in error_msg:
+            log.warning("Context length limit exceeded", model=model_name, project=str(project.id))
+            await send_json({
+                "type": "error",
+                "error_type": "token_limit",
+                "message": "The model's token/context limit was exceeded because the codebase files or query context are too large. Try closing some open files in the editor or asking a shorter question."
+            })
+        elif "api key" in error_msg or "api_key" in error_msg or "unauthorized" in error_msg or "authentication" in error_msg or "invalid api" in error_msg or "apikey" in error_msg:
+            log.warning("Authentication failure with LLM provider", model=model_name, project=str(project.id))
+            await send_json({
+                "type": "error",
+                "error_type": "auth_error",
+                "message": "The LLM provider failed to authorize the request. Please check your API Key configuration in the settings panel."
+            })
+        elif "429" in error_msg or "rate limit" in error_msg or "too many requests" in error_msg or e.__class__.__name__ == "RateLimitError":
             log.warning("Rate limit hit", model=model_name, project=str(project.id))
             await send_json({
                 "type": "error",
                 "error_type": "rate_limit",
-                "message": "You have exhausted your rate limits. Please try again later or choose a different Model 🫠"
+                "message": "You have exhausted your rate limits. Please try again later or choose a different model."
+            })
+        elif "timeout" in error_msg or "connection" in error_msg or "connect" in error_msg or "network" in error_msg or "dns" in error_msg:
+            log.warning("Network connection issue with provider", model=model_name, project=str(project.id))
+            await send_json({
+                "type": "error",
+                "error_type": "network_error",
+                "message": "Could not establish a connection to the LLM provider. Please verify your internet connection and check if the provider service is offline."
             })
         else:
             log.error("Agent execution failed", project=str(project.id), exc_info=True)
             await send_json({
                 "type": "error",
+                "error_type": "generic",
                 "message": "An unexpected error occurred while processing your request. The execution was aborted."
             })
 

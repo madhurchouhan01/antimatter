@@ -8,11 +8,13 @@ export const useChatStore = create(
       conversationId: null,
       isStreaming:    false,
       streamBuffer:   "",
+      isConnected:    false,
 
       addMessage: (msg) =>
         set((state) => ({ messages: [...state.messages, msg] })),
 
       setStreaming: (val) => set({ isStreaming: val }),
+      setConnected: (val) => set({ isConnected: val }),
 
       appendToken: (token) =>
         set((state) => ({ streamBuffer: state.streamBuffer + token })),
@@ -34,7 +36,7 @@ export const useChatStore = create(
         }),
 
       setConversationId: (id) => set({ conversationId: id }),
-      clearChat: () => set({ messages: [], conversationId: null, streamBuffer: "" }),
+      clearChat: () => set({ messages: [], conversationId: null, streamBuffer: "", isConnected: false }),
     }),
     {
       name: "chat-storage",
