@@ -26,10 +26,18 @@ export default function Register() {
   const [name, setName]         = useState("")
   const [error, setError]       = useState("")
   const [ghLoading, setGhLoading] = useState(false)
+  const [isExiting, setIsExiting] = useState(false)
   const setTokens  = useAuthStore((s) => s.setTokens)
   const navigate   = useNavigate()
   const popupRef   = useRef(null)
   const timerRef   = useRef(null)
+
+  const handleExitNavigate = (path) => {
+    setIsExiting(true)
+    setTimeout(() => {
+      navigate(path)
+    }, 350)
+  }
 
   useEffect(() => {
     const handleMessage = (event) => {
@@ -38,7 +46,10 @@ export default function Register() {
       if (type === "GITHUB_AUTH_SUCCESS") {
         setGhLoading(false)
         setTokens(access_token, refresh_token)
-        navigate("/projects")
+        setIsExiting(true)
+        setTimeout(() => {
+          navigate("/projects")
+        }, 350)
       } else if (type === "GITHUB_AUTH_ERROR") {
         setGhLoading(false)
         setError(ghError || "GitHub sign-up failed. Please try again.")
@@ -78,21 +89,24 @@ export default function Register() {
     setError("")
     try {
       await authApi.register(email, password, name)
-      navigate("/login")
+      setIsExiting(true)
+      setTimeout(() => {
+        navigate("/login")
+      }, 350)
     } catch (err) {
       setError(err.response?.data?.detail || "Registration failed. Please try again.")
     }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-editor-bg relative overflow-hidden">
-      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600/20 blur-[120px] rounded-full pointer-events-none" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-purple-600/20 blur-[120px] rounded-full pointer-events-none" />
-      <div className="absolute top-[40%] left-[60%] w-[20%] h-[20%] bg-indigo-500/10 blur-[80px] rounded-full pointer-events-none" />
+    <div className={`min-h-screen flex items-center justify-center bg-editor-bg relative overflow-hidden ${isExiting ? "page-fade-out" : "page-fade-in"}`}>
+      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600/20 blur-[120px] rounded-full pointer-events-none glow-orb-1" />
+      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-purple-600/20 blur-[120px] rounded-full pointer-events-none glow-orb-2" />
+      <div className="absolute top-[40%] left-[60%] w-[20%] h-[20%] bg-indigo-500/10 blur-[80px] rounded-full pointer-events-none glow-orb-1" />
 
-      <div className="w-full max-w-md z-10 backdrop-blur-xl bg-editor-sidebar/80 border border-editor-border/50 shadow-2xl rounded-2xl p-10 flex flex-col gap-6">
+      <div className="w-full max-w-md z-10 backdrop-blur-xl bg-editor-sidebar/80 border border-editor-border/50 shadow-2xl hover:shadow-[0_0_50px_rgba(99,102,241,0.12)] rounded-2xl p-10 flex flex-col gap-6 transition-all duration-500">
         <div className="text-center">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg shadow-blue-500/30 mb-4">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg shadow-blue-500/30 mb-4 hover:scale-105 transition-transform duration-300">
             <svg viewBox="0 0 24 24" className="w-6 h-6 fill-white"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
           </div>
           <h1 className="text-2xl font-bold text-white tracking-tight">Create your account</h1>
@@ -126,7 +140,7 @@ export default function Register() {
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-editor-muted uppercase tracking-wider">Full Name</label>
             <input
-              className="bg-editor-bg/50 border border-editor-border/50 rounded-lg px-4 py-2.5 text-sm text-editor-text outline-none focus:border-blue-500/70 focus:bg-editor-highlight/30 transition-colors placeholder:text-editor-muted/50"
+              className="bg-[#12131a]/60 border border-editor-border/40 rounded-xl px-4 py-2.5 text-sm text-editor-text outline-none focus:border-indigo-500/70 focus:ring-1 focus:ring-indigo-500/30 focus:bg-[#12131a]/95 transition-all duration-300 placeholder:text-editor-muted/40"
               placeholder="John Doe" type="text"
               value={name} onChange={(e) => setName(e.target.value)}
               required
@@ -135,7 +149,7 @@ export default function Register() {
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-editor-muted uppercase tracking-wider">Email Address</label>
             <input
-              className="bg-editor-bg/50 border border-editor-border/50 rounded-lg px-4 py-2.5 text-sm text-editor-text outline-none focus:border-blue-500/70 focus:bg-editor-highlight/30 transition-colors placeholder:text-editor-muted/50"
+              className="bg-[#12131a]/60 border border-editor-border/40 rounded-xl px-4 py-2.5 text-sm text-editor-text outline-none focus:border-indigo-500/70 focus:ring-1 focus:ring-indigo-500/30 focus:bg-[#12131a]/95 transition-all duration-300 placeholder:text-editor-muted/40"
               placeholder="you@example.com" type="email"
               value={email} onChange={(e) => setEmail(e.target.value)}
               required
@@ -144,7 +158,7 @@ export default function Register() {
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-editor-muted uppercase tracking-wider">Password</label>
             <input
-              className="bg-editor-bg/50 border border-editor-border/50 rounded-lg px-4 py-2.5 text-sm text-editor-text outline-none focus:border-blue-500/70 focus:bg-editor-highlight/30 transition-colors placeholder:text-editor-muted/50"
+              className="bg-[#12131a]/60 border border-editor-border/40 rounded-xl px-4 py-2.5 text-sm text-editor-text outline-none focus:border-indigo-500/70 focus:ring-1 focus:ring-indigo-500/30 focus:bg-[#12131a]/95 transition-all duration-300 placeholder:text-editor-muted/40"
               placeholder="••••••••" type="password"
               value={password} onChange={(e) => setPassword(e.target.value)}
               required minLength={6}
@@ -161,9 +175,13 @@ export default function Register() {
 
         <p className="text-center text-sm text-editor-muted">
           Already have an account?{" "}
-          <Link to="/login" className="text-blue-400 hover:text-blue-300 font-medium transition-colors">
+          <button 
+            type="button"
+            onClick={() => handleExitNavigate("/login")} 
+            className="text-blue-400 hover:text-blue-300 font-medium transition-colors focus:outline-none"
+          >
             Sign in
-          </Link>
+          </button>
         </p>
       </div>
     </div>
