@@ -97,23 +97,18 @@ export function useAgentSocket(projectId) {
       } else if (msg.type === "tool_start") {
         // Feed trace store
         useAgentTraceStore.getState().pushToolStart(msg.tool, msg.input)
-        addMessage({
-          id:   crypto.randomUUID(),
-          role: "tool_start",
-          content: `Running **${msg.tool}**`,
-          tool: msg.tool,
-          input: msg.input,
-        })
       } else if (msg.type === "tool_end") {
         // Feed trace store
         useAgentTraceStore.getState().pushToolEnd(msg.tool, msg.output)
-        addMessage({
-          id:      crypto.randomUUID(),
-          role:    "tool_end",
-          content: msg.output,
-          tool:    msg.tool,
-        })
       } else if (msg.type === "done") {
+        const finalEntries = useAgentTraceStore.getState().entries
+        if (finalEntries.length > 0) {
+          addMessage({
+            id:      crypto.randomUUID(),
+            role:    "activity",
+            entries: finalEntries,
+          })
+        }
         flushBuffer(msg.final_text)
         setConversationId(msg.conversation_id)
         // Mark trace run as finished

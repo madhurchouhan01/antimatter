@@ -5,10 +5,13 @@ import { useProjectStore } from "../stores/projectStore"
 import { useSettingsStore } from "../stores/settingsStore"
 import { useAgentSocket } from "../hooks/useAgentSocket"
 import { useAgentTraceStore } from "../stores/agentTraceStore"
-import AgentActivityPanel from "./AgentActivityPanel"
+import ActivityDropdown from "./ActivityDropdown"
 import Markdown from "./Markdown"
 
 function MessageBubble({ msg, onRetry }) {
+  if (msg.role === "activity") {
+    return <ActivityDropdown entries={msg.entries} isLive={false} />
+  }
   const isUser   = msg.role === "user"
   const isTool   = msg.role === "tool_start" || msg.role === "tool_end"
   const isSystem = msg.role === "system"
@@ -112,6 +115,8 @@ export default function ChatPanel() {
   const project   = useProjectStore((s) => s.activeProject)
   const { messages, isStreaming, streamBuffer } = useChatStore()
   const { sendMessage, connect, disconnect } = useAgentSocket(project?.id)
+  const entries   = useAgentTraceStore((s) => s.entries)
+  const isActive  = useAgentTraceStore((s) => s.isActive)
   const [input, setInput] = useState("")
   const bottomRef = useRef(null)
 
@@ -133,7 +138,7 @@ export default function ChatPanel() {
   const THINKING_WORDS = [
     "reasoning", "deducing", "inducing", "extrapolating",
     "analyzing", "synthesizing", "categorizing", "deciphering",
-    "assessing", "verifying", "postulating",
+    "assessing", "verifying", "postulating", "thinking", "working"
   ]
   const [wordIndex, setWordIndex] = useState(0)
   const [isWaiting, setIsWaiting] = useState(false)
@@ -230,8 +235,13 @@ export default function ChatPanel() {
         )}
         {messages.map((msg) => <MessageBubble key={msg.id} msg={msg} onRetry={handleRetry} />)}
         
+        {/* Live agent activity dropdown during active run */}
+        {isActive && entries.length > 0 && (
+          <ActivityDropdown entries={entries} isLive={true} />
+        )}
+        
         {/* ── Thinking shimmer — premium cycling word card ── */}
-        {isWaiting && !streamBuffer && !messages.find(m => m.role === "tool_start") && (
+        {isWaiting && entries.length === 0 && !streamBuffer && !isStreaming && (
           <div className="self-start max-w-[92%] relative">
             {/* Ambient drifting glow behind the card */}
             <div
@@ -335,9 +345,6 @@ export default function ChatPanel() {
         )}
         <div ref={bottomRef} className="h-2 shrink-0" />
       </div>
-
-      {/* ── Agent Activity Panel (live tool-call trace) ── */}
-      <AgentActivityPanel />
 
       {/* Input */}
       <div className="p-4 border-t border-editor-border/50 bg-editor-bg/30 backdrop-blur-md">
