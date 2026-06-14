@@ -17,13 +17,14 @@ export const useChatStore = create(
       appendToken: (token) =>
         set((state) => ({ streamBuffer: state.streamBuffer + token })),
 
-      flushBuffer: () =>
+      flushBuffer: (finalText) =>
         set((state) => {
-          if (!state.streamBuffer) return {}
+          const content = (finalText !== undefined && finalText !== null) ? finalText : state.streamBuffer;
+          if (!content) return { isStreaming: false }
           const msg = {
             id:      crypto.randomUUID(),
             role:    "assistant",
-            content: state.streamBuffer,
+            content: content,
           }
           return {
             messages:    [...state.messages, msg],

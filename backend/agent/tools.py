@@ -81,7 +81,12 @@ def make_tools(
 
     @tool
     async def read_file(path: str) -> str:
-        """Read the contents of a file at the given workspace-relative path (e.g., 'src/main.py'). Always read a file before editing it."""
+        """
+        Read the full contents of a file at a workspace-relative path.
+
+        Use this before any edit so you have the exact current content.
+        path examples: 'main.py', 'src/utils/helpers.py', 'README.md'
+        """
         try:
             return await fs.read(path)
         except FileNotFoundError:
@@ -95,7 +100,14 @@ def make_tools(
 
     @tool
     async def write_file(path: str, content: str) -> str:
-        """Propose creating a new file or overwriting an entire file at 'path' (must be workspace-relative, e.g. 'src/main.py'). Wait for user approval before making more edits to this path."""
+        """
+        Create a new file or completely overwrite an existing file.
+
+        - path: workspace-relative (e.g. 'src/main.py', 'tests/test_foo.py').
+        - content: the complete new file content as a string.
+        - Prefer replace_file_content / multi_replace_file_content for partial edits.
+        - After proposing a diff, wait for user approval before editing this path again.
+        """
         # --- size guard -------------------------------------------------------
         try:
             encoded = content.encode("utf-8")
@@ -136,7 +148,13 @@ def make_tools(
 
     @tool
     async def list_files(path: str = "", max_depth: int = 2) -> str:
-        """List files and directories at a workspace-relative 'path' (defaults to root ''). 'max_depth' controls recursion depth (1 to 10, default 2)."""
+        """
+        List files and directories in the workspace.
+
+        - path: workspace-relative directory to list (default '' = project root).
+        - max_depth: how many directory levels to recurse (1–10, default 2).
+        - Use this to explore project structure before reading or editing files.
+        """
         max_depth = max(1, min(max_depth, LIST_FILES_MAX_DEPTH))
 
         try:
@@ -167,7 +185,13 @@ def make_tools(
 
     @tool
     async def run_command(command: str, timeout: int = DEFAULT_COMMAND_TIMEOUT) -> str:
-        """Execute a synchronous, blocking shell command inside the project sandbox. Do NOT use for long-running servers or background processes."""
+        """
+        Execute a short-lived shell command inside the project sandbox and return its output.
+
+        - Use for: compiling, formatting, linting, one-off scripts, checking versions.
+        - Do NOT use for: servers, watchers, or any process that runs indefinitely — use run_background_command instead.
+        - timeout: seconds before the command is killed (1–300, default 30).
+        """
         timeout = max(1, min(timeout, 300))
         try:
             return await _exec_in_sandbox(command, timeout)
@@ -188,7 +212,15 @@ def make_tools(
         case_sensitive: bool = False,
         max_results: int = 50,
     ) -> str:
-        """Search the workspace. 'query' is regex for 'content' mode, glob pattern for 'filename' mode. 'path' is workspace-relative scope."""
+        """
+        Search the workspace for text patterns or filenames.
+
+        - mode='content' (default): regex search inside file contents (like ripgrep/grep -rn).
+        - mode='filename': glob pattern match on file names only (e.g. '*.py', 'test_*').
+        - path: workspace-relative directory to scope the search (default = entire project).
+        - case_sensitive: default False (case-insensitive).
+        - max_results: cap on returned matches (default 50).
+        """
         mode = mode.strip().lower()
         if mode not in ("content", "filename"):
             return "ERROR: mode must be 'content' or 'filename'."
@@ -250,7 +282,13 @@ def make_tools(
 
     @tool
     async def install_packages(packages: list[str], manager: str = "auto") -> str:
-        """Install packages in the sandbox. 'packages' is a list of package specifiers. 'manager' is 'pip', 'npm', or 'auto'."""
+        """
+        Install one or more packages into the sandbox environment.
+
+        - packages: list of specifiers, e.g. ['requests', 'numpy==1.26']
+        - manager: 'pip' for Python, 'npm' for Node.js, 'auto' to detect from package.json.
+        - Run this before executing code that imports a library not yet installed.
+        """
         if not packages:
             return "ERROR: No packages specified."
 
@@ -298,7 +336,14 @@ def make_tools(
         extra_args: str = "",
         timeout: int = DEFAULT_TEST_TIMEOUT,
     ) -> str:
-        """Execute pytest inside the project sandbox and return the results. 'path' is relative test path scope."""
+        """
+        Run the project's pytest test suite inside the sandbox.
+
+        - path: workspace-relative path to limit scope (e.g. 'tests/test_auth.py', 'tests/').
+          Leave empty to run all discovered tests.
+        - extra_args: additional pytest flags (e.g. '-v', '-k test_login', '--tb=long').
+        - timeout: seconds before the run is killed (1–600, default 120).
+        """
         timeout = max(1, min(timeout, 600))
 
         scope = path.strip() or ""
@@ -329,7 +374,16 @@ def make_tools(
 
     @tool
     async def replace_file_content(path: str, target_content: str, replacement_content: str, allow_multiple: bool = False) -> str:
-        """Replace a contiguous block of text in a file. 'path' is relative. 'target_content' must match file content EXACTLY (including indentation)."""
+        """
+        Replace a single contiguous block of text inside an existing file.
+
+        - path: workspace-relative file path.
+        - target_content: the EXACT text to find (whitespace and indentation must match).
+        - replacement_content: the text to substitute in its place.
+        - allow_multiple: if True, replaces every occurrence; if False (default) and multiple
+          occurrences exist, the call fails — make target_content more specific instead.
+        - Use multi_replace_file_content when you need to change several separate blocks at once.
+        """
         try:
             try:
                 original = await fs.read(path)
@@ -364,7 +418,17 @@ def make_tools(
 
     @tool
     async def multi_replace_file_content(path: str, replacements: list[dict]) -> str:
-        """Replace multiple non-contiguous blocks of text in a file. 'path' is relative. 'replacements' is list of {'target_content': '...', 'replacement_content': '...'}. Matches must be exact."""
+        """
+        Replace several non-contiguous blocks of text in a single file in one atomic call.
+
+        - path: workspace-relative file path.
+        - replacements: ordered list of objects, each with:
+            { "target_content": "<exact text to find>",
+              "replacement_content": "<text to substitute>" }
+        - All target_content values must match EXACTLY (including indentation).
+        - Replacements are applied sequentially — earlier changes affect later searches.
+        - Use this instead of multiple replace_file_content calls on the same file.
+        """
         try:
             try:
                 original = await fs.read(path)
@@ -401,7 +465,14 @@ def make_tools(
     
     @tool
     async def search_web(query: str) -> str:
-        """Search the web using the Serper API and return top results."""
+        """
+        Search the public web and return the top organic results.
+
+        - Use for: looking up library documentation, error messages, package versions,
+          recent news, or any information not available in the workspace files.
+        - Returns up to 5 result snippets with titles and URLs.
+        - query: a concise, keyword-focused search string (e.g. 'FastAPI background tasks docs').
+        """
         import os, aiohttp
         api_key = os.getenv("SERPER_API_KEY")
         if not api_key:
@@ -433,7 +504,19 @@ def make_tools(
 
     @tool
     async def generate_image(prompt: str) -> str:
-        """Generate an image or UI mockup from a text prompt and return its URL."""
+        """
+        Generate a raster image (photo, illustration, or UI mockup screenshot) from a
+        natural-language prompt and return its hosted URL.
+
+        STRICT SCOPE — only call this tool when the user explicitly asks to:
+          • produce a photo-realistic or artistic image
+          • render a UI / wireframe screenshot as an image file
+
+        Do NOT call this tool for:
+          • code flowcharts, architecture diagrams, or sequence diagrams  →  use Mermaid
+          • data charts or graphs  →  generate code that plots them
+          • any request that can be satisfied with text, code, or a diagram
+        """
         import os, aiohttp
         api_key = os.getenv("KIE_API_KEY")
         if not api_key:
@@ -462,7 +545,14 @@ def make_tools(
 
     @tool
     async def run_background_command(command: str) -> str:
-        """Run a command in the background (e.g. servers, watch tasks) and return its command ID."""
+        """
+        Start a long-running process in the background and return its command ID.
+
+        - Use for: dev servers, watchers, queue workers, or any process that must
+          stay alive across multiple agent turns.
+        - Returns a command ID — pass it to command_status or send_command_input.
+        - Do NOT use for short one-off commands — use run_command instead.
+        """
         try:
             sandbox = await sandbox_manager.get_or_create(project_id, user_id)
             cmd_id = await sandbox.run_background(command)
@@ -472,7 +562,13 @@ def make_tools(
 
     @tool
     async def command_status(cmd_id: str) -> str:
-        """Get status and stdout/stderr output logs of a background command by its command ID."""
+        """
+        Retrieve the current status and output (stdout + stderr) of a background command.
+
+        - cmd_id: the ID returned by run_background_command.
+        - Returns: status ('running' | 'exited'), exit code, and buffered output.
+        - Call this to check whether a server started successfully or a job finished.
+        """
         try:
             sandbox = await sandbox_manager.get_or_create(project_id, user_id)
             status = sandbox.get_background_status(cmd_id)
@@ -487,7 +583,13 @@ def make_tools(
 
     @tool
     async def send_command_input(cmd_id: str, input_data: str) -> str:
-        """Send standard input (stdin) text to a running background command by its command ID."""
+        """
+        Send text to the stdin of a running background command.
+
+        - cmd_id: the ID returned by run_background_command.
+        - input_data: the text to write to the process's stdin (include '\n' if needed).
+        - Use for: answering interactive prompts, sending keystrokes to REPLs, etc.
+        """
         try:
             sandbox = await sandbox_manager.get_or_create(project_id, user_id)
             return await sandbox.send_background_input(cmd_id, input_data)

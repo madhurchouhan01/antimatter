@@ -1,10 +1,96 @@
-import React from "react"
+import React, { useEffect, useRef, useState } from "react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import rehypeHighlight from "rehype-highlight"
-import { useState } from "react"
+import mermaid from "mermaid"
 
 import "highlight.js/styles/github-dark.css"
+
+// ─── Mermaid initialisation (once, module-level) ────────────────────────────
+mermaid.initialize({
+  startOnLoad: false,
+  theme: "dark",
+  themeVariables: {
+    background: "#0d0d14",
+    primaryColor: "#6366f1",
+    primaryTextColor: "#e2e8f0",
+    primaryBorderColor: "#4f46e5",
+    lineColor: "#6366f1",
+    secondaryColor: "#1e1b4b",
+    tertiaryColor: "#1e1e2e",
+    edgeLabelBackground: "#1e1e2e",
+    clusterBkg: "#1e1b4b",
+    titleColor: "#e2e8f0",
+    nodeBorder: "#4f46e5",
+    mainBkg: "#1e1e2e",
+    nodeTextColor: "#e2e8f0",
+    fontFamily: "Inter, ui-sans-serif, system-ui",
+  },
+  flowchart: { curve: "basis", useMaxWidth: true },
+  sequence: { useMaxWidth: true },
+})
+
+let _mermaidCounter = 0
+
+// ─── MermaidDiagram Component ─────────────────────────────────────────────────
+function MermaidDiagram({ code }) {
+  const containerRef = useRef(null)
+  const [error, setError] = useState(null)
+  const [svg, setSvg] = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    setError(null)
+    setSvg(null)
+
+    const id = `mermaid-${Date.now()}-${++_mermaidCounter}`
+    ;(async () => {
+      try {
+        const { svg: rendered } = await mermaid.render(id, code)
+        if (!cancelled) setSvg(rendered)
+      } catch (err) {
+        if (!cancelled) setError(String(err?.message ?? err))
+      }
+    })()
+
+    return () => { cancelled = true }
+  }, [code])
+
+  if (error) {
+    return (
+      <div className="my-3 rounded-xl border border-red-500/30 bg-red-950/30 p-4">
+        <p className="text-xs font-mono text-red-400 mb-1 font-semibold">Mermaid render error</p>
+        <pre className="text-[11px] text-red-300/80 whitespace-pre-wrap">{error}</pre>
+        <details className="mt-2">
+          <summary className="text-[10px] text-editor-muted/60 cursor-pointer hover:text-editor-muted">Show source</summary>
+          <pre className="mt-1 text-[11px] text-editor-muted/70 whitespace-pre-wrap overflow-x-auto">{code}</pre>
+        </details>
+      </div>
+    )
+  }
+
+  if (!svg) {
+    return (
+      <div className="my-3 rounded-xl border border-editor-border/40 bg-[#0d0d14] p-6 flex items-center justify-center">
+        <span className="text-[11px] text-editor-muted/60 animate-pulse">Rendering diagram…</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="my-3 rounded-xl border border-editor-border/40 bg-[#0d0d14] overflow-hidden shadow-lg">
+      <div className="flex items-center justify-between px-4 py-2 bg-editor-sidebar/80 border-b border-editor-border/30">
+        <span className="text-[10px] uppercase tracking-widest text-indigo-400/80 font-mono font-semibold">diagram</span>
+        <CopyButton text={code} />
+      </div>
+      <div
+        ref={containerRef}
+        className="p-4 overflow-x-auto flex justify-center [&>svg]:max-w-full [&>svg]:h-auto"
+        dangerouslySetInnerHTML={{ __html: svg }}
+      />
+    </div>
+  )
+}
 
 export default function Markdown({ text }) {
   if (!text) return null
@@ -135,6 +221,7 @@ export default function Markdown({ text }) {
           ),
           code({ node, inline, className, children, ...props }) {
             const match = /language-(\w+)/.exec(className || "")
+            const lang = match?.[1]
             const content = String(children).replace(/\n$/, "")
             // Treat as inline if inline=true OR single-line with no language hint
             const isInline = inline || (!match && !content.includes("\n"))
@@ -150,11 +237,16 @@ export default function Markdown({ text }) {
               )
             }
 
+            // ── Mermaid diagrams get a live SVG render ──────────────────────
+            if (lang === "mermaid") {
+              return <MermaidDiagram code={content} />
+            }
+
             return (
               <div className="my-3 last:mb-0 rounded-xl overflow-hidden border border-editor-border/40 bg-[#0d0d14] shadow-lg">
                 <div className="flex items-center justify-between px-4 py-2 bg-editor-sidebar/80 border-b border-editor-border/30">
                   <span className="text-[10px] uppercase tracking-widest text-editor-muted/70 font-mono font-semibold">
-                    {match?.[1] ?? "code"}
+                    {lang ?? "code"}
                   </span>
                   <CopyButton text={content} />
                 </div>

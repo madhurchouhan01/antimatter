@@ -114,7 +114,7 @@ export function useAgentSocket(projectId) {
           tool:    msg.tool,
         })
       } else if (msg.type === "done") {
-        flushBuffer()
+        flushBuffer(msg.final_text)
         setConversationId(msg.conversation_id)
         // Mark trace run as finished
         useAgentTraceStore.getState().endRun()
