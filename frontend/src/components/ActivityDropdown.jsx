@@ -1,10 +1,9 @@
-import { useRef, useEffect } from "react"
-import { useAgentTraceStore } from "../stores/agentTraceStore"
+import { useState, useEffect } from "react"
 import {
-  ChevronDown, ChevronRight,
+  ChevronDown, ChevronUp,
   FileText, Terminal, Search, Package, TestTube,
   Globe, Image, Play, Activity, CheckCircle2, XCircle,
-  Loader2, Cpu, Clock, ChevronUp,
+  Loader2, Cpu, Clock
 } from "lucide-react"
 
 // ─── Tool metadata ────────────────────────────────────────────────────────────
@@ -54,7 +53,6 @@ function TraceEntry({ entry, index }) {
   const inputPreview = (() => {
     const inp = entry.input
     if (!inp || Object.keys(inp).length === 0) return null
-    // Show the first meaningful string value
     const firstValue = Object.values(inp).find(v => typeof v === "string")
     return firstValue ? truncate(firstValue, 80) : truncate(JSON.stringify(inp), 80)
   })()
@@ -78,7 +76,6 @@ function TraceEntry({ entry, index }) {
     >
       {/* Top row: icon + label + duration */}
       <div className="flex items-center gap-2 min-w-0">
-        {/* Sequence number */}
         <span
           className="shrink-0 text-[9px] font-mono font-bold w-4 text-right"
           style={{ color: color + "70" }}
@@ -86,7 +83,6 @@ function TraceEntry({ entry, index }) {
           {String(index + 1).padStart(2, "0")}
         </span>
 
-        {/* Tool icon */}
         <div
           className="shrink-0 w-5 h-5 rounded flex items-center justify-center"
           style={{ background: color + "18", border: `1px solid ${color}30` }}
@@ -94,12 +90,10 @@ function TraceEntry({ entry, index }) {
           <Icon size={11} style={{ color }} />
         </div>
 
-        {/* Label */}
         <span className="text-[12px] font-semibold text-white/90 truncate flex-1 min-w-0">
           {label}
         </span>
 
-        {/* Duration badge */}
         {entry.durationMs != null && (
           <span
             className="shrink-0 flex items-center gap-0.5 text-[10px] font-mono px-1.5 py-0.5 rounded"
@@ -114,18 +108,15 @@ function TraceEntry({ entry, index }) {
           </span>
         )}
 
-        {/* Status icon */}
         <span className="shrink-0">{statusIcon}</span>
       </div>
 
-      {/* Input preview */}
       {inputPreview && (
         <div className="ml-11 text-[10px] text-editor-muted/70 font-mono truncate leading-relaxed">
           {inputPreview}
         </div>
       )}
 
-      {/* Output preview (on done/error) */}
       {!isRunning && entry.output && (
         <div
           className="ml-11 text-[10px] font-mono leading-relaxed rounded px-1.5 py-1 mt-0.5 line-clamp-2"
@@ -138,7 +129,6 @@ function TraceEntry({ entry, index }) {
         </div>
       )}
 
-      {/* Running shimmer bar */}
       {isRunning && (
         <div className="ml-11 mt-1">
           <div className="skeleton-bar h-[3px] rounded-full" style={{ width: "60%" }} />
@@ -148,97 +138,74 @@ function TraceEntry({ entry, index }) {
   )
 }
 
-// ─── The panel itself ─────────────────────────────────────────────────────────
-export default function AgentActivityPanel() {
-  const entries    = useAgentTraceStore((s) => s.entries)
-  const isActive   = useAgentTraceStore((s) => s.isActive)
-  const panelOpen  = useAgentTraceStore((s) => s.panelOpen)
-  const togglePanel = useAgentTraceStore((s) => s.togglePanel)
+// ─── Collapsible Dropdown Component ───────────────────────────────────────────
+export default function ActivityDropdown({ entries, isLive }) {
+  const [isOpen, setIsOpen] = useState(isLive)
 
-  const scrollRef = useRef(null)
-
-  // Auto-scroll to bottom as new entries arrive
+  // Auto-open when new entries arrive in live mode
   useEffect(() => {
-    if (panelOpen && scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+    if (isLive) {
+      setIsOpen(true)
     }
-  }, [entries, panelOpen])
+  }, [entries.length, isLive])
 
-  // Only render the panel if there are entries or the agent is active
-  if (entries.length === 0 && !isActive) return null
+  if (!entries || entries.length === 0) return null
 
   const runningCount = entries.filter(e => e.status === "running").length
-  const doneCount    = entries.filter(e => e.status === "done").length
   const errorCount   = entries.filter(e => e.status === "error").length
+  const doneCount    = entries.filter(e => e.status === "done").length
+
+  const getHeaderIcon = () => {
+    if (isLive) {
+      return (
+        <div className="relative shrink-0 flex items-center justify-center w-4 h-4">
+          <span
+            className="absolute inset-0 rounded-full animate-ping bg-blue-500/30"
+            style={{ animationDuration: "1.4s" }}
+          />
+          <Loader2 size={12} className="animate-spin text-blue-400" />
+        </div>
+      )
+    }
+    if (errorCount > 0) {
+      return <XCircle size={14} className="text-red-400 shrink-0" />
+    }
+    return <CheckCircle2 size={14} className="text-green-400 shrink-0" />
+  }
 
   return (
-    <div
-      className="shrink-0 border-t border-editor-border/40"
-      style={{
-        background: "linear-gradient(180deg, rgba(26,27,38,0.98) 0%, rgba(22,23,32,0.99) 100%)",
-      }}
-    >
-      {/* ── Header bar ── */}
+    <div className="my-2 self-start w-full max-w-[92%]">
       <button
-        onClick={togglePanel}
-        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-editor-highlight/20 transition-colors group"
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center gap-2.5 px-3.5 py-2.5 bg-editor-highlight/20 hover:bg-editor-highlight/40 border border-editor-border/30 rounded-xl transition-all text-left group"
       >
-        {/* Live pulse */}
-        <div className="relative shrink-0 flex items-center justify-center w-4 h-4">
-          {isActive && (
-            <span
-              className="absolute inset-0 rounded-full animate-ping"
-              style={{ background: "rgba(122,162,247,0.3)", animationDuration: "1.4s" }}
-            />
-          )}
-          <Play
-            size={8}
-            className="relative z-10"
-            style={{ color: isActive ? "#7aa2f7" : "#565f89", fill: isActive ? "#7aa2f7" : "#565f89" }}
-          />
-        </div>
+        {getHeaderIcon()}
 
-        <span className="text-[10px] font-bold uppercase tracking-widest text-editor-muted group-hover:text-white transition-colors">
-          Agent Activity
+        <span className="text-[11px] font-bold uppercase tracking-wider text-editor-muted group-hover:text-white transition-colors">
+          {isLive ? "Agent Executing..." : "Agent Activity"}
         </span>
 
-        {/* Counters */}
-        <div className="flex items-center gap-1.5 ml-1">
-          {runningCount > 0 && (
-            <span className="text-[9px] px-1.5 py-0.5 rounded-full font-mono font-bold bg-blue-500/20 text-blue-400 border border-blue-500/20">
-              {runningCount} running
-            </span>
-          )}
-          {doneCount > 0 && (
-            <span className="text-[9px] px-1.5 py-0.5 rounded-full font-mono bg-green-500/10 text-green-400/70">
-              {doneCount} done
-            </span>
-          )}
-          {errorCount > 0 && (
-            <span className="text-[9px] px-1.5 py-0.5 rounded-full font-mono bg-red-500/10 text-red-400/70">
-              {errorCount} err
-            </span>
-          )}
-        </div>
+        <span className="text-[10px] text-editor-muted/60 font-mono">
+          ({entries.length} {entries.length === 1 ? "step" : "steps"})
+        </span>
+
+        {!isOpen && (
+          <div className="hidden sm:flex items-center gap-1.5 ml-2 text-[9px] text-editor-muted/50 font-mono">
+            {doneCount > 0 && <span>{doneCount} done</span>}
+            {errorCount > 0 && <span className="text-red-400/80">{errorCount} error</span>}
+          </div>
+        )}
 
         <span className="ml-auto text-editor-muted/50 group-hover:text-editor-muted transition-colors">
-          {panelOpen ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
+          {isOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
         </span>
       </button>
 
-      {/* ── Entry list ── */}
-      {panelOpen && (
-        <div
-          ref={scrollRef}
-          className="flex flex-col gap-0 overflow-y-auto scrollbar-thin"
-          style={{ maxHeight: "220px" }}
-        >
+      {isOpen && (
+        <div className="flex flex-col gap-1.5 mt-2 pl-3 ml-2 border-l border-editor-border/30 animate-in fade-in duration-200">
           {entries.map((entry, i) => (
             <TraceEntry key={entry.id} entry={entry} index={i} />
           ))}
-
-          {/* Bottom padding so last entry isn't clipped */}
-          <div className="h-2 shrink-0" />
         </div>
       )}
     </div>

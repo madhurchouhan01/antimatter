@@ -127,7 +127,7 @@ async def retrieve_memories(
                         UPDATE agent_memories
                         SET last_retrieved_at = now(),
                             retrieval_count   = retrieval_count + 1
-                        WHERE id = ANY(:ids::uuid[])
+                        WHERE id = ANY(CAST(:ids AS uuid[]))
                     """),
                     {"ids": hit_ids},
                 )

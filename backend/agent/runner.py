@@ -12,8 +12,20 @@ from agent.graph import build_graph
 from agent.context_builder import build_rag_context
 from agent.memory import retrieve_memories, check_and_write_memory
 from core.logger import get_logger
+import re
 
 log = get_logger(__name__)
+
+def merge_diagram_into_message(content: str, diagram_markdown: str) -> str:
+    if not diagram_markdown:
+        return content
+    if "```mermaid" in content:
+        pattern = r'```mermaid\s*(.*?)\s*```'
+        replacement = f"```mermaid\n{diagram_markdown}\n```"
+        new_content, count = re.subn(pattern, replacement, content, flags=re.DOTALL)
+        if count > 0:
+            return new_content
+    return f"{content.strip()}\n\n### Diagram Visualization\n```mermaid\n{diagram_markdown}\n```"
 
 
 async def _write_memory_bg(
@@ -100,6 +112,7 @@ async def run_agent_streaming(
     provider: str = "groq",
     api_key: str | None = None,
 ):
+    final_text = None
     conv = await get_or_create_conversation(db, project.id, conversation_id)
     history = await load_history(db, conv.id)
 
@@ -152,6 +165,10 @@ async def run_agent_streaming(
         state = {
             "messages": history + [HumanMessage(content=enriched_message)],
             "memory_context": memory_context,
+            "diagram_markdown": "",
+            "validation_errors": "",
+            "validation_retries": 0,
+            "needs_diagram": False,
         }
 
         initial_msg_count = len(state["messages"])
@@ -182,10 +199,13 @@ async def run_agent_streaming(
             kind = event["event"]
 
             if kind == "on_chat_model_stream":
-                chunk = event["data"]["chunk"]
-                token = chunk.content
-                if token:
-                    await send_json({"type": "token", "content": token})
+                node = event.get("metadata", {}).get("langgraph_node")
+                # Only stream tokens if they belong to the main coding agent
+                if node == "agent":
+                    chunk = event["data"]["chunk"]
+                    token = chunk.content
+                    if token:
+                        await send_json({"type": "token", "content": token})
                 
                 # Stream tool call chunks if present
                 if chunk.tool_call_chunks:
@@ -217,8 +237,24 @@ async def run_agent_streaming(
                 if event["name"].startswith("antimatter/"):
                     log.debug("I am just before write memory bg:end")
                     # The top-level graph finished. We can grab the final state to save everything accurately!
-                    final_messages = event["data"].get("output", {}).get("messages", [])
+                    final_output = event["data"].get("output", {})
+                    final_messages = final_output.get("messages", [])
+                    diagram_markdown = final_output.get("diagram_markdown", "")
+                    validation_errors = final_output.get("validation_errors", "")
+                    
                     new_messages = final_messages[initial_msg_count:]
+                    
+                    # Merge validated diagram into the last assistant message if valid
+                    if diagram_markdown and not validation_errors:
+                        for m in reversed(new_messages):
+                            if isinstance(m, AIMessage):
+                                m.content = merge_diagram_into_message(m.content, diagram_markdown)
+                                break
+                    
+                    for m in reversed(new_messages):
+                        if isinstance(m, AIMessage):
+                            final_text = m.content
+                            break
                     
                     base_time = datetime.datetime.now(datetime.timezone.utc)
                     for i, m in enumerate(new_messages):
@@ -256,7 +292,7 @@ async def run_agent_streaming(
                     )
     except Exception as e:
         error_msg = str(e).lower()
-        if "429" in error_msg or "rate limit" in error_msg:
+        if "429" in error_msg or "rate limit" in error_msg or "too many requests" in error_msg or e.__class__.__name__ == "RateLimitError":
             log.warning("Rate limit hit", model=model_name, project=str(project.id))
             await send_json({
                 "type": "error",
@@ -270,4 +306,4 @@ async def run_agent_streaming(
                 "message": "An unexpected error occurred while processing your request. The execution was aborted."
             })
 
-    await send_json({"type": "done", "conversation_id": str(conv.id)})
+    await send_json({"type": "done", "conversation_id": str(conv.id), "final_text": final_text})

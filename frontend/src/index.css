@@ -93,3 +93,49 @@ body { margin: 0; background: #1a1b26; color: #a9b1d6; }
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+/* ── Onboarding Page Transitions ───────────────────────────────────────────── */
+@keyframes pageFadeIn {
+  0% { opacity: 0; transform: scale(0.985) translateY(12px); filter: blur(6px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); filter: blur(0); }
+}
+.page-fade-in {
+  animation: pageFadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes pageFadeOut {
+  0% { opacity: 1; transform: scale(1) translateY(0); filter: blur(0); }
+  100% { opacity: 0; transform: scale(0.985) translateY(-12px); filter: blur(6px); }
+}
+.page-fade-out {
+  animation: pageFadeOut 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* ── Slow Background Orb Drift ─────────────────────────────────────────────── */
+@keyframes slowOrbDrift1 {
+  0% { transform: translate(0px, 0px) scale(1); }
+  50% { transform: translate(30px, -45px) scale(1.08); }
+  100% { transform: translate(0px, 0px) scale(1); }
+}
+@keyframes slowOrbDrift2 {
+  0% { transform: translate(0px, 0px) scale(1); }
+  50% { transform: translate(-40px, 30px) scale(0.92); }
+  100% { transform: translate(0px, 0px) scale(1); }
+}
+.glow-orb-1 {
+  animation: slowOrbDrift1 20s infinite alternate ease-in-out;
+}
+.glow-orb-2 {
+  animation: slowOrbDrift2 24s infinite alternate ease-in-out;
+}
+
+/* ── Staggered Project Card Entrance ───────────────────────────────────────── */
+@keyframes cardEntrance {
+  0% { opacity: 0; transform: translateY(18px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.animate-card-entrance {
+  opacity: 0;
+  animation: cardEntrance 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
