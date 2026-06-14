@@ -350,7 +350,7 @@ export default function Layout() {
           />
           <div 
             style={{ width: `${chatWidth}px` }}
-            className="shrink-0"
+            className="shrink-0 h-full"
           >
             <ChatPanel />
           </div>
