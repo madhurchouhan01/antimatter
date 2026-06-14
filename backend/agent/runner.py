@@ -292,7 +292,7 @@ async def run_agent_streaming(
                     )
     except Exception as e:
         error_msg = str(e).lower()
-        if "context_length" in error_msg or "context length" in error_msg or "token limit" in error_msg or "maximum context" in error_msg or "too many tokens" in error_msg:
+        if "context_length" in error_msg or "context length" in error_msg or "token limit" in error_msg or "tokens limit" in error_msg or "maximum context" in error_msg or "too many tokens" in error_msg or "limit exceeded" in error_msg or "prompt tokens" in error_msg:
             log.warning("Context length limit exceeded", model=model_name, project=str(project.id))
             await send_json({
                 "type": "error",
