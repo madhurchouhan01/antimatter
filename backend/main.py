@@ -19,8 +19,10 @@ log = get_logger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    configure_logging(level="INFO")
-    log.info("AntiMatter API starting", env=settings.environment, port=1842)
+    import os
+    log_level = os.getenv("LOG_LEVEL", "INFO")
+    configure_logging(level=log_level)
+    log.info("AntiMatter API starting", env=settings.environment, port=1842, log_level=log_level)
     setup_tracing()
     await init_db()
     log.info("Database initialized")

@@ -63,7 +63,7 @@ async def retrieve_memories(
     db: AsyncSession,
     project_id: str,
     task_description: str,
-    threshold: float = 0.75,
+    threshold: float = 0.3,
     limit: int = 3,
 ) -> str:
     """
@@ -72,6 +72,7 @@ async def retrieve_memories(
     Returns a formatted string ready to be appended to the system prompt, or ""
     if nothing is above the similarity threshold.
     """
+    log.info(f"Memory Retrieval: starting retrieval for task: {task_description!r} in project: {project_id}")
     try:
         query_embedding = await _embed_memory_query(task_description)
     except Exception:
@@ -85,11 +86,11 @@ async def retrieve_memories(
                     id,
                     generalizable_lesson,
                     context_signature,
-                    1 - (embedding <=> :embedding) AS similarity
+                    1 - (embedding <=> CAST(:embedding AS vector)) AS similarity
                 FROM agent_memories
                 WHERE project_id = :project_id
                   AND embedding IS NOT NULL
-                ORDER BY embedding <=> :embedding
+                ORDER BY embedding <=> CAST(:embedding AS vector)
                 LIMIT :limit
             """),
             {
@@ -103,25 +104,38 @@ async def retrieve_memories(
         log.warning("Memory retrieval: DB query failed, skipping", exc_info=True)
         return ""
 
+    log.info(f"Memory Retrieval: found {len(hits)} raw memory candidate(s)")
+    for h in hits:
+        log.info(f"  Candidate id={h.id}, lesson={h.generalizable_lesson!r}, similarity={h.similarity:.4f} (threshold={threshold})")
+
     relevant = [h for h in hits if h.similarity >= threshold][:limit]
     if not relevant:
+        log.info("Memory Retrieval: no memory candidates met the similarity threshold")
         return ""
+
+    log.info(f"Memory Retrieval: returning {len(relevant)} relevant memory/memories above threshold")
 
     # Update retrieval stats in the background (best-effort)
     hit_ids = [str(h.id) for h in relevant]
-    try:
-        await db.execute(
-            text("""
-                UPDATE agent_memories
-                SET last_retrieved_at = now(),
-                    retrieval_count   = retrieval_count + 1
-                WHERE id = ANY(:ids::uuid[])
-            """),
-            {"ids": hit_ids},
-        )
-        await db.commit()
-    except Exception:
-        log.warning("Memory retrieval: failed to update retrieval stats", exc_info=True)
+    
+    async def _update_stats_bg():
+        from db.session import AsyncSessionLocal
+        try:
+            async with AsyncSessionLocal() as bg_db:
+                await bg_db.execute(
+                    text("""
+                        UPDATE agent_memories
+                        SET last_retrieved_at = now(),
+                            retrieval_count   = retrieval_count + 1
+                        WHERE id = ANY(:ids::uuid[])
+                    """),
+                    {"ids": hit_ids},
+                )
+                await bg_db.commit()
+        except Exception:
+            log.warning("Memory retrieval: failed to update retrieval stats in background", exc_info=True)
+
+    asyncio.create_task(_update_stats_bg())
 
     # Format for system prompt injection
     lines: list[str] = []
@@ -311,9 +325,10 @@ async def check_and_write_memory(
     4. Store          — INSERT into agent_memories.
     """
     # Lazy import to avoid circular deps
+    # pyrefly: ignore [missing-import]
     from agent.llm import get_llm
     from db.models import AgentMemory
-
+    log.info("inside check and write")
     trace = _build_compact_trace(final_messages)
     if not trace.strip():
         log.debug("Memory: empty trace, skipping")
@@ -333,6 +348,7 @@ async def check_and_write_memory(
         task_description=task_description[:300],
         trace=trace[:3000],
     )
+    log.info(f"Memory: worthiness prompt sent to LLM:\n{worthiness_prompt}")
     try:
         worth_response = await asyncio.wait_for(
             llm.ainvoke(worthiness_prompt),
@@ -343,6 +359,7 @@ async def check_and_write_memory(
             if isinstance(worth_response.content, str)
             else str(worth_response.content)
         )
+        log.info(f"Memory: worthiness response received from LLM:\n{worth_content}")
         worth_data = _parse_json_from_response(worth_content)
     except asyncio.TimeoutError:
         log.warning("Memory: worthiness check timed out, skipping")
@@ -352,15 +369,13 @@ async def check_and_write_memory(
         return
 
     if not worth_data.get("worthy", False):
-        log.debug(
-            "Memory: task not worthy",
-            reason=worth_data.get("reason", ""),
-            project=project_id,
+        log.info(
+            f"Memory: task NOT worthy. Reason: {worth_data.get('reason', '')}"
         )
         return
 
     log.info(
-        "Memory: task deemed worthy, extracting",
+        "Memory: task deemed worthy, starting metadata extraction",
         reason=worth_data.get("reason"),
         project=project_id,
     )
@@ -372,6 +387,7 @@ async def check_and_write_memory(
         known_files=json.dumps(known_files),
         known_modules=json.dumps(known_modules),
     )
+    log.info(f"Memory: extraction prompt sent to LLM:\n{extraction_prompt}")
     try:
         extract_response = await asyncio.wait_for(
             llm.ainvoke(extraction_prompt),
@@ -382,6 +398,7 @@ async def check_and_write_memory(
             if isinstance(extract_response.content, str)
             else str(extract_response.content)
         )
+        log.info(f"Memory: extraction response received from LLM:\n{extract_content}")
         extracted: dict[str, Any] = _parse_json_from_response(extract_content)
     except asyncio.TimeoutError:
         log.warning("Memory: extraction timed out, skipping")

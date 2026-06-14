@@ -145,7 +145,7 @@ def get_llm(
             temperature=0,
             streaming=True,
             max_retries=3,
-            max_tokens=4000,   # cap to avoid 402 on free-tier accounts
+            max_tokens=100,   # cap to avoid 402 on free-tier accounts
             default_headers={
                 "HTTP-Referer": "https://antimatter.dev",
                 "X-Title": "AntiMatter IDE",
