@@ -370,10 +370,11 @@ Copy `.env.example` to `.env` and set the following:
 ### Chatting with the Agent
 
 Type a task in the chat panel. The agent will:
-1. Build context from your codebase using hybrid RAG
-2. Enter the agentic loop — reasoning, calling tools, observing results
-3. Stream tokens and tool activity back to you in real time
-4. Propose any file changes as diffs — you approve or reject each one
+1. Retrieve and inject relevant **Episodic Memories** (past lessons) if any match the task description.
+2. Build code context from your codebase using **Hybrid RAG** (semantic search + BM25).
+3. Enter the agentic loop — reasoning, calling tools, and observing results.
+4. Stream tokens, live tool actions (rendered in the collapsible **Agent Activity** dropdown showing status and durations), and validated **Mermaid diagrams** back to you.
+5. Propose any file changes as diffs — you approve or reject each one.
 
 **Example tasks:**
 ```
