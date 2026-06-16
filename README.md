@@ -90,7 +90,7 @@ Most AI coding tools are glorified autocomplete — they suggest text in a singl
 - **Monaco Editor** (the engine behind VS Code) with syntax highlighting, IntelliSense, and multi-tab support
 - **Inline Chat** (Cmd+K / Ctrl+K) — select code, ask a question, get an inline diff
 - **Git panel** — stage, commit, view diffs, manage branches from the UI
-- **Integrated terminal** — connected directly to your project's Docker sandbox
+- **Integrated terminal** — connected directly to your project's Docker sandbox, featuring a **Direct Log Redirection** action to automatically grab and animate logs directly into the AI chat input
 - **LSP support** — real diagnostics from `pylsp` wired into Monaco
 
 ### 🔐 Auth & Projects
@@ -403,6 +403,9 @@ Currently supported models include:
 ### Terminal
 
 The terminal tab connects directly to your project's Docker sandbox. Run commands, start dev servers, inspect output — all isolated from the host.
+
+#### 📤 Direct Log Redirection
+Next to the terminal fullscreen button is a redirect action button. Clicking it grabs the active terminal's entire scrollback buffer, wraps it in a code block, and triggers a premium floating animation that flies the logs directly into the AI chat input, completing with a satisfying pulse transition. This eliminates copy-paste friction when sharing command output, stack traces, or build logs with the agent.
 
 ```bash
 # Inside the sandbox terminal

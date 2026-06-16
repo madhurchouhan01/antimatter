@@ -1,16 +1,24 @@
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect } from "react"
 import {
   X, Settings, Key, ChevronDown, Eye, EyeOff, CheckCircle2,
-  AlertCircle, Loader2, ExternalLink, Cpu, Sparkles, Shield
+  AlertCircle, Loader2, ExternalLink, Cpu, Sparkles, Shield,
+  Zap, Brain, Shuffle, Bot
 } from "lucide-react"
 import { useSettingsStore } from "../stores/settingsStore"
 import api from "../lib/api"
+
+// Custom SVG component for GitHub
+const GitHubIcon = ({ size = 16, className = "", style = {} }) => (
+  <svg viewBox="0 0 24 24" className={className} style={{ width: size, height: size, fill: "currentColor", ...style }} xmlns="http://www.w3.org/2000/svg">
+    <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12" />
+  </svg>
+)
 
 // ── Provider metadata ─────────────────────────────────────────────────────────
 const PROVIDERS = {
   groq: {
     label: "Groq",
-    icon: "⚡",
+    icon: Zap,
     color: "#f97316",
     gradient: "from-orange-500/20 to-red-500/10",
     border: "border-orange-500/30",
@@ -22,7 +30,7 @@ const PROVIDERS = {
   },
   github: {
     label: "GitHub Marketplace",
-    icon: "🐙",
+    icon: GitHubIcon,
     color: "#a78bfa",
     gradient: "from-violet-500/20 to-purple-500/10",
     border: "border-violet-500/30",
@@ -34,7 +42,7 @@ const PROVIDERS = {
   },
   openai: {
     label: "OpenAI",
-    icon: "🤖",
+    icon: Bot,
     color: "#10a37f",
     gradient: "from-emerald-500/20 to-teal-500/10",
     border: "border-emerald-500/30",
@@ -46,7 +54,7 @@ const PROVIDERS = {
   },
   openrouter: {
     label: "OpenRouter",
-    icon: "🔀",
+    icon: Shuffle,
     color: "#6366f1",
     gradient: "from-indigo-500/20 to-blue-500/10",
     border: "border-indigo-500/30",
@@ -58,7 +66,7 @@ const PROVIDERS = {
   },
   anthropic: {
     label: "Anthropic",
-    icon: "🧠",
+    icon: Brain,
     color: "#d97706",
     gradient: "from-amber-500/20 to-yellow-500/10",
     border: "border-amber-500/30",
@@ -70,7 +78,7 @@ const PROVIDERS = {
   },
   gemini: {
     label: "Google Gemini",
-    icon: "✨",
+    icon: Sparkles,
     color: "#3b82f6",
     gradient: "from-blue-500/20 to-cyan-500/10",
     border: "border-blue-500/30",
@@ -194,7 +202,9 @@ export default function SettingsModal({ onClose }) {
                         : "border-editor-border/40 hover:border-editor-border hover:bg-editor-highlight/30"
                       }`}
                   >
-                    <span className="text-lg leading-none">{p.icon}</span>
+                    <span className="flex items-center justify-center p-0.5">
+                      <p.icon size={16} style={{ color: p.color }} />
+                    </span>
                     <span className={`text-[10px] font-semibold ${provider === key ? "text-white" : "text-editor-muted"}`}>
                       {p.label}
                     </span>
@@ -203,8 +213,11 @@ export default function SettingsModal({ onClose }) {
               </div>
 
               {/* Provider description */}
-              <div className={`mt-3 px-3 py-2 rounded-lg border text-[11px] text-editor-muted bg-gradient-to-r ${meta.gradient} ${meta.border}`}>
-                <span style={{ color: meta.color }}>{meta.icon} {meta.label}</span>
+              <div className={`mt-3 px-3 py-2.5 rounded-lg border text-[11px] text-editor-muted bg-gradient-to-r ${meta.gradient} ${meta.border}`}>
+                <span className="inline-flex items-center gap-1 font-semibold" style={{ color: meta.color }}>
+                  <meta.icon size={12} className="mr-0.5" />
+                  {meta.label}
+                </span>
                 {" — "}{meta.description}
               </div>
             </div>
