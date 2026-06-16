@@ -195,9 +195,20 @@ export default function ChatPanel() {
   const { sendMessage, connect, disconnect } = useAgentSocket(project?.id)
   const entries   = useAgentTraceStore((s) => s.entries)
   const isActive  = useAgentTraceStore((s) => s.isActive)
-  const [input, setInput] = useState("")
+  const input = useChatStore((s) => s.input)
+  const setInput = useChatStore((s) => s.setInput)
+  const inputPulse = useChatStore((s) => s.inputPulse)
   const bottomRef = useRef(null)
   const containerRef = useRef(null)
+
+  // Auto-resize input textarea when input changes programmatically (e.g. log injection)
+  useEffect(() => {
+    const textarea = document.getElementById("chat-input-textarea")
+    if (textarea) {
+      textarea.style.height = 'auto'
+      textarea.style.height = Math.min(textarea.scrollHeight, 160) + 'px'
+    }
+  }, [input])
 
   // Pull provider + model from the global settings store
   const provider    = useSettingsStore((s) => s.provider)
@@ -458,7 +469,7 @@ export default function ChatPanel() {
 
       {/* Input */}
       <div className="p-4 border-t border-editor-border/50 bg-editor-bg/30 backdrop-blur-md">
-        <div className={`flex gap-2 items-end bg-editor-bg border border-editor-border hover:border-editor-accent/50 focus-within:border-editor-accent/80 focus-within:shadow-[0_0_15px_rgba(122,162,247,0.15)] rounded-xl px-3 py-2.5 transition-all ${!isConnected ? 'opacity-50 pointer-events-none' : ''}`}>
+        <div className={`flex gap-2 items-end bg-editor-bg border border-editor-border hover:border-editor-accent/50 focus-within:border-editor-accent/80 focus-within:shadow-[0_0_15px_rgba(122,162,247,0.15)] rounded-xl px-3 py-2.5 transition-all ${inputPulse ? 'animate-input-pulse border-editor-accent shadow-[0_0_25px_rgba(122,162,247,0.6)] scale-[1.02]' : ''} ${!isConnected ? 'opacity-50 pointer-events-none' : ''}`}>
           <textarea
             id="chat-input-textarea"
             className="flex-1 bg-transparent text-white text-[13px] resize-none outline-none max-h-40 min-h-[20px] placeholder:text-editor-muted"

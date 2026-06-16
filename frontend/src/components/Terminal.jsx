@@ -4,7 +4,7 @@ import { FitAddon } from "@xterm/addon-fit"
 import { WebLinksAddon } from "@xterm/addon-web-links"
 import { useAuthStore } from "../stores/authStore"
 import { useProjectStore } from "../stores/projectStore"
-import { useTerminalStore } from "../stores/terminalStore"
+import { useTerminalStore, registerTerminalInstance, unregisterTerminalInstance } from "../stores/terminalStore"
 import "@xterm/xterm/css/xterm.css"
 
 export default function Terminal({ terminalId }) {
@@ -72,6 +72,7 @@ export default function Terminal({ terminalId }) {
 
     xtermRef.current = term
     fitRef.current   = fitAddon
+    registerTerminalInstance(terminalId, term)
 
     // Connect WebSocket passing terminal_id parameter
     const ws = new WebSocket(
@@ -142,6 +143,7 @@ export default function Terminal({ terminalId }) {
       resizeObserver.disconnect()
       term.dispose()
       ws.close()
+      unregisterTerminalInstance(terminalId)
       // If we are unmounting, clear sendCommand
       useTerminalStore.setState({ sendCommand: null })
     }

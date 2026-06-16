@@ -11,7 +11,8 @@ import GlobalDiffPanel from "./GlobalDiffPanel"
 import ShortcutsOverlay from "./ShortcutsOverlay"
 import SettingsModal from "./SettingsModal"
 import { useShortcuts } from "../hooks/useShortcuts"
-import { useTerminalStore } from "../stores/terminalStore"
+import { useTerminalStore, getTerminalBufferText } from "../stores/terminalStore"
+import { useChatStore } from "../stores/chatStore"
 import { useProjectStore } from "../stores/projectStore"
 import { useAuthStore } from "../stores/authStore"
 import { useSettingsStore } from "../stores/settingsStore"
@@ -19,7 +20,8 @@ import { useAgentSocket } from "../hooks/useAgentSocket"
 import {
   PanelLeftClose, PanelLeftOpen,
   MessageSquare, Terminal as TermIcon,
-  GitBranch, Plus, Maximize2, Minimize2, ChevronDown, LogOut, Settings
+  GitBranch, Plus, Maximize2, Minimize2, ChevronDown, LogOut, Settings,
+  ArrowRightToLine
 } from "lucide-react"
 
 export default function Layout() {
@@ -135,6 +137,56 @@ export default function Layout() {
     }
     document.addEventListener("mousemove", handleMouseMove)
     document.addEventListener("mouseup", handleMouseUp)
+  }
+
+  const [flyingLogs, setFlyingLogs] = useState([])
+
+  const handleSendLogsToChat = (e) => {
+    if (!activeSession) return
+    const logs = getTerminalBufferText(activeSession)
+    if (!logs || logs.trim() === "") return
+
+    const buttonRect = e.currentTarget.getBoundingClientRect()
+    const startPoint = {
+      x: buttonRect.left + buttonRect.width / 2,
+      y: buttonRect.top + buttonRect.height / 2
+    }
+
+    const triggerAnimation = () => {
+      setTimeout(() => {
+        const textarea = document.getElementById("chat-input-textarea")
+        if (!textarea) return
+
+        const targetRect = textarea.getBoundingClientRect()
+        const endPoint = {
+          x: targetRect.left + targetRect.width / 2,
+          y: targetRect.top + targetRect.height / 2
+        }
+
+        const id = Date.now()
+        setFlyingLogs((prev) => [...prev, { id, startPoint, endPoint }])
+
+        setTimeout(() => {
+          setFlyingLogs((prev) => prev.filter((item) => item.id !== id))
+
+          const preamble = `Here is my terminal output:\n\`\`\`\n${logs}\n\`\`\``
+          const { input, setInput, setInputPulse } = useChatStore.getState()
+          const newValue = input ? `${input}\n\n${preamble}` : preamble
+          setInput(newValue)
+
+          setInputPulse(true)
+          setTimeout(() => {
+            setInputPulse(false)
+          }, 600)
+        }, 750)
+      }, chatOpen ? 20 : 350)
+    }
+
+    if (!chatOpen) {
+      setChatOpen(true)
+    }
+
+    triggerAnimation()
   }
 
   return (
@@ -309,6 +361,13 @@ export default function Layout() {
               {/* Window controls */}
               <div className="ml-auto flex items-center gap-2 pr-1 shrink-0">
                 <button
+                  onClick={handleSendLogsToChat}
+                  className="p-1 text-editor-muted hover:text-editor-text hover:bg-editor-highlight/60 rounded transition-colors flex items-center justify-center"
+                  title="Send terminal logs to AI chat"
+                >
+                  <ArrowRightToLine size={13} />
+                </button>
+                <button
                   onClick={() => setTermFullscreen(!termFullscreen)}
                   className="p-1 text-editor-muted hover:text-editor-text hover:bg-editor-highlight/60 rounded transition-colors"
                   title={termFullscreen ? "Restore pane" : "Maximize pane"}
@@ -359,6 +418,28 @@ export default function Layout() {
       )}
 
       <IndexingNotification />
+
+      {/* Flying log elements */}
+      {flyingLogs.map((item) => (
+        <div
+          key={item.id}
+          className="animate-fly-to-chat flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-editor-accent/40 bg-[#1e1f29] shadow-[0_10px_30px_rgba(0,0,0,0.5)] text-[10px] font-mono text-editor-accent font-bold"
+          style={{
+            "--start-x": `${item.startPoint.x}px`,
+            "--start-y": `${item.startPoint.y}px`,
+            "--end-x": `${item.endPoint.x}px`,
+            "--end-y": `${item.endPoint.y}px`,
+            position: "fixed",
+            left: 0,
+            top: 0,
+            zIndex: 99999,
+            pointerEvents: "none",
+          }}
+        >
+          <TermIcon size={12} />
+          <span>LOGS</span>
+        </div>
+      ))}
     </div>
   )
 }
