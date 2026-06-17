@@ -76,6 +76,10 @@ export const conversationsApi = {
     api.get(`/api/projects/${projectId}/conversations`),
   messages: (projectId, convId) =>
     api.get(`/api/projects/${projectId}/conversations/${convId}/messages`),
+  update:   (projectId, convId, title) =>
+    api.put(`/api/projects/${projectId}/conversations/${convId}`, { title }),
+  delete:   (projectId, convId) =>
+    api.delete(`/api/projects/${projectId}/conversations/${convId}`),
 }
 
 // Settings endpoints

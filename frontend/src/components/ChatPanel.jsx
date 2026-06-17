@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { Send, Wrench, Bot, User, AlertCircle, Sparkles, Info, Zap, PlusSquare, RefreshCw, Settings, Globe } from "lucide-react"
+import { Send, Wrench, Bot, User, AlertCircle, Sparkles, Info, Zap, PlusSquare, RefreshCw, Settings, Globe, History, Edit2, Trash2, Check, X, Search } from "lucide-react"
 import { useChatStore } from "../stores/chatStore"
 import { useProjectStore } from "../stores/projectStore"
 import { useSettingsStore } from "../stores/settingsStore"
@@ -7,6 +7,27 @@ import { useAgentSocket } from "../hooks/useAgentSocket"
 import { useAgentTraceStore } from "../stores/agentTraceStore"
 import ActivityDropdown from "./ActivityDropdown"
 import Markdown from "./Markdown"
+
+function formatRelativeTime(dateStr) {
+  try {
+    const date = new Date(dateStr)
+    const now = new Date()
+    const diffMs = now - date
+    const diffSec = Math.floor(diffMs / 1000)
+    const diffMin = Math.floor(diffSec / 60)
+    const diffHr = Math.floor(diffMin / 60)
+    const diffDays = Math.floor(diffHr / 24)
+
+    if (diffSec < 60) return "Just now"
+    if (diffMin < 60) return `${diffMin}m ago`
+    if (diffHr < 24) return `${diffHr}h ago`
+    if (diffDays === 1) return "Yesterday"
+    if (diffDays < 7) return `${diffDays}d ago`
+    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  } catch (e) {
+    return ""
+  }
+}
 
 function MessageBubble({ msg, onRetry }) {
   if (msg.role === "activity") {
@@ -201,6 +222,34 @@ export default function ChatPanel() {
   const bottomRef = useRef(null)
   const containerRef = useRef(null)
 
+  // Chat History state
+  const [showHistory, setShowHistory] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [editingConvId, setEditingConvId] = useState(null)
+  const [editTitle, setEditTitle] = useState("")
+  const [deletingConvId, setDeletingConvId] = useState(null)
+
+  const conversations = useChatStore((s) => s.conversations)
+  const conversationId = useChatStore((s) => s.conversationId)
+  const fetchConversations = useChatStore((s) => s.fetchConversations)
+  const loadConversation = useChatStore((s) => s.loadConversation)
+  const renameConversation = useChatStore((s) => s.renameConversation)
+  const deleteConversation = useChatStore((s) => s.deleteConversation)
+
+  // Fetch conversation lists when project changes
+  useEffect(() => {
+    if (project) {
+      fetchConversations(project.id)
+    }
+  }, [project?.id, fetchConversations])
+
+  // Load active conversation's messages from database on mount if messages is empty
+  useEffect(() => {
+    if (project && conversationId && messages.length === 0) {
+      loadConversation(project.id, conversationId)
+    }
+  }, [project?.id, conversationId, loadConversation, messages.length])
+
   // Auto-resize input textarea when input changes programmatically (e.g. log injection)
   useEffect(() => {
     const textarea = document.getElementById("chat-input-textarea")
@@ -214,7 +263,6 @@ export default function ChatPanel() {
   const provider    = useSettingsStore((s) => s.provider)
   const model       = useSettingsStore((s) => s.model)
   const setModel    = useSettingsStore((s) => s.setModel)
-  const providerModels = useSettingsStore((s) => s.providerModels) || []
 
   // Curated model lists per provider (loaded separately from backend)
   const [modelCatalogue, setModelCatalogue] = useState({})
@@ -289,17 +337,22 @@ export default function ChatPanel() {
     sendMessage(text, model)
   }
 
+  // Filter conversations by search query
+  const filteredConversations = conversations.filter(conv => 
+    (conv.title || "Untitled Conversation").toLowerCase().includes(searchQuery.toLowerCase())
+  )
+
   return (
-    <div className="flex flex-col h-full bg-editor-sidebar/95 backdrop-blur-xl border-l border-editor-border/50 shadow-[-8px_0_24px_rgba(0,0,0,0.2)] z-30 relative">
+    <div className="flex flex-col h-full bg-editor-sidebar/95 backdrop-blur-xl border-l border-editor-border/50 shadow-[-8px_0_24px_rgba(0,0,0,0.2)] z-30 relative overflow-hidden">
       {/* Header */}
-      <div className="flex items-center gap-2.5 px-5 h-12 border-b border-editor-border/50 bg-editor-bg/50 shrink-0">
+      <div className="flex items-center gap-2 px-4 h-12 border-b border-editor-border/50 bg-editor-bg/50 shrink-0">
         <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-blue-500/10 border border-blue-500/20">
           <Sparkles size={14} className="text-editor-accent" />
         </div>
-        <span className="text-[13px] font-bold text-white tracking-wide uppercase">AI Assistant</span>
+        <span className="text-[13px] font-bold text-white tracking-wide uppercase ml-2">AI Assistant</span>
         
         <select 
-          className="ml-auto bg-editor-bg border border-editor-border text-[11px] text-editor-muted rounded px-2 py-0.5 outline-none hover:border-editor-accent/50 focus:border-editor-accent/80 transition-colors max-w-[140px] truncate cursor-pointer"
+          className="ml-auto bg-editor-bg border border-editor-border text-[11px] text-editor-muted rounded px-2 py-0.5 outline-none hover:border-editor-accent/50 focus:border-editor-accent/80 transition-colors max-w-[120px] truncate cursor-pointer"
           value={model}
           onChange={(e) => setModel(e.target.value)}
         >
@@ -311,20 +364,36 @@ export default function ChatPanel() {
           )}
         </select>
 
+        {/* History Toggle Button */}
+        <button
+          onClick={() => {
+            if (project) {
+              fetchConversations(project.id)
+            }
+            setShowHistory(!showHistory)
+          }}
+          className={`ml-2 flex items-center justify-center w-7 h-7 rounded hover:bg-editor-highlight transition-all
+            ${showHistory ? 'bg-editor-accent/20 text-editor-accent border border-editor-accent/30' : 'text-editor-muted hover:text-white'}`}
+          title="Chat History"
+        >
+          <History size={14} />
+        </button>
 
+        {/* New Chat Button */}
         <button
           onClick={() => {
             useChatStore.getState().clearChat()
             useAgentTraceStore.getState().clear()
+            setShowHistory(false)
           }}
-          className="ml-2 flex items-center justify-center w-6 h-6 rounded hover:bg-editor-highlight text-editor-muted hover:text-white transition-colors"
+          className="ml-1.5 flex items-center justify-center w-7 h-7 rounded hover:bg-editor-highlight text-editor-muted hover:text-white transition-all"
           title="New Chat"
         >
           <PlusSquare size={14} />
         </button>
       </div>
 
-      {/* Messages */}
+      {/* Main Messages area */}
       <div 
         ref={containerRef}
         className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 scrollbar-thin"
@@ -450,6 +519,170 @@ export default function ChatPanel() {
         )}
         <div ref={bottomRef} className="h-2 shrink-0" />
       </div>
+
+      {/* History Drawer Overlay */}
+      {showHistory && (
+        <div className="absolute inset-x-0 bottom-0 top-12 bg-[#12131a]/98 backdrop-blur-xl z-40 flex flex-col border-t border-editor-border/50 animate-in slide-in-from-left duration-200">
+          {/* Search bar */}
+          <div className="p-3 border-b border-editor-border/30 flex gap-2 items-center bg-editor-sidebar">
+            <div className="relative flex-1">
+              <Search size={13} className="absolute left-2.5 top-2.5 text-editor-muted" />
+              <input
+                type="text"
+                placeholder="Search conversations..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-[#1e1f29] border border-editor-border/60 focus:border-editor-accent/80 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder:text-editor-muted outline-none transition-all"
+              />
+              {searchQuery && (
+                <button 
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2 top-2.5 text-editor-muted hover:text-white"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+            <button
+              onClick={() => setShowHistory(false)}
+              className="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-editor-highlight hover:bg-editor-highlight/80 text-white transition-colors border border-editor-border/50"
+            >
+              Close
+            </button>
+          </div>
+
+          {/* Conversations list */}
+          <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-2 scrollbar-thin">
+            {filteredConversations.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 text-editor-muted text-xs opacity-70">
+                <History size={28} className="mb-2 opacity-50" />
+                <span>No conversations found</span>
+              </div>
+            ) : (
+              filteredConversations.map((conv) => {
+                const isActive = conv.id === conversationId
+                const isEditing = conv.id === editingConvId
+                const isDeleting = conv.id === deletingConvId
+
+                return (
+                  <div
+                    key={conv.id}
+                    onClick={() => {
+                      if (!isEditing && !isDeleting) {
+                        loadConversation(project.id, conv.id)
+                        useAgentTraceStore.getState().clear()
+                        setShowHistory(false)
+                      }
+                    }}
+                    className={`group relative flex flex-col p-3.5 rounded-xl border transition-all duration-200 cursor-pointer select-none
+                      ${isActive 
+                        ? "bg-editor-accent/10 border-editor-accent shadow-[0_0_16px_rgba(122,162,247,0.08)]" 
+                        : "bg-editor-bg/40 border-editor-border/40 hover:bg-editor-highlight/30 hover:border-editor-border/70"
+                      }`}
+                  >
+                    {isEditing ? (
+                      <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="text"
+                          value={editTitle}
+                          onChange={(e) => setEditTitle(e.target.value)}
+                          className="flex-1 bg-[#1e1f29] border border-editor-accent rounded-lg px-2.5 py-1 text-xs text-white outline-none focus:ring-1 focus:ring-editor-accent"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              if (editTitle.trim()) {
+                                renameConversation(project.id, conv.id, editTitle.trim())
+                              }
+                              setEditingConvId(null)
+                            } else if (e.key === "Escape") {
+                              setEditingConvId(null)
+                            }
+                          }}
+                        />
+                        <button
+                          onClick={() => {
+                            if (editTitle.trim()) {
+                              renameConversation(project.id, conv.id, editTitle.trim())
+                            }
+                            setEditingConvId(null)
+                          }}
+                          className="p-1.5 text-green-400 hover:bg-green-500/10 rounded-lg transition-colors"
+                          title="Save title"
+                        >
+                          <Check size={14} />
+                        </button>
+                        <button
+                          onClick={() => setEditingConvId(null)}
+                          className="p-1.5 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                          title="Cancel"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ) : isDeleting ? (
+                      <div className="flex items-center justify-between" onClick={(e) => e.stopPropagation()}>
+                        <span className="text-xs text-red-400 font-semibold animate-pulse">Delete conversation?</span>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => {
+                              deleteConversation(project.id, conv.id)
+                              setDeletingConvId(null)
+                            }}
+                            className="px-3 py-1 text-[11px] font-bold bg-red-500/20 hover:bg-red-500/40 text-red-200 border border-red-500/30 rounded-lg transition-colors"
+                          >
+                            Delete
+                          </button>
+                          <button
+                            onClick={() => setDeletingConvId(null)}
+                            className="px-3 py-1 text-[11px] font-semibold bg-editor-highlight hover:bg-editor-highlight/80 text-white rounded-lg transition-colors border border-editor-border/40"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex items-start justify-between pr-14">
+                          <span className={`text-xs font-semibold truncate ${isActive ? 'text-white' : 'text-editor-text/90 group-hover:text-white'}`}>
+                            {conv.title || "Untitled Conversation"}
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-editor-muted mt-1.5 font-medium">
+                          {formatRelativeTime(conv.created_at)}
+                        </span>
+
+                        {/* Actions drawer triggers on hover */}
+                        <div 
+                          className="absolute right-2 top-1/2 -translate-y-1/2 hidden group-hover:flex items-center gap-1 bg-editor-sidebar/85 backdrop-blur-md rounded-lg p-0.5 border border-editor-border/30"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button
+                            onClick={() => {
+                              setEditingConvId(conv.id)
+                              setEditTitle(conv.title || "")
+                            }}
+                            className="p-1.5 text-editor-muted hover:text-white hover:bg-editor-highlight rounded-lg transition-colors"
+                            title="Rename"
+                          >
+                            <Edit2 size={12} />
+                          </button>
+                          <button
+                            onClick={() => setDeletingConvId(conv.id)}
+                            className="p-1.5 text-editor-muted hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                            title="Delete"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )
+              })
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Offline warning banner */}
       {!isConnected && (

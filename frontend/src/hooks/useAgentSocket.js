@@ -112,6 +112,10 @@ export function useAgentSocket(projectId) {
         }
         flushBuffer(msg.final_text)
         setConversationId(msg.conversation_id)
+        
+        // Refresh conversations list to update sidebar titles
+        useChatStore.getState().fetchConversations(projectId)
+
         // Mark trace run as finished
         useAgentTraceStore.getState().endRun()
         // If any diffs arrived during this turn, mark agent as done so UI shows review panel

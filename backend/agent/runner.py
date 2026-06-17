@@ -124,6 +124,12 @@ async def run_agent_streaming(
         content=user_message,
         created_at=now_
     ))
+    # Auto-generate title if not set
+    if not conv.title:
+        title_text = user_message.strip().split("\n")[0]
+        if len(title_text) > 40:
+            title_text = title_text[:40] + "..."
+        conv.title = title_text or "New Conversation"
     await db.flush()
 
     try:
