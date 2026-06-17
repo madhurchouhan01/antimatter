@@ -36,3 +36,33 @@ export const useTerminalStore = create((set) => ({
   addPendingCommand: (cmd) => set((state) => ({ pendingCommands: [...state.pendingCommands, cmd] })),
   clearPendingCommands: () => set({ pendingCommands: [] }),
 }))
+
+const terminalInstances = {}
+
+export const registerTerminalInstance = (id, term) => {
+  terminalInstances[id] = term
+}
+
+export const unregisterTerminalInstance = (id) => {
+  delete terminalInstances[id]
+}
+
+export const getTerminalBufferText = (id) => {
+  const term = terminalInstances[id]
+  if (!term) return ""
+  const buffer = term.buffer.active
+  const lines = []
+  for (let i = 0; i < buffer.length; i++) {
+    const line = buffer.getLine(i)
+    if (line) {
+      lines.push(line.translateToString(true))
+    }
+  }
+  
+  // Trim trailing empty lines
+  let end = lines.length - 1
+  while (end >= 0 && (!lines[end] || lines[end].trim() === "")) {
+    end--
+  }
+  return lines.slice(0, end + 1).join("\n")
+}

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { Send, Wrench, Bot, User, AlertCircle, Sparkles, Info, Zap, PlusSquare, RefreshCw, Settings } from "lucide-react"
+import { Send, Wrench, Bot, User, AlertCircle, Sparkles, Info, Zap, PlusSquare, RefreshCw, Settings, Globe, History, Edit2, Trash2, Check, X, Search } from "lucide-react"
 import { useChatStore } from "../stores/chatStore"
 import { useProjectStore } from "../stores/projectStore"
 import { useSettingsStore } from "../stores/settingsStore"
@@ -7,6 +7,27 @@ import { useAgentSocket } from "../hooks/useAgentSocket"
 import { useAgentTraceStore } from "../stores/agentTraceStore"
 import ActivityDropdown from "./ActivityDropdown"
 import Markdown from "./Markdown"
+
+function formatRelativeTime(dateStr) {
+  try {
+    const date = new Date(dateStr)
+    const now = new Date()
+    const diffMs = now - date
+    const diffSec = Math.floor(diffMs / 1000)
+    const diffMin = Math.floor(diffSec / 60)
+    const diffHr = Math.floor(diffMin / 60)
+    const diffDays = Math.floor(diffHr / 24)
+
+    if (diffSec < 60) return "Just now"
+    if (diffMin < 60) return `${diffMin}m ago`
+    if (diffHr < 24) return `${diffHr}h ago`
+    if (diffDays === 1) return "Yesterday"
+    if (diffDays < 7) return `${diffDays}d ago`
+    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  } catch (e) {
+    return ""
+  }
+}
 
 function MessageBubble({ msg, onRetry }) {
   if (msg.role === "activity") {
@@ -16,16 +37,121 @@ function MessageBubble({ msg, onRetry }) {
   const isTool   = msg.role === "tool_start" || msg.role === "tool_end"
   const isSystem = msg.role === "system"
 
-  // Rate limit error: highly visible block
-  if (msg.role === "error" && msg.error_type === "rate_limit") {
-    return (
-      <div className="flex flex-col gap-2 p-4 rounded-xl bg-orange-500/20 border border-orange-500/50 text-orange-200 self-stretch my-2 shadow-[0_0_20px_rgba(249,115,22,0.15)]">
-        <div className="flex items-center gap-2 font-bold text-orange-400">
-          <Zap size={16} className="fill-orange-400" />
-          <span>Rate Limit Exceeded</span>
+  // Actionable Error Cards
+  if (msg.role === "error") {
+    const errorType = msg.error_type || "generic"
+
+    if (errorType === "rate_limit") {
+      return (
+        <div className="flex flex-col gap-2.5 p-4 rounded-xl bg-orange-500/10 border border-orange-500/30 text-orange-200 self-stretch my-2 shadow-[0_0_24px_rgba(249,115,22,0.08)] animate-in fade-in duration-200">
+          <div className="flex items-center gap-2 font-bold text-orange-400">
+            <Zap size={15} className="fill-orange-400 text-orange-400 animate-pulse" />
+            <span>Rate Limit Exceeded</span>
+          </div>
+          <div className="text-[12.5px] leading-relaxed opacity-95">
+            <Markdown text={msg.content} />
+          </div>
+          {onRetry && (
+            <button onClick={() => {
+                const msgs = useChatStore.getState().messages;
+                const lastUser = [...msgs].reverse().find(m => m.role === "user");
+                if(lastUser) onRetry(lastUser.content);
+              }} 
+              className="mt-1.5 self-start flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-500/20 hover:bg-orange-500/30 border border-orange-500/30 text-orange-300 text-xs font-semibold transition-all duration-200"
+            >
+              <RefreshCw size={11} />
+              Retry Request
+            </button>
+          )}
         </div>
-        <div className="text-[13px] leading-relaxed">
-          <Markdown text={msg.content} />
+      )
+    }
+
+    if (errorType === "token_limit") {
+      return (
+        <div className="flex flex-col gap-2.5 p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 self-stretch my-2 shadow-[0_0_24px_rgba(245,158,11,0.08)] animate-in fade-in duration-200">
+          <div className="flex items-center gap-2 font-bold text-amber-400">
+            <AlertCircle size={15} className="text-amber-400 animate-pulse" />
+            <span>Context Limit Exceeded</span>
+          </div>
+          <div className="text-[12.5px] leading-relaxed opacity-95">
+            <Markdown text={msg.content} />
+          </div>
+          <div className="mt-1.5 border-t border-amber-500/20 pt-2 flex flex-col gap-1.5 text-[11px] text-amber-300/80">
+            <span className="font-semibold text-amber-300 uppercase tracking-wider text-[9px]">Suggested Actions:</span>
+            <span className="flex items-start gap-1">
+              <span className="text-amber-400">•</span>
+              <span>Close open editor tabs that have large file sizes to reduce RAG context.</span>
+            </span>
+            <span className="flex items-start gap-1">
+              <span className="text-amber-400">•</span>
+              <span>Ask a shorter, more specific question.</span>
+            </span>
+            <span className="flex items-start gap-1">
+              <span className="text-amber-400">•</span>
+              <span>Select a model with a larger context window in the top dropdown.</span>
+            </span>
+          </div>
+        </div>
+      )
+    }
+
+    if (errorType === "auth_error") {
+      return (
+        <div className="flex flex-col gap-2.5 p-4 rounded-xl bg-red-950/20 border border-red-500/30 text-red-200 self-stretch my-2 shadow-[0_0_24px_rgba(239,68,68,0.08)] animate-in fade-in duration-200">
+          <div className="flex items-center gap-2 font-bold text-red-400">
+            <AlertCircle size={15} className="text-red-400 animate-pulse" />
+            <span>LLM Authentication Failure</span>
+          </div>
+          <div className="text-[12.5px] leading-relaxed opacity-95">
+            <Markdown text={msg.content} />
+          </div>
+          <button 
+            onClick={() => useSettingsStore.getState().setSettingsOpen(true)}
+            className="mt-1.5 self-start flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-300 text-xs font-semibold transition-all duration-200"
+          >
+            <Settings size={11} />
+            Configure API Keys
+          </button>
+        </div>
+      )
+    }
+
+    if (errorType === "network_error") {
+      return (
+        <div className="flex flex-col gap-2.5 p-4 rounded-xl bg-zinc-800/30 border border-zinc-500/30 text-zinc-300 self-stretch my-2 shadow-sm animate-in fade-in duration-200">
+          <div className="flex items-center gap-2 font-bold text-zinc-400">
+            <Globe size={15} className="text-zinc-400 animate-pulse" />
+            <span>Connection Timeout / Offline</span>
+          </div>
+          <div className="text-[12.5px] leading-relaxed opacity-95">
+            <Markdown text={msg.content} />
+          </div>
+          {onRetry && (
+            <button onClick={() => {
+                const msgs = useChatStore.getState().messages;
+                const lastUser = [...msgs].reverse().find(m => m.role === "user");
+                if(lastUser) onRetry(lastUser.content);
+              }} 
+              className="mt-1.5 self-start flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-500/10 hover:bg-zinc-500/20 border border-zinc-500/25 text-zinc-300 text-xs font-semibold transition-all duration-200"
+            >
+              <RefreshCw size={11} />
+              Retry Request
+            </button>
+          )}
+        </div>
+      )
+    }
+
+    // Generic / fallback error card
+    return (
+      <div className="flex flex-col gap-2 p-3.5 rounded-xl bg-red-950/10 border border-red-500/20 text-red-300 self-stretch my-2 shadow-sm animate-in fade-in duration-200">
+        <div className="flex items-center gap-2 font-semibold text-red-400">
+          <AlertCircle size={14} className="text-red-400 animate-pulse" />
+          <span>Agent Execution Failure</span>
+        </div>
+        <div className="text-[12.5px] leading-relaxed opacity-90">
+           <Markdown text={msg.content} />
         </div>
         {onRetry && (
           <button onClick={() => {
@@ -33,7 +159,7 @@ function MessageBubble({ msg, onRetry }) {
               const lastUser = [...msgs].reverse().find(m => m.role === "user");
               if(lastUser) onRetry(lastUser.content);
             }} 
-            className="mt-2 self-start flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-500/20 hover:bg-orange-500/40 text-orange-300 text-xs font-medium transition-colors border border-orange-500/30"
+            className="mt-1 self-start flex items-center gap-1.5 px-3 py-1 rounded border border-red-500/20 bg-red-500/10 hover:bg-red-500/20 text-red-300 text-xs transition-colors"
           >
             <RefreshCw size={12} />
             Retry
@@ -43,37 +169,10 @@ function MessageBubble({ msg, onRetry }) {
     )
   }
 
-  // Generic error
-  if (msg.role === "error") {
-      return (
-        <div className="flex flex-col gap-2 p-3.5 rounded-xl bg-red-900/20 border border-red-500/30 text-red-300 self-stretch my-2 shadow-sm">
-          <div className="flex items-center gap-2 font-semibold text-red-400">
-            <AlertCircle size={14} className="text-red-400" />
-            <span>Agent Error</span>
-          </div>
-          <div className="text-[12px] leading-relaxed opacity-90">
-             <Markdown text={msg.content} />
-          </div>
-          {onRetry && (
-            <button onClick={() => {
-                const msgs = useChatStore.getState().messages;
-                const lastUser = [...msgs].reverse().find(m => m.role === "user");
-                if(lastUser) onRetry(lastUser.content);
-              }} 
-              className="mt-1 self-start flex items-center gap-1.5 px-3 py-1 rounded border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 text-red-300 text-xs transition-colors"
-            >
-              <RefreshCw size={12} />
-              Retry
-            </button>
-          )}
-        </div>
-      )
-  }
-
   // System messages: slim horizontal notification bar, not a bubble
   if (isSystem) {
     return (
-      <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-editor-highlight/30 border border-editor-border/30 text-editor-muted text-[11px] self-stretch">
+      <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-editor-highlight/30 border border-editor-border/30 text-editor-muted text-[11px] self-stretch animate-in fade-in duration-200">
         <Info size={12} className="shrink-0 text-editor-muted/70" />
         <Markdown text={msg.content} />
       </div>
@@ -97,7 +196,7 @@ function MessageBubble({ msg, onRetry }) {
   }
 
   return (
-    <div className={`flex items-start gap-3 px-3.5 py-2.5 rounded-2xl max-w-[92%] ${styles[msg.role] ?? styles.assistant} ${isUser ? 'rounded-tr-sm' : 'rounded-tl-sm'}`}>
+    <div className={`flex items-start gap-3 px-3.5 py-2.5 rounded-2xl max-w-[92%] ${styles[msg.role] ?? styles.assistant} ${isUser ? 'rounded-tr-sm' : 'rounded-tl-sm'} animate-in fade-in duration-200`}>
       {!isTool && (
         <div className={`mt-0.5 shrink-0 flex items-center justify-center w-6 h-6 rounded-full ${isUser ? 'bg-white/20' : 'bg-editor-accent/10'}`}>
           {icons[msg.role]}
@@ -113,18 +212,57 @@ function MessageBubble({ msg, onRetry }) {
 
 export default function ChatPanel() {
   const project   = useProjectStore((s) => s.activeProject)
-  const { messages, isStreaming, streamBuffer } = useChatStore()
+  const { messages, isStreaming, streamBuffer, isConnected } = useChatStore()
   const { sendMessage, connect, disconnect } = useAgentSocket(project?.id)
   const entries   = useAgentTraceStore((s) => s.entries)
   const isActive  = useAgentTraceStore((s) => s.isActive)
-  const [input, setInput] = useState("")
+  const input = useChatStore((s) => s.input)
+  const setInput = useChatStore((s) => s.setInput)
+  const inputPulse = useChatStore((s) => s.inputPulse)
   const bottomRef = useRef(null)
+  const containerRef = useRef(null)
+
+  // Chat History state
+  const [showHistory, setShowHistory] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [editingConvId, setEditingConvId] = useState(null)
+  const [editTitle, setEditTitle] = useState("")
+  const [deletingConvId, setDeletingConvId] = useState(null)
+
+  const conversations = useChatStore((s) => s.conversations)
+  const conversationId = useChatStore((s) => s.conversationId)
+  const fetchConversations = useChatStore((s) => s.fetchConversations)
+  const loadConversation = useChatStore((s) => s.loadConversation)
+  const renameConversation = useChatStore((s) => s.renameConversation)
+  const deleteConversation = useChatStore((s) => s.deleteConversation)
+
+  // Fetch conversation lists when project changes
+  useEffect(() => {
+    if (project) {
+      fetchConversations(project.id)
+    }
+  }, [project?.id, fetchConversations])
+
+  // Load active conversation's messages from database on mount if messages is empty
+  useEffect(() => {
+    if (project && conversationId && messages.length === 0) {
+      loadConversation(project.id, conversationId)
+    }
+  }, [project?.id, conversationId, loadConversation, messages.length])
+
+  // Auto-resize input textarea when input changes programmatically (e.g. log injection)
+  useEffect(() => {
+    const textarea = document.getElementById("chat-input-textarea")
+    if (textarea) {
+      textarea.style.height = 'auto'
+      textarea.style.height = Math.min(textarea.scrollHeight, 160) + 'px'
+    }
+  }, [input])
 
   // Pull provider + model from the global settings store
   const provider    = useSettingsStore((s) => s.provider)
   const model       = useSettingsStore((s) => s.model)
   const setModel    = useSettingsStore((s) => s.setModel)
-  const providerModels = useSettingsStore((s) => s.providerModels) || []
 
   // Curated model lists per provider (loaded separately from backend)
   const [modelCatalogue, setModelCatalogue] = useState({})
@@ -141,20 +279,17 @@ export default function ChatPanel() {
     "assessing", "verifying", "postulating", "thinking", "working"
   ]
   const [wordIndex, setWordIndex] = useState(0)
-  const [isWaiting, setIsWaiting] = useState(false)
   const cyclingWord = THINKING_WORDS[wordIndex]
 
-  // Stop waiting once the agent sends its first real response
-  useEffect(() => {
-    if (!isStreaming && isWaiting) {
-      setIsWaiting(false)
-      setWordIndex(0)
-    }
-  }, [isStreaming])
+  // Derived state: wait if run is active but we haven't started streaming tokens or executing tools
+  const isWaiting = isActive && !isStreaming && !streamBuffer && entries.length === 0
 
   // Cycle words every 1.5 s while waiting
   useEffect(() => {
-    if (!isWaiting) return
+    if (!isWaiting) {
+      setWordIndex(0)
+      return
+    }
     const id = setInterval(() => {
       setWordIndex((i) => (i + 1) % THINKING_WORDS.length)
     }, 1500)
@@ -165,16 +300,31 @@ export default function ChatPanel() {
     if (project) connect()
   }, [project?.id, connect])
 
+  // Instant scroll on stream updates to avoid smooth animation queues/glitches
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [messages, streamBuffer])
+    const container = containerRef.current
+    if (!container || !streamBuffer) return
+    const threshold = 150
+    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight <= threshold
+    if (isNearBottom) {
+      container.scrollTop = container.scrollHeight
+    }
+  }, [streamBuffer])
+
+  // Smooth scroll on new message completions or user submissions
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+    container.scrollTo({
+      top: container.scrollHeight,
+      behavior: "smooth"
+    })
+  }, [messages.length])
 
   const handleSend = () => {
     const text = input.trim()
     if (!text || isStreaming) return
     setInput("")
-    setIsWaiting(true)
-    setWordIndex(0)
     sendMessage(text, model)
 
     const textarea = document.getElementById("chat-input-textarea")
@@ -187,17 +337,22 @@ export default function ChatPanel() {
     sendMessage(text, model)
   }
 
+  // Filter conversations by search query
+  const filteredConversations = conversations.filter(conv => 
+    (conv.title || "Untitled Conversation").toLowerCase().includes(searchQuery.toLowerCase())
+  )
+
   return (
-    <div className="flex flex-col h-full bg-editor-sidebar/95 backdrop-blur-xl border-l border-editor-border/50 shadow-[-8px_0_24px_rgba(0,0,0,0.2)] z-30 relative">
+    <div className="flex flex-col h-full bg-editor-sidebar/95 backdrop-blur-xl border-l border-editor-border/50 shadow-[-8px_0_24px_rgba(0,0,0,0.2)] z-30 relative overflow-hidden">
       {/* Header */}
-      <div className="flex items-center gap-2.5 px-5 h-12 border-b border-editor-border/50 bg-editor-bg/50 shrink-0">
+      <div className="flex items-center gap-2 px-4 h-12 border-b border-editor-border/50 bg-editor-bg/50 shrink-0">
         <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-blue-500/10 border border-blue-500/20">
           <Sparkles size={14} className="text-editor-accent" />
         </div>
-        <span className="text-[13px] font-bold text-white tracking-wide uppercase">AI Assistant</span>
+        <span className="text-[13px] font-bold text-white tracking-wide uppercase ml-2">AI Assistant</span>
         
         <select 
-          className="ml-auto bg-editor-bg border border-editor-border text-[11px] text-editor-muted rounded px-2 py-0.5 outline-none hover:border-editor-accent/50 focus:border-editor-accent/80 transition-colors max-w-[140px] truncate cursor-pointer"
+          className="ml-auto bg-editor-bg border border-editor-border text-[11px] text-editor-muted rounded px-2 py-0.5 outline-none hover:border-editor-accent/50 focus:border-editor-accent/80 transition-colors max-w-[120px] truncate cursor-pointer"
           value={model}
           onChange={(e) => setModel(e.target.value)}
         >
@@ -209,21 +364,40 @@ export default function ChatPanel() {
           )}
         </select>
 
+        {/* History Toggle Button */}
+        <button
+          onClick={() => {
+            if (project) {
+              fetchConversations(project.id)
+            }
+            setShowHistory(!showHistory)
+          }}
+          className={`ml-2 flex items-center justify-center w-7 h-7 rounded hover:bg-editor-highlight transition-all
+            ${showHistory ? 'bg-editor-accent/20 text-editor-accent border border-editor-accent/30' : 'text-editor-muted hover:text-white'}`}
+          title="Chat History"
+        >
+          <History size={14} />
+        </button>
 
+        {/* New Chat Button */}
         <button
           onClick={() => {
             useChatStore.getState().clearChat()
             useAgentTraceStore.getState().clear()
+            setShowHistory(false)
           }}
-          className="ml-2 flex items-center justify-center w-6 h-6 rounded hover:bg-editor-highlight text-editor-muted hover:text-white transition-colors"
+          className="ml-1.5 flex items-center justify-center w-7 h-7 rounded hover:bg-editor-highlight text-editor-muted hover:text-white transition-all"
           title="New Chat"
         >
           <PlusSquare size={14} />
         </button>
       </div>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 scrollbar-thin">
+      {/* Main Messages area */}
+      <div 
+        ref={containerRef}
+        className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 scrollbar-thin"
+      >
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center px-4 opacity-50">
             <Bot size={48} className="text-editor-muted mb-4" />
@@ -346,15 +520,196 @@ export default function ChatPanel() {
         <div ref={bottomRef} className="h-2 shrink-0" />
       </div>
 
+      {/* History Drawer Overlay */}
+      {showHistory && (
+        <div className="absolute inset-x-0 bottom-0 top-12 bg-[#12131a]/98 backdrop-blur-xl z-40 flex flex-col border-t border-editor-border/50 animate-in slide-in-from-left duration-200">
+          {/* Search bar */}
+          <div className="p-3 border-b border-editor-border/30 flex gap-2 items-center bg-editor-sidebar">
+            <div className="relative flex-1">
+              <Search size={13} className="absolute left-2.5 top-2.5 text-editor-muted" />
+              <input
+                type="text"
+                placeholder="Search conversations..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-[#1e1f29] border border-editor-border/60 focus:border-editor-accent/80 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder:text-editor-muted outline-none transition-all"
+              />
+              {searchQuery && (
+                <button 
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2 top-2.5 text-editor-muted hover:text-white"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+            <button
+              onClick={() => setShowHistory(false)}
+              className="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-editor-highlight hover:bg-editor-highlight/80 text-white transition-colors border border-editor-border/50"
+            >
+              Close
+            </button>
+          </div>
+
+          {/* Conversations list */}
+          <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-2 scrollbar-thin">
+            {filteredConversations.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 text-editor-muted text-xs opacity-70">
+                <History size={28} className="mb-2 opacity-50" />
+                <span>No conversations found</span>
+              </div>
+            ) : (
+              filteredConversations.map((conv) => {
+                const isActive = conv.id === conversationId
+                const isEditing = conv.id === editingConvId
+                const isDeleting = conv.id === deletingConvId
+
+                return (
+                  <div
+                    key={conv.id}
+                    onClick={() => {
+                      if (!isEditing && !isDeleting) {
+                        loadConversation(project.id, conv.id)
+                        useAgentTraceStore.getState().clear()
+                        setShowHistory(false)
+                      }
+                    }}
+                    className={`group relative flex flex-col p-3.5 rounded-xl border transition-all duration-200 cursor-pointer select-none
+                      ${isActive 
+                        ? "bg-editor-accent/10 border-editor-accent shadow-[0_0_16px_rgba(122,162,247,0.08)]" 
+                        : "bg-editor-bg/40 border-editor-border/40 hover:bg-editor-highlight/30 hover:border-editor-border/70"
+                      }`}
+                  >
+                    {isEditing ? (
+                      <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="text"
+                          value={editTitle}
+                          onChange={(e) => setEditTitle(e.target.value)}
+                          className="flex-1 bg-[#1e1f29] border border-editor-accent rounded-lg px-2.5 py-1 text-xs text-white outline-none focus:ring-1 focus:ring-editor-accent"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              if (editTitle.trim()) {
+                                renameConversation(project.id, conv.id, editTitle.trim())
+                              }
+                              setEditingConvId(null)
+                            } else if (e.key === "Escape") {
+                              setEditingConvId(null)
+                            }
+                          }}
+                        />
+                        <button
+                          onClick={() => {
+                            if (editTitle.trim()) {
+                              renameConversation(project.id, conv.id, editTitle.trim())
+                            }
+                            setEditingConvId(null)
+                          }}
+                          className="p-1.5 text-green-400 hover:bg-green-500/10 rounded-lg transition-colors"
+                          title="Save title"
+                        >
+                          <Check size={14} />
+                        </button>
+                        <button
+                          onClick={() => setEditingConvId(null)}
+                          className="p-1.5 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                          title="Cancel"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ) : isDeleting ? (
+                      <div className="flex items-center justify-between" onClick={(e) => e.stopPropagation()}>
+                        <span className="text-xs text-red-400 font-semibold animate-pulse">Delete conversation?</span>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => {
+                              deleteConversation(project.id, conv.id)
+                              setDeletingConvId(null)
+                            }}
+                            className="px-3 py-1 text-[11px] font-bold bg-red-500/20 hover:bg-red-500/40 text-red-200 border border-red-500/30 rounded-lg transition-colors"
+                          >
+                            Delete
+                          </button>
+                          <button
+                            onClick={() => setDeletingConvId(null)}
+                            className="px-3 py-1 text-[11px] font-semibold bg-editor-highlight hover:bg-editor-highlight/80 text-white rounded-lg transition-colors border border-editor-border/40"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex items-start justify-between pr-14">
+                          <span className={`text-xs font-semibold truncate ${isActive ? 'text-white' : 'text-editor-text/90 group-hover:text-white'}`}>
+                            {conv.title || "Untitled Conversation"}
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-editor-muted mt-1.5 font-medium">
+                          {formatRelativeTime(conv.created_at)}
+                        </span>
+
+                        {/* Actions drawer triggers on hover */}
+                        <div 
+                          className="absolute right-2 top-1/2 -translate-y-1/2 hidden group-hover:flex items-center gap-1 bg-editor-sidebar/85 backdrop-blur-md rounded-lg p-0.5 border border-editor-border/30"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button
+                            onClick={() => {
+                              setEditingConvId(conv.id)
+                              setEditTitle(conv.title || "")
+                            }}
+                            className="p-1.5 text-editor-muted hover:text-white hover:bg-editor-highlight rounded-lg transition-colors"
+                            title="Rename"
+                          >
+                            <Edit2 size={12} />
+                          </button>
+                          <button
+                            onClick={() => setDeletingConvId(conv.id)}
+                            className="p-1.5 text-editor-muted hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                            title="Delete"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )
+              })
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Offline warning banner */}
+      {!isConnected && (
+        <div className="px-4 py-2 bg-red-950/40 border-t border-red-500/20 text-red-300 text-xs flex items-center justify-between animate-in slide-in-from-bottom-2 duration-300">
+          <div className="flex items-center gap-2 font-medium">
+            <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping" />
+            <span>Connection offline. Reconnecting in a few seconds...</span>
+          </div>
+          <button 
+            onClick={() => connect()} 
+            className="px-2 py-0.5 rounded bg-red-500/20 hover:bg-red-500/30 text-red-200 border border-red-500/30 font-medium transition-colors pointer-events-auto"
+          >
+            Retry Now
+          </button>
+        </div>
+      )}
+
       {/* Input */}
       <div className="p-4 border-t border-editor-border/50 bg-editor-bg/30 backdrop-blur-md">
-        <div className="flex gap-2 items-end bg-editor-bg border border-editor-border hover:border-editor-accent/50 focus-within:border-editor-accent/80 focus-within:shadow-[0_0_15px_rgba(122,162,247,0.15)] rounded-xl px-3 py-2.5 transition-all">
+        <div className={`flex gap-2 items-end bg-editor-bg border border-editor-border hover:border-editor-accent/50 focus-within:border-editor-accent/80 focus-within:shadow-[0_0_15px_rgba(122,162,247,0.15)] rounded-xl px-3 py-2.5 transition-all ${inputPulse ? 'animate-input-pulse border-editor-accent shadow-[0_0_25px_rgba(122,162,247,0.6)] scale-[1.02]' : ''} ${!isConnected ? 'opacity-50 pointer-events-none' : ''}`}>
           <textarea
             id="chat-input-textarea"
             className="flex-1 bg-transparent text-white text-[13px] resize-none outline-none max-h-40 min-h-[20px] placeholder:text-editor-muted"
-            placeholder="Message the agent..."
+            placeholder={isConnected ? "Message the agent..." : "Agent is offline..."}
             rows={1}
             value={input}
+            disabled={!isConnected}
             onChange={(e) => {
               setInput(e.target.value)
               e.target.style.height = 'auto'
@@ -369,10 +724,10 @@ export default function ChatPanel() {
           />
           <button
             onClick={handleSend}
-            disabled={isStreaming || !input.trim()}
+            disabled={isStreaming || !input.trim() || !isConnected}
             className="flex items-center justify-center w-8 h-8 rounded-lg bg-editor-accent hover:bg-editor-accentHover text-editor-bg disabled:bg-editor-highlight disabled:text-editor-muted transition-colors shrink-0 mb-0.5 shadow-md disabled:shadow-none"
           >
-            <Send size={14} className={!isStreaming && input.trim() ? "translate-x-px -translate-y-px" : ""} />
+            <Send size={14} className={!isStreaming && input.trim() && isConnected ? "translate-x-px -translate-y-px" : ""} />
           </button>
         </div>
         <div className="flex justify-between items-center mt-2 px-1">

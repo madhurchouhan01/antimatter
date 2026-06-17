@@ -1,6 +1,6 @@
 # Environment variables
 .env
-.env.*
+.env
 
 # Virtual env
 antimatter-env/
@@ -12,7 +12,7 @@ __pycache__/
 
 # ChromaDB / memory
 project/memory/*
-# project/memory/chromadb/
+# project/memory/chromadb
 
 start-env.bat
 antimatter-frontend/
@@ -44,3 +44,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+
+antimatter_recruiter_guide.md

@@ -67,6 +67,20 @@ Most AI coding tools are glorified autocomplete — they suggest text in a singl
 - **Reciprocal Rank Fusion (RRF)** to merge both result lists into a single ranked context
 - **File watcher** auto-reindexes changed files in the background
 
+### 🧠 Episodic Memory (Agent Memory)
+- **Worthiness Filter**: Traces of runs containing non-obvious design decisions, multi-attempt bug fixes, or user corrections are automatically judged by an LLM to decide if they warrant a permanent lesson.
+- **VoyageAI Embeddings**: Lessons are embedded using `voyage-3` (prose-optimized) and stored in PostgreSQL with `pgvector` for similarity search.
+- **Dynamic Context Injection**: Subsequent runs retrieve relevant memories based on the task description and inject them into the system prompt as `## Relevant Past Experience` to prevent repeating mistakes.
+
+### 📊 Agent Observability & Activity Tracing
+- **Real-Time Execution Dropdown**: Tool calls are streamed over WebSockets and rendered in an interactive **Agent Activity** panel in the UI, showing inputs, outputs, status (running, done, error), and millisecond-level duration.
+- **LangSmith Tracing**: Runs are configured with descriptive run names (`antimatter/provider/model`), tags, and rich metadata (project, conversation, open files, message preview) for advanced observability when `LANGCHAIN_TRACING_V2=true` is set.
+
+### 🎨 Mermaid Diagram Generation & Validation
+- **Visualizer Node**: Prompts requesting diagram generation, flowcharts, or system schemas automatically trigger a dedicated diagram generation node in the LangGraph loop.
+- **In-Sandbox Validation**: Generated Mermaid code is validated in the user's isolated Docker sandbox using a bundled NodeJS parser (`validate_mermaid.js`).
+- **Auto-Correction Loop**: If validation fails, syntax errors are fed back to the diagram generator node to automatically fix and re-validate (up to 3 retries) before final frontend rendering.
+
 ### 🏗 Multi-LLM Support
 - Unified provider interface: **Groq**, **Anthropic (Claude)**, **OpenAI**, **Google Gemini**, **OpenRouter**
 - Switchable at runtime per conversation — no restart required
@@ -76,7 +90,7 @@ Most AI coding tools are glorified autocomplete — they suggest text in a singl
 - **Monaco Editor** (the engine behind VS Code) with syntax highlighting, IntelliSense, and multi-tab support
 - **Inline Chat** (Cmd+K / Ctrl+K) — select code, ask a question, get an inline diff
 - **Git panel** — stage, commit, view diffs, manage branches from the UI
-- **Integrated terminal** — connected directly to your project's Docker sandbox
+- **Integrated terminal** — connected directly to your project's Docker sandbox, featuring a **Direct Log Redirection** action to automatically grab and animate logs directly into the AI chat input
 - **LSP support** — real diagnostics from `pylsp` wired into Monaco
 
 ### 🔐 Auth & Projects
@@ -94,59 +108,79 @@ Most AI coding tools are glorified autocomplete — they suggest text in a singl
 │                                                                   │
 │  FileTree · CodeEditor · ChatPanel · Terminal · GitPanel         │
 │       │                    │ WebSocket                           │
+│       │                    ▼                                     │
+│       │             WS /api/agent/{project_id}                    │
+│       │                    │                                     │
+│       │                    │ Streams: token · tool_start/end ·   │
+│       │                    │          file.patch                 │
 └───────┼────────────────────┼─────────────────────────────────────┘
-        │ REST                │ WS /api/agent
+        │ REST                │
         ▼                    ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                        FastAPI Backend                           │
 │                                                                   │
 │  /api/auth   /api/projects   /api/files   /api/git   /api/lsp   │
+│  /api/projects/{project_id}/memories                            │
 │                                                                   │
 │  ┌──────────────────────────────────────────────────────────┐   │
 │  │                    Agent Runner                           │   │
 │  │                                                           │   │
-│  │  HumanMessage + RAG context                              │   │
-│  │          │                                               │   │
-│  │          ▼                                               │   │
-│  │  ┌─────────────────────────────────┐                    │   │
-│  │  │       LangGraph StateGraph      │                    │   │
-│  │  │                                 │                    │   │
-│  │  │  agent_node ──► ToolNode ──┐    │                    │   │
-│  │  │      ▲                     │    │                    │   │
-│  │  │      └─────────────────────┘    │                    │   │
-│  │  │  (loops until no tool_calls)    │                    │   │
-│  │  └─────────────────────────────────┘                    │   │
+│  │  1. Retrieve relevant memories (retrieve_memories)       │   │
+│  │  2. Build enriched context (RAG + memories)               │   │
+│  │  3. Execute LangGraph StateGraph (streams events)        │   │
+│  │  4. Post-task: worthiness check & write episodic memory  │   │
+│  │     (check_and_write_memory, background task)             │   │
 │  │                                                           │   │
-│  │  Streams: token · tool_start · tool_end · file.patch     │   │
+│  │  ┌─────────────────────────────────────────────────────┐  │   │
+│  │  │               LangGraph StateGraph                  │  │   │
+│  │  │                                                     │  │   │
+│  │  │                 ┌───────────────┐                   │  │   │
+│  │  │                 │  agent_node   │                   │  │   │
+│  │  │                 └───────┬───────┘                   │  │   │
+│  │  │               ┌─────────┴─────────┐                 │  │   │
+│  │  │         tools?│          diagram? │                 │  │   │
+│  │  │               ▼                   ▼                 │  │   │
+│  │  │         ┌───────────┐   ┌──────────────────┐        │  │   │
+│  │  │         │ ToolNode  │   │diagram_generator │        │  │   │
+│  │  │         └─────┬─────┘   └─────────┬────────┘        │  │   │
+│  │  │               │                   ▼                 │  │   │
+│  │  │               │         ┌──────────────────┐        │  │   │
+│  │  │               │         │diagram_validator │        │  │   │
+│  │  │               │         └─────────┬────────┘        │  │   │
+│  │  │               │          errors?  │                 │  │   │
+│  │  │               │          & rt < 3 │ (no errors)     │  │   │
+│  │  │               │             ▼     ▼                 │  │   │
+│  │  │               └─────────────┴─────► END             │  │   │
+│  │  └─────────────────────────────────────────────────────┘  │   │
 │  └──────────────────────────────────────────────────────────┘   │
 │                                                                   │
 │  ┌─────────────────┐   ┌──────────────────┐   ┌─────────────┐  │
-│  │   RAG Pipeline  │   │   Sandbox Mgr    │   │  LSP Server │  │
+│  │   RAG & Memory  │   │   Sandbox Mgr    │   │  LSP Server │  │
 │  │                 │   │                  │   │             │  │
-│  │ Tree-sitter     │   │  Docker per-user │   │  pylsp      │  │
-│  │ chunk_file()    │   │  exec_run()      │   │  WebSocket  │  │
-│  │                 │   │  run_background()│   │  bridge     │  │
-│  │ VoyageAI embed  │   │  cleanup_idle()  │   │             │  │
-│  │ pgvector store  │   └──────────────────┘   └─────────────┘  │
-│  │ BM25 + RRF      │                                            │
-│  └─────────────────┘                                            │
+│  │ Tree-sitter AST │   │  Docker per-user │   │  pylsp      │  │
+│  │ VoyageAI embed  │   │  exec_run()      │   │  WebSocket  │  │
+│  │ pgvector store  │   │  run_background()│   │  bridge     │  │
+│  │ BM25 + RRF      │   │  validate_mermaid│   │             │  │
+│  └─────────────────┘   └──────────────────┘   └─────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
         │                    │                    │
         ▼                    ▼                    ▼
   PostgreSQL+pgvector      Redis              Docker Engine
-  (embeddings, history)   (sessions)         (sandboxes)
+ (embeddings, memories)  (sessions)          (sandboxes)
 ```
 
 ### Key Design Decisions
 
 | Decision | Rationale |
 |---|---|
-| LangGraph over raw function loops | Explicit state machine — easy to add nodes (planner, critic) without rewriting control flow |
+| LangGraph over raw function loops | Explicit state machine — easy to add nodes (diagram generator, critic) without rewriting control flow |
 | Tree-sitter over regex/AST chunking | Language-agnostic, handles partial parses, correct for JS/TS/JSX |
-| pgvector over a hosted vector DB | One less external service; PostgreSQL already handles auth data |
+| pgvector over a hosted vector DB | One less external service; PostgreSQL already handles auth data, chat history, and episodic memories |
 | RRF fusion over weighted sums | Rank-based — avoids score normalization problems across two different similarity metrics |
 | Diff proposal over direct writes | The agent optimizing for task completion ≠ the user wanting every file changed |
 | Per-user Docker containers | Prevents cross-user command execution; natural resource limits via Docker |
+| Episodic Memory over static context | Filters/stores lessons from worthy runs (gotchas, multi-attempt errors) and retrieves them via pgvector cosine distance, avoiding model repetition of the same mistakes |
+| In-sandbox Mermaid Validation | Sandbox executes NPM-bundled `validate_mermaid.js` under standard NodeJS to check syntax. Real-time feedback feeds back to LLM for auto-correction before rendering |
 
 ---
 
@@ -302,7 +336,7 @@ Copy `.env.example` to `.env` and set the following:
 | `OPENAI_API_KEY` | Enables GPT-4o and other OpenAI models |
 | `GEMINI_API_KEY` | Enables Gemini 1.5 Pro / Flash |
 | `OPENROUTER_API_KEY` | Enables any model via OpenRouter |
-| `VOYAGE_API_KEY` | VoyageAI embeddings (higher quality than defaults) |
+| `VOYAGE_API_KEY` | VoyageAI embeddings (highly recommended; required for Voyage-based Episodic Memory, fallback to local sentence-transformers if unset) |
 
 ### Optional — Observability
 
@@ -336,10 +370,11 @@ Copy `.env.example` to `.env` and set the following:
 ### Chatting with the Agent
 
 Type a task in the chat panel. The agent will:
-1. Build context from your codebase using hybrid RAG
-2. Enter the agentic loop — reasoning, calling tools, observing results
-3. Stream tokens and tool activity back to you in real time
-4. Propose any file changes as diffs — you approve or reject each one
+1. Retrieve and inject relevant **Episodic Memories** (past lessons) if any match the task description.
+2. Build code context from your codebase using **Hybrid RAG** (semantic search + BM25).
+3. Enter the agentic loop — reasoning, calling tools, and observing results.
+4. Stream tokens, live tool actions (rendered in the collapsible **Agent Activity** dropdown showing status and durations), and validated **Mermaid diagrams** back to you.
+5. Propose any file changes as diffs — you approve or reject each one.
 
 **Example tasks:**
 ```
@@ -368,6 +403,9 @@ Currently supported models include:
 ### Terminal
 
 The terminal tab connects directly to your project's Docker sandbox. Run commands, start dev servers, inspect output — all isolated from the host.
+
+#### 📤 Direct Log Redirection
+Next to the terminal fullscreen button is a redirect action button. Clicking it grabs the active terminal's entire scrollback buffer, wraps it in a code block, and triggers a premium floating animation that flies the logs directly into the AI chat input, completing with a satisfying pulse transition. This eliminates copy-paste friction when sharing command output, stack traces, or build logs with the agent.
 
 ```bash
 # Inside the sandbox terminal
@@ -404,6 +442,9 @@ All endpoints except `/health` and `/api/auth/*` require a valid JWT cookie set 
 | `GET` | `/api/git/{project_id}/status` | Git status for project |
 | `POST` | `/api/git/{project_id}/commit` | Stage and commit changes |
 | `GET` | `/api/git/{project_id}/log` | Git log |
+| `GET` | `/api/projects/{project_id}/memories` | List episodic memories for project (paginated) |
+| `GET` | `/api/projects/{project_id}/memories/{memory_id}` | Get a single episodic memory by ID |
+| `DELETE` | `/api/projects/{project_id}/memories/{memory_id}` | Hard-delete a single episodic memory |
 
 ### Agent WebSocket
 
@@ -445,7 +486,10 @@ antimatter/
 │   │   ├── runner.py         # Streaming agent runner + conversation persistence
 │   │   ├── tools.py          # All 14 agent tools
 │   │   ├── llm.py            # Multi-provider LLM factory
-│   │   └── context_builder.py # RAG context injection
+│   │   ├── context_builder.py # RAG context injection
+│   │   ├── memory.py         # Episodic memory logic (check, write, retrieve)
+│   │   └── assets/
+│   │       └── validate_mermaid.js # Headless Mermaid syntax validator bundle
 │   ├── context/
 │   │   ├── chunker.py        # Tree-sitter chunking (Python/JS/TS/TSX)
 │   │   ├── embedder.py       # VoyageAI embedding client
@@ -464,7 +508,8 @@ antimatter/
 │   │   ├── projects.py       # Project management
 │   │   ├── git.py            # Git operations
 │   │   ├── terminal.py       # Terminal WebSocket → sandbox
-│   │   └── lsp.py            # LSP WebSocket bridge
+│   │   ├── lsp.py            # LSP WebSocket bridge
+│   │   └── memories.py       # Episodic memory REST API
 │   ├── db/                   # SQLAlchemy models + async session
 │   ├── core/                 # Config, logging, tracing
 │   ├── lsp/                  # pylsp process management
@@ -482,8 +527,9 @@ antimatter/
 │       │   ├── GitPanel.jsx        # Git UI
 │       │   ├── DiffViewer.jsx      # File diff approval UI
 │       │   ├── InlineChatWidget.jsx # Cmd+K inline chat
-│       │   └── SettingsModal.jsx   # Model/provider selector
-│       ├── stores/                 # Zustand state management
+│       │   ├── SettingsModal.jsx   # Model/provider selector
+│       │   └── ActivityDropdown.jsx # Interactive agent activity panel
+│       ├── stores/                 # Zustand state management (e.g. agentTraceStore.js)
 │       ├── services/               # API + WebSocket clients
 │       └── hooks/                  # Shared React hooks
 ├── docker-compose.yml
@@ -496,9 +542,9 @@ antimatter/
 ## Roadmap
 
 - [ ] **Multi-agent pipeline** — separate Planner, Executor, and Critic nodes in LangGraph with visible reasoning at each step
-- [ ] **Agent observability UI** — live panel showing every tool call, input, output, and latency for the current run
+- [x] **Agent observability UI** — live panel showing every tool call, input, output, and latency for the current run (implemented via WebSocket streaming + `ActivityDropdown` UI)
 - [ ] **Evaluation framework** — run the agent against a task suite and track pass@1 over time
-- [ ] **Agent memory** — store summaries of completed tasks in the vector store; retrieve relevant experiences on new tasks (episodic memory)
+- [x] **Agent memory** — store summaries of completed tasks in the vector store; retrieve relevant experiences on new tasks (implemented via `agent_memories` pgvector database table + VoyageAI embeddings)
 - [ ] **Selection-based editing** — select any range in Monaco → agent edits only that selection
 - [ ] **Project-wide symbol rename** — rename a symbol across all files using Tree-sitter + the patch system
 - [ ] **Test generation agent** — dedicated node that writes pytest tests and verifies they pass via the sandbox

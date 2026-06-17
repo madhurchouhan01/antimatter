@@ -3,6 +3,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from context.vector_store import vector_store
 from context.embedder import embed_query
 from dataclasses import dataclass
+from core.logger import get_logger
+
+log = get_logger(__name__)
 
 @dataclass
 class RetrievedChunk:
@@ -28,15 +31,29 @@ async def hybrid_search(
     Combine semantic + BM25 results using Reciprocal Rank Fusion.
     This finds both conceptually similar code AND exact identifier matches.
     """
-    # Run both searches in parallel
-    query_embedding = await embed_query(query)
+    # Run searches with a fallback to BM25 if embedding fails
+    query_embedding = None
+    try:
+        query_embedding = await embed_query(query)
+    except Exception as e:
+        log.warning(f"Query embedding failed: {e}. Falling back to BM25-only search.")
 
-    semantic_results = await vector_store.semantic_search(
-        db, project_id, query_embedding, top_k=top_k * 2
-    )
-    bm25_results = await vector_store.bm25_search(
-        db, project_id, query, top_k=top_k * 2
-    )
+    semantic_results = []
+    if query_embedding is not None:
+        try:
+            semantic_results = await vector_store.semantic_search(
+                db, project_id, query_embedding, top_k=top_k * 2
+            )
+        except Exception as e:
+            log.warning(f"Semantic search failed: {e}")
+
+    bm25_results = []
+    try:
+        bm25_results = await vector_store.bm25_search(
+            db, project_id, query, top_k=top_k * 2
+        )
+    except Exception as e:
+        log.error(f"BM25 search failed: {e}")
 
     # Build RRF score map keyed by (file_path, start_line)
     scores: dict[tuple, float] = {}

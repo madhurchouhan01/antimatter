@@ -1,4 +1,5 @@
 import axios from "axios"
+import { useToastStore } from "../stores/toastStore"
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL ?? "http://127.0.0.1:1842",
@@ -11,16 +12,32 @@ api.interceptors.request.use((config) => {
   return config
 })
 
+// Catch response errors globally and alert the user with Toasts
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.config && error.config.__skipToast) {
+      return Promise.reject(error)
+    }
+
+    const data = error.response?.data
+    const message = data?.detail || data?.message || error.message || "A connection error occurred. Is the server running?"
+    
+    useToastStore.getState().addToast(message, "error")
+    return Promise.reject(error)
+  }
+)
+
 // Auth endpoints
 export const authApi = {
   register: (email, password, name) =>
-    api.post("/api/auth/register", { email, password, name }),
+    api.post("/api/auth/register", { email, password, name }, { __skipToast: true }),
   login: (email, password) =>
-    api.post("/api/auth/login", { email, password }),
+    api.post("/api/auth/login", { email, password }, { __skipToast: true }),
   logout: (refresh_token) =>
-    api.post("/api/auth/logout", { refresh_token }),
+    api.post("/api/auth/logout", { refresh_token }, { __skipToast: true }),
   getGithubLoginUrl: () =>
-    api.get("/api/auth/github/login"),
+    api.get("/api/auth/github/login", { __skipToast: true }),
 }
 
 // Project endpoints
@@ -59,6 +76,10 @@ export const conversationsApi = {
     api.get(`/api/projects/${projectId}/conversations`),
   messages: (projectId, convId) =>
     api.get(`/api/projects/${projectId}/conversations/${convId}/messages`),
+  update:   (projectId, convId, title) =>
+    api.put(`/api/projects/${projectId}/conversations/${convId}`, { title }),
+  delete:   (projectId, convId) =>
+    api.delete(`/api/projects/${projectId}/conversations/${convId}`),
 }
 
 // Settings endpoints
