@@ -91,7 +91,7 @@ Most AI coding tools are glorified autocomplete — they suggest text in a singl
 - **Inline Chat** (Cmd+K / Ctrl+K) — select code, ask a question, get an inline diff
 - **Git panel** — stage, commit, view diffs, manage branches from the UI
 - **Integrated terminal** — connected directly to your project's Docker sandbox, featuring a **Direct Log Redirection** action to automatically grab and animate logs directly into the AI chat input
-- **LSP support** — real diagnostics from `pylsp` wired into Monaco
+- **LSP support** — real diagnostics from `pylsp` wired into Monaco.
 
 ### 🔐 Auth & Projects
 - **GitHub OAuth** login with JWT (HttpOnly cookies, refresh token rotation)
