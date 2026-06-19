@@ -2,10 +2,11 @@ import { useState, useEffect } from "react"
 import {
   X, Settings, Key, ChevronDown, Eye, EyeOff, CheckCircle2,
   AlertCircle, Loader2, ExternalLink, Cpu, Sparkles, Shield,
-  Zap, Shuffle
+  Zap, Shuffle, Brain, Trash2, Copy, Check
 } from "lucide-react"
 import { useSettingsStore } from "../stores/settingsStore"
-import api from "../lib/api"
+import { useProjectStore } from "../stores/projectStore"
+import api, { memoriesApi } from "../lib/api"
 
 // Custom SVG component for GitHub
 const GitHubIcon = ({ size = 16, className = "", style = {} }) => (
@@ -122,6 +123,11 @@ export default function SettingsModal({ onClose }) {
     saveSettings,
   } = useSettingsStore()
 
+  const activeProject = useProjectStore((s) => s.activeProject)
+
+  const [activeTab, setActiveTab] = useState("provider")  // "provider" | "memories"
+
+  // Provider settings state
   const [provider, setProvider]       = useState(savedProvider)
   const [model,    setModel]          = useState(savedModel)
   const [apiKey,   setApiKey]         = useState("")
@@ -132,12 +138,29 @@ export default function SettingsModal({ onClose }) {
   const [useCustom, setUseCustom]     = useState(false)
   const [saveOk,   setSaveOk]         = useState(false)
 
+  // Memories state
+  const [memories, setMemories]       = useState([])
+  const [memLoading, setMemLoading]   = useState(false)
+  const [deletingId, setDeletingId]   = useState(null)
+  const [copiedPrompt, setCopiedPrompt] = useState(false)
+
   const meta = PROVIDERS[provider] || PROVIDERS.groq
 
   // Load provider→model catalogue from backend
   useEffect(() => {
     api.get("/api/settings/models").then(res => setProviderModels(res.data)).catch(() => {})
   }, [])
+
+  // Fetch memories when Memories tab is opened
+  useEffect(() => {
+    if (activeTab === "memories" && activeProject?.id) {
+      setMemLoading(true)
+      memoriesApi.list(activeProject.id)
+        .then(res => setMemories(res.data.items || []))
+        .catch(() => setMemories([]))
+        .finally(() => setMemLoading(false))
+    }
+  }, [activeTab, activeProject?.id])
 
   // When provider changes, switch model to provider's default
   const handleProviderChange = (p) => {
@@ -148,6 +171,36 @@ export default function SettingsModal({ onClose }) {
     setCustomModel("")
     setApiKey("")
     setClearKey(false)
+  }
+
+  const handleDeleteMemory = async (memoryId) => {
+    if (!activeProject?.id) return
+    setDeletingId(memoryId)
+    try {
+      await memoriesApi.delete(activeProject.id, memoryId)
+      setMemories(prev => prev.filter(m => m.id !== memoryId))
+    } catch {}
+    setDeletingId(null)
+  }
+
+  const handleCopyAsSystemPrompt = async () => {
+    if (memories.length === 0) return
+    const prompt = [
+      "## AntiMatter Episodic Memory Context",
+      "",
+      "The following are lessons learned from past agent sessions in this project:",
+      "",
+      ...memories.map((m, i) =>
+        [`### Lesson ${i + 1}: ${m.task_description.slice(0, 80)}${m.task_description.length > 80 ? "..." : ""}`,
+         `**Lesson:** ${m.generalizable_lesson}`,
+         m.what_worked ? `**What worked:** ${m.what_worked}` : "",
+         m.what_failed_first ? `**What failed first:** ${m.what_failed_first}` : "",
+        ].filter(Boolean).join("\n")
+      ),
+    ].join("\n")
+    await navigator.clipboard.writeText(prompt)
+    setCopiedPrompt(true)
+    setTimeout(() => setCopiedPrompt(false), 2000)
   }
 
   const handleSave = async () => {
@@ -194,8 +247,8 @@ export default function SettingsModal({ onClose }) {
               <Settings size={15} className="text-editor-accent" />
             </div>
             <div>
-              <h2 className="text-[14px] font-bold text-white tracking-wide">AI Provider Settings</h2>
-              <p className="text-[11px] text-editor-muted">Configure model, provider and API key</p>
+              <h2 className="text-[14px] font-bold text-white tracking-wide">Settings</h2>
+              <p className="text-[11px] text-editor-muted">Configure model, provider, and manage memories</p>
             </div>
             <button
               onClick={onClose}
@@ -205,185 +258,291 @@ export default function SettingsModal({ onClose }) {
             </button>
           </div>
 
-          <div className="p-6 flex flex-col gap-6 max-h-[75vh] overflow-y-auto scrollbar-thin">
+          {/* ── Tab Switcher ── */}
+          <div className="flex border-b border-editor-border/40 bg-white/[0.01]">
+            <button
+              onClick={() => setActiveTab("provider")}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[12px] font-semibold transition-colors ${
+                activeTab === "provider"
+                  ? "text-editor-accent border-b-2 border-editor-accent"
+                  : "text-editor-muted hover:text-white border-b-2 border-transparent"
+              }`}
+            >
+              <Cpu size={12} /> Provider Settings
+            </button>
+            <button
+              onClick={() => setActiveTab("memories")}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[12px] font-semibold transition-colors ${
+                activeTab === "memories"
+                  ? "text-editor-accent border-b-2 border-editor-accent"
+                  : "text-editor-muted hover:text-white border-b-2 border-transparent"
+              }`}
+            >
+              <Brain size={12} /> Episodic Memory
+            </button>
+          </div>
 
-            {/* ── Provider Selection ── */}
-            <div>
-              <label className="flex items-center gap-1.5 text-[11px] font-semibold text-editor-muted uppercase tracking-widest mb-3">
-                <Cpu size={11} /> Provider
-              </label>
-              <div className="grid grid-cols-3 gap-2">
-                {Object.entries(PROVIDERS).map(([key, p]) => (
-                  <button
-                    key={key}
-                    onClick={() => handleProviderChange(key)}
-                    className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-all text-center
-                      ${provider === key
-                        ? `bg-gradient-to-br ${p.gradient} ${p.border} shadow-sm`
-                        : "border-editor-border/40 hover:border-editor-border hover:bg-editor-highlight/30"
-                      }`}
-                  >
-                    <span className="flex items-center justify-center p-0.5">
-                      <p.icon size={16} style={{ color: p.color }} />
-                    </span>
-                    <span className={`text-[10px] font-semibold ${provider === key ? "text-white" : "text-editor-muted"}`}>
-                      {p.label}
-                    </span>
-                  </button>
-                ))}
+          {/* ── Tab Panels ── */}
+          {activeTab === "provider" ? (
+            <div className="p-6 flex flex-col gap-6 max-h-[65vh] overflow-y-auto scrollbar-thin">
+
+              {/* ── Provider Selection ── */}
+              <div>
+                <label className="flex items-center gap-1.5 text-[11px] font-semibold text-editor-muted uppercase tracking-widest mb-3">
+                  <Cpu size={11} /> Provider
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {Object.entries(PROVIDERS).map(([key, p]) => (
+                    <button
+                      key={key}
+                      onClick={() => handleProviderChange(key)}
+                      className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-all text-center
+                        ${provider === key
+                          ? `bg-gradient-to-br ${p.gradient} ${p.border} shadow-sm`
+                          : "border-editor-border/40 hover:border-editor-border hover:bg-editor-highlight/30"
+                        }`}
+                    >
+                      <span className="flex items-center justify-center p-0.5">
+                        <p.icon size={16} style={{ color: p.color }} />
+                      </span>
+                      <span className={`text-[10px] font-semibold ${provider === key ? "text-white" : "text-editor-muted"}`}>
+                        {p.label}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Provider description */}
+                <div className={`mt-3 px-3 py-2.5 rounded-lg border text-[11px] text-editor-muted bg-gradient-to-r ${meta.gradient} ${meta.border}`}>
+                  <span className="inline-flex items-center gap-1 font-semibold" style={{ color: meta.color }}>
+                    <meta.icon size={12} className="mr-0.5" />
+                    {meta.label}
+                  </span>
+                  {" — "}{meta.description}
+                </div>
               </div>
 
-              {/* Provider description */}
-              <div className={`mt-3 px-3 py-2.5 rounded-lg border text-[11px] text-editor-muted bg-gradient-to-r ${meta.gradient} ${meta.border}`}>
-                <span className="inline-flex items-center gap-1 font-semibold" style={{ color: meta.color }}>
-                  <meta.icon size={12} className="mr-0.5" />
-                  {meta.label}
-                </span>
-                {" — "}{meta.description}
+              {/* ── Model Selection ── */}
+              <div>
+                <label className="flex items-center gap-1.5 text-[11px] font-semibold text-editor-muted uppercase tracking-widest mb-3">
+                  <Sparkles size={11} /> Model
+                </label>
+                {!useCustom ? (
+                  <div className="relative">
+                    <select
+                      value={model}
+                      onChange={e => setModel(e.target.value)}
+                      className="w-full appearance-none bg-editor-bg border border-editor-border text-white text-[13px] rounded-xl px-4 py-2.5 pr-8 outline-none focus:border-editor-accent/70 transition-colors cursor-pointer"
+                    >
+                      {models.map(m => (
+                        <option key={m} value={m}>{m}</option>
+                      ))}
+                      {model && !models.includes(model) && (
+                        <option value={model}>{model}</option>
+                      )}
+                    </select>
+                    <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-editor-muted pointer-events-none" />
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    value={customModel}
+                    onChange={e => setCustomModel(e.target.value)}
+                    placeholder="e.g. openai/gpt-4.1-nano"
+                    className="w-full bg-editor-bg border border-editor-border focus:border-editor-accent/70 text-white text-[13px] rounded-xl px-4 py-2.5 outline-none transition-colors"
+                  />
+                )}
+                <button
+                  onClick={() => { setUseCustom(p => !p); setCustomModel("") }}
+                  className="mt-2 text-[10px] text-editor-muted hover:text-editor-accent transition-colors"
+                >
+                  {useCustom ? "← Back to model list" : "Enter custom model name →"}
+                </button>
               </div>
+
+              {/* ── API Key ── */}
+              <div>
+                <label className="flex items-center gap-1.5 text-[11px] font-semibold text-editor-muted uppercase tracking-widest mb-3">
+                  <Key size={11} /> API Key
+                  {hasApiKey && !clearKey && (
+                    <span className="ml-auto flex items-center gap-1 text-emerald-400 normal-case font-medium tracking-normal">
+                      <CheckCircle2 size={11} /> Key saved
+                    </span>
+                  )}
+                </label>
+
+                <div className="relative flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      type={showKey ? "text" : "password"}
+                      value={apiKey}
+                      onChange={e => { setApiKey(e.target.value); setClearKey(false) }}
+                      placeholder={
+                        hasApiKey && !clearKey
+                          ? "••••••••••••  (saved — leave blank to keep)"
+                          : meta.keyPlaceholder
+                      }
+                      className="w-full bg-editor-bg border border-editor-border focus:border-editor-accent/70 text-white text-[13px] rounded-xl px-4 py-2.5 pr-10 outline-none transition-colors font-mono placeholder:font-sans placeholder:text-editor-muted/60"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowKey(p => !p)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-editor-muted hover:text-white transition-colors"
+                    >
+                      {showKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
+                  </div>
+                  {hasApiKey && !clearKey && (
+                    <button
+                      onClick={() => { setClearKey(true); setApiKey("") }}
+                      className="shrink-0 px-3 py-2.5 rounded-xl border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-[11px] font-medium transition-colors"
+                      title="Clear saved key"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+
+                {clearKey && (
+                  <p className="mt-2 text-[11px] text-red-400 flex items-center gap-1.5">
+                    <AlertCircle size={11} /> Key will be cleared on save. Backend fallback will be used.
+                  </p>
+                )}
+
+                <a
+                  href={meta.docsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-2.5 inline-flex items-center gap-1 text-[11px] transition-colors hover:underline"
+                  style={{ color: meta.color }}
+                >
+                  {meta.docsLabel} <ExternalLink size={10} />
+                </a>
+
+                {/* Security note */}
+                <div className="mt-3 flex items-start gap-2 px-3 py-2 rounded-lg bg-editor-highlight/20 border border-editor-border/30">
+                  <Shield size={12} className="text-editor-muted shrink-0 mt-0.5" />
+                  <p className="text-[10px] text-editor-muted leading-relaxed">
+                    Your API key is stored securely server-side and tied to your account. It is never returned to the browser after saving. Your key overrides AntiMatter's backend fallback key for this provider.
+                  </p>
+                </div>
+              </div>
+
+              {/* ── Error banner ── */}
+              {error && (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-900/20 border border-red-500/30 text-red-300 text-[12px]">
+                  <AlertCircle size={13} className="shrink-0 text-red-400" />
+                  {error}
+                </div>
+              )}
             </div>
+          ) : (
+            /* ── Memories Tab ── */
+            <div className="p-6 flex flex-col gap-4 max-h-[65vh] overflow-y-auto scrollbar-thin">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[13px] font-semibold text-white">Episodic Memories</p>
+                  <p className="text-[11px] text-editor-muted mt-0.5">Lessons learned from past agent sessions in this project.</p>
+                </div>
+                <button
+                  onClick={handleCopyAsSystemPrompt}
+                  disabled={memories.length === 0 || copiedPrompt}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 text-[12px] font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  title="Copy all memories as a system prompt to clipboard"
+                >
+                  {copiedPrompt ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
+                  {copiedPrompt ? "Copied!" : "Copy as Prompt"}
+                </button>
+              </div>
 
-            {/* ── Model Selection ── */}
-            <div>
-              <label className="flex items-center gap-1.5 text-[11px] font-semibold text-editor-muted uppercase tracking-widest mb-3">
-                <Sparkles size={11} /> Model
-              </label>
-              {!useCustom ? (
-                <div className="relative">
-                  <select
-                    value={model}
-                    onChange={e => setModel(e.target.value)}
-                    className="w-full appearance-none bg-editor-bg border border-editor-border text-white text-[13px] rounded-xl px-4 py-2.5 pr-8 outline-none focus:border-editor-accent/70 transition-colors cursor-pointer"
-                  >
-                    {models.map(m => (
-                      <option key={m} value={m}>{m}</option>
-                    ))}
-                    {model && !models.includes(model) && (
-                      <option value={model}>{model}</option>
-                    )}
-                  </select>
-                  <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-editor-muted pointer-events-none" />
+              {memLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 size={20} className="animate-spin text-editor-muted" />
+                </div>
+              ) : memories.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-editor-muted text-center">
+                  <Brain size={32} className="mb-3 opacity-30" />
+                  <p className="text-[13px] font-medium">No memories yet</p>
+                  <p className="text-[11px] mt-1 opacity-60">Memories are created automatically after worthy agent runs.</p>
                 </div>
               ) : (
-                <input
-                  type="text"
-                  value={customModel}
-                  onChange={e => setCustomModel(e.target.value)}
-                  placeholder="e.g. openai/gpt-4.1-nano"
-                  className="w-full bg-editor-bg border border-editor-border focus:border-editor-accent/70 text-white text-[13px] rounded-xl px-4 py-2.5 outline-none transition-colors"
-                />
+                <div className="flex flex-col gap-3">
+                  {memories.map((mem) => (
+                    <div
+                      key={mem.id}
+                      className="p-4 rounded-xl border border-editor-border/40 bg-editor-highlight/20 hover:border-editor-border/70 transition-colors group"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[12px] font-semibold text-white/90 truncate">{mem.task_description}</p>
+                          <p className="text-[11px] text-indigo-300/80 mt-1.5 leading-relaxed">{mem.generalizable_lesson}</p>
+                          {mem.what_worked && (
+                            <p className="text-[10px] text-emerald-400/70 mt-1">✓ {mem.what_worked}</p>
+                          )}
+                          {mem.what_failed_first && (
+                            <p className="text-[10px] text-red-400/70 mt-0.5">✗ {mem.what_failed_first}</p>
+                          )}
+                          <div className="flex items-center gap-3 mt-2">
+                            <span className="text-[9px] text-editor-muted font-mono">{new Date(mem.created_at).toLocaleDateString()}</span>
+                            <span className="text-[9px] text-editor-muted">Retrieved {mem.retrieval_count}×</span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleDeleteMemory(mem.id)}
+                          disabled={deletingId === mem.id}
+                          className="shrink-0 p-1.5 rounded-lg text-editor-muted hover:text-red-400 hover:bg-red-500/10 transition-colors opacity-0 group-hover:opacity-100"
+                          title="Delete memory"
+                        >
+                          {deletingId === mem.id
+                            ? <Loader2 size={13} className="animate-spin" />
+                            : <Trash2 size={13} />}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
+            </div>
+          )}
+
+          {/* ── Footer — only show Save button on provider tab ── */}
+          {activeTab === "provider" && (
+            <div className="flex items-center justify-between px-6 py-4 border-t border-editor-border/40 bg-white/[0.02]">
               <button
-                onClick={() => { setUseCustom(p => !p); setCustomModel("") }}
-                className="mt-2 text-[10px] text-editor-muted hover:text-editor-accent transition-colors"
+                onClick={onClose}
+                className="px-4 py-2 rounded-xl text-[13px] text-editor-muted hover:text-white hover:bg-editor-highlight transition-colors"
               >
-                {useCustom ? "← Back to model list" : "Enter custom model name →"}
+                Cancel
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={isSaving}
+                className={`flex items-center gap-2 px-5 py-2 rounded-xl text-[13px] font-semibold transition-all shadow-lg
+                  ${saveOk
+                    ? "bg-emerald-500/20 border border-emerald-500/40 text-emerald-400"
+                    : "bg-editor-accent hover:bg-editor-accentHover text-editor-bg disabled:bg-editor-highlight disabled:text-editor-muted"
+                  }`}
+              >
+                {isSaving ? (
+                  <><Loader2 size={13} className="animate-spin" /> Saving…</>
+                ) : saveOk ? (
+                  <><CheckCircle2 size={13} /> Saved!</>
+                ) : (
+                  "Save Settings"
+                )}
               </button>
             </div>
-
-            {/* ── API Key ── */}
-            <div>
-              <label className="flex items-center gap-1.5 text-[11px] font-semibold text-editor-muted uppercase tracking-widest mb-3">
-                <Key size={11} /> API Key
-                {hasApiKey && !clearKey && (
-                  <span className="ml-auto flex items-center gap-1 text-emerald-400 normal-case font-medium tracking-normal">
-                    <CheckCircle2 size={11} /> Key saved
-                  </span>
-                )}
-              </label>
-
-              <div className="relative flex items-center gap-2">
-                <div className="relative flex-1">
-                  <input
-                    type={showKey ? "text" : "password"}
-                    value={apiKey}
-                    onChange={e => { setApiKey(e.target.value); setClearKey(false) }}
-                    placeholder={
-                      hasApiKey && !clearKey
-                        ? "••••••••••••  (saved — leave blank to keep)"
-                        : meta.keyPlaceholder
-                    }
-                    className="w-full bg-editor-bg border border-editor-border focus:border-editor-accent/70 text-white text-[13px] rounded-xl px-4 py-2.5 pr-10 outline-none transition-colors font-mono placeholder:font-sans placeholder:text-editor-muted/60"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowKey(p => !p)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-editor-muted hover:text-white transition-colors"
-                  >
-                    {showKey ? <EyeOff size={14} /> : <Eye size={14} />}
-                  </button>
-                </div>
-                {hasApiKey && !clearKey && (
-                  <button
-                    onClick={() => { setClearKey(true); setApiKey("") }}
-                    className="shrink-0 px-3 py-2.5 rounded-xl border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-[11px] font-medium transition-colors"
-                    title="Clear saved key"
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
-
-              {clearKey && (
-                <p className="mt-2 text-[11px] text-red-400 flex items-center gap-1.5">
-                  <AlertCircle size={11} /> Key will be cleared on save. Backend fallback will be used.
-                </p>
-              )}
-
-              <a
-                href={meta.docsUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-2.5 inline-flex items-center gap-1 text-[11px] transition-colors hover:underline"
-                style={{ color: meta.color }}
+          )}
+          {activeTab === "memories" && (
+            <div className="flex items-center justify-end px-6 py-4 border-t border-editor-border/40 bg-white/[0.02]">
+              <button
+                onClick={onClose}
+                className="px-4 py-2 rounded-xl text-[13px] text-editor-muted hover:text-white hover:bg-editor-highlight transition-colors"
               >
-                {meta.docsLabel} <ExternalLink size={10} />
-              </a>
-
-              {/* Security note */}
-              <div className="mt-3 flex items-start gap-2 px-3 py-2 rounded-lg bg-editor-highlight/20 border border-editor-border/30">
-                <Shield size={12} className="text-editor-muted shrink-0 mt-0.5" />
-                <p className="text-[10px] text-editor-muted leading-relaxed">
-                  Your API key is stored securely server-side and tied to your account. It is never returned to the browser after saving. Your key overrides AntiMatter's backend fallback key for this provider.
-                </p>
-              </div>
+                Close
+              </button>
             </div>
-
-            {/* ── Error banner ── */}
-            {error && (
-              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-900/20 border border-red-500/30 text-red-300 text-[12px]">
-                <AlertCircle size={13} className="shrink-0 text-red-400" />
-                {error}
-              </div>
-            )}
-          </div>
-
-          {/* ── Footer ── */}
-          <div className="flex items-center justify-between px-6 py-4 border-t border-editor-border/40 bg-white/[0.02]">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 rounded-xl text-[13px] text-editor-muted hover:text-white hover:bg-editor-highlight transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={isSaving}
-              className={`flex items-center gap-2 px-5 py-2 rounded-xl text-[13px] font-semibold transition-all shadow-lg
-                ${saveOk
-                  ? "bg-emerald-500/20 border border-emerald-500/40 text-emerald-400"
-                  : "bg-editor-accent hover:bg-editor-accentHover text-editor-bg disabled:bg-editor-highlight disabled:text-editor-muted"
-                }`}
-            >
-              {isSaving ? (
-                <><Loader2 size={13} className="animate-spin" /> Saving…</>
-              ) : saveOk ? (
-                <><CheckCircle2 size={13} /> Saved!</>
-              ) : (
-                "Save Settings"
-              )}
-            </button>
-          </div>
+          )}
         </div>
       </div>
     </>

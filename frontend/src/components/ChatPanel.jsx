@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { Send, Wrench, Bot, User, AlertCircle, Sparkles, Info, Zap, PlusSquare, RefreshCw, Settings, Globe, History, Edit2, Trash2, Check, X, Search } from "lucide-react"
+import { Send, Wrench, Bot, User, AlertCircle, Sparkles, Info, Zap, PlusSquare, RefreshCw, Settings, Globe, History, Edit2, Trash2, Check, X, Search, Coins } from "lucide-react"
 import { useChatStore } from "../stores/chatStore"
 import { useProjectStore } from "../stores/projectStore"
 import { useSettingsStore } from "../stores/settingsStore"
@@ -29,6 +29,54 @@ function formatRelativeTime(dateStr) {
   }
 }
 
+// ── Token cost estimator ──────────────────────────────────────────────────────
+const TOKEN_COSTS_PER_1K = {
+  // Groq
+  "llama-3.3-70b-versatile":  { input: 0.00059, output: 0.00079 },
+  "llama-3.1-8b-instant":     { input: 0.00005, output: 0.00008 },
+  "mixtral-8x7b-32768":       { input: 0.00024, output: 0.00024 },
+  // OpenAI
+  "gpt-4o":                   { input: 0.0025,  output: 0.01 },
+  "gpt-4o-mini":              { input: 0.00015, output: 0.0006 },
+  // Anthropic
+  "claude-sonnet-4-5":        { input: 0.003,   output: 0.015 },
+  "claude-3-haiku":           { input: 0.00025, output: 0.00125 },
+  // Gemini
+  "gemini-2.5-flash":         { input: 0.00015, output: 0.0006 },
+  "gemini-1.5-pro":           { input: 0.00125, output: 0.005 },
+  "gemini-1.5-flash":         { input: 0.000075,output: 0.0003 },
+}
+
+function estimateCost(tokenUsage) {
+  if (!tokenUsage) return null
+  const { input_tokens = 0, output_tokens = 0, total_tokens = 0, model = "" } = tokenUsage
+  const rates = TOKEN_COSTS_PER_1K[model]
+  if (!rates) {
+    return { input_tokens, output_tokens, total_tokens, cost: null }
+  }
+  const cost = (input_tokens / 1000) * rates.input + (output_tokens / 1000) * rates.output
+  return { input_tokens, output_tokens, total_tokens, cost }
+}
+
+function formatCost(cost) {
+  if (cost === null || cost === undefined) return null
+  if (cost < 0.0001) return "< $0.0001"
+  if (cost < 0.01) return `$${cost.toFixed(4)}`
+  return `$${cost.toFixed(3)}`
+}
+
+// ── Quick-action prompt templates ────────────────────────────────────────────
+const QUICK_ACTIONS = [
+  { label: "✍️  Write Docstrings",   prompt: "Add clear, concise docstrings to all public functions and classes in the open file." },
+  { label: "🧪  Generate Tests",     prompt: "Write comprehensive pytest tests for the code in the open file, covering edge cases." },
+  { label: "⚡  Refactor Code",      prompt: "Refactor the open file for better readability, performance, and maintainability." },
+  { label: "🐞  Find Bugs",          prompt: "Carefully review the open file and identify any potential bugs, edge cases, or logic errors." },
+  { label: "📋  Explain Code",       prompt: "Explain what the code in the open file does, step by step, in plain language." },
+  { label: "🔒  Security Review",    prompt: "Review the open file for security vulnerabilities and suggest fixes." },
+  { label: "📊  Check Performance",  prompt: "Analyze the open file for any performance bottlenecks and suggest optimizations." },
+  { label: "🔧  Fix Lint Errors",    prompt: "Fix all linting warnings and errors in the open file." },
+]
+
 function MessageBubble({ msg, onRetry }) {
   if (msg.role === "activity") {
     return <ActivityDropdown entries={msg.entries} isLive={false} />
@@ -36,6 +84,9 @@ function MessageBubble({ msg, onRetry }) {
   const isUser   = msg.role === "user"
   const isTool   = msg.role === "tool_start" || msg.role === "tool_end"
   const isSystem = msg.role === "system"
+
+  // Token usage badge (assistant only)
+  const tokenInfo = msg.role === "assistant" ? estimateCost(msg.token_usage) : null
 
   // Actionable Error Cards
   if (msg.role === "error") {
@@ -205,6 +256,20 @@ function MessageBubble({ msg, onRetry }) {
       {isTool && <div className="mt-0.5 shrink-0">{icons[msg.role]}</div>}
       <div className="flex-1 min-w-0 text-[13px] leading-relaxed">
         <Markdown text={msg.content} />
+        {/* Token cost badge — only on completed assistant messages */}
+        {tokenInfo && (
+          <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400/80 text-[10px] font-mono">
+              <Coins size={9} />
+              <span>{tokenInfo.total_tokens.toLocaleString()} tokens</span>
+            </div>
+            {tokenInfo.cost !== null && (
+              <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400/80 text-[10px] font-mono">
+                <span>{formatCost(tokenInfo.cost)}</span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -702,6 +767,30 @@ export default function ChatPanel() {
 
       {/* Input */}
       <div className="p-4 border-t border-editor-border/50 bg-editor-bg/30 backdrop-blur-md">
+        {/* Quick-Action Pills */}
+        {messages.length === 0 && (
+          <div className="mb-3 flex gap-2 overflow-x-auto scrollbar-none pb-1">
+            {QUICK_ACTIONS.map((action) => (
+              <button
+                key={action.label}
+                disabled={isStreaming || !isConnected}
+                onClick={() => {
+                  setInput(action.prompt)
+                  const textarea = document.getElementById("chat-input-textarea")
+                  if (textarea) {
+                    textarea.style.height = "auto"
+                    textarea.style.height = Math.min(textarea.scrollHeight, 160) + "px"
+                    textarea.focus()
+                  }
+                }}
+                className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-editor-border/50 bg-editor-highlight/30 hover:bg-editor-highlight/70 hover:border-editor-accent/40 text-editor-muted hover:text-white text-[11px] font-medium transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {action.label}
+              </button>
+            ))}
+          </div>
+        )}
+
         <div className={`flex gap-2 items-end bg-editor-bg border border-editor-border hover:border-editor-accent/50 focus-within:border-editor-accent/80 focus-within:shadow-[0_0_15px_rgba(122,162,247,0.15)] rounded-xl px-3 py-2.5 transition-all ${inputPulse ? 'animate-input-pulse border-editor-accent shadow-[0_0_25px_rgba(122,162,247,0.6)] scale-[1.02]' : ''} ${!isConnected ? 'opacity-50 pointer-events-none' : ''}`}>
           <textarea
             id="chat-input-textarea"
