@@ -113,6 +113,7 @@ async def run_agent_streaming(
     api_key: str | None = None,
 ):
     final_text = None
+    accumulated_token_usage = {}  # {input_tokens, output_tokens, total_tokens, model}
     conv = await get_or_create_conversation(db, project.id, conversation_id)
     history = await load_history(db, conv.id)
 
@@ -238,6 +239,20 @@ async def run_agent_streaming(
                     "output": str(event["data"].get("output", "")),
                 })
                 
+            elif kind == "on_chat_model_end":
+                # Capture token usage from any agent LLM call
+                node = event.get("metadata", {}).get("langgraph_node")
+                if node == "agent":
+                    resp = event["data"].get("output")
+                    usage = getattr(resp, "usage_metadata", None) or {}
+                    if usage:
+                        accumulated_token_usage = {
+                            "input_tokens":  usage.get("input_tokens", 0),
+                            "output_tokens": usage.get("output_tokens", 0),
+                            "total_tokens":  usage.get("total_tokens", 0),
+                            "model": model_name,
+                        }
+
             elif kind == "on_chain_end":
                 log.info(f"Chain ended: name={event['name']}")
                 if event["name"].startswith("antimatter/"):
@@ -263,6 +278,13 @@ async def run_agent_streaming(
                             break
                     
                     base_time = datetime.datetime.now(datetime.timezone.utc)
+                    # Find the index of the last AI message to attach token_usage to it
+                    last_ai_idx = None
+                    for rev_i, rev_m in enumerate(reversed(new_messages)):
+                        if isinstance(rev_m, AIMessage) and not (getattr(rev_m, 'tool_calls', None)):
+                            last_ai_idx = len(new_messages) - 1 - rev_i
+                            break
+
                     for i, m in enumerate(new_messages):
                         role = "assistant" if isinstance(m, AIMessage) else "tool"
                         content = m.content if isinstance(m.content, str) else str(m.content)
@@ -272,12 +294,16 @@ async def run_agent_streaming(
                             tool_calls = m.tool_calls
                         elif isinstance(m, ToolMessage):
                             tool_calls = {"id": m.tool_call_id, "name": m.name}
-                            
+                        
+                        # Attach token usage to the last non-tool-calling AI message
+                        msg_token_usage = accumulated_token_usage if (i == last_ai_idx and accumulated_token_usage) else None
+
                         db.add(Message(
                             conversation_id=conv.id,
                             role=role,
                             content=content,
                             tool_calls=tool_calls,
+                            token_usage=msg_token_usage,
                             created_at=base_time + datetime.timedelta(microseconds=i + 1)
                         ))
                     await db.commit()
@@ -334,4 +360,9 @@ async def run_agent_streaming(
                 "message": "An unexpected error occurred while processing your request. The execution was aborted."
             })
 
-    await send_json({"type": "done", "conversation_id": str(conv.id), "final_text": final_text})
+    await send_json({
+        "type": "done",
+        "conversation_id": str(conv.id),
+        "final_text": final_text,
+        "token_usage": accumulated_token_usage if accumulated_token_usage else None,
+    })

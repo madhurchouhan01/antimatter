@@ -110,7 +110,7 @@ export function useAgentSocket(projectId) {
             entries: finalEntries,
           })
         }
-        flushBuffer(msg.final_text)
+        flushBuffer(msg.final_text, msg.token_usage || null)
         setConversationId(msg.conversation_id)
         
         // Refresh conversations list to update sidebar titles

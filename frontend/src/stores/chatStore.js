@@ -65,6 +65,7 @@ function reconstructMessages(dbMessages) {
         id: msg.id,
         role: "assistant",
         content: msg.content,
+        token_usage: msg.token_usage || null,
       })
     } else {
       reconstructed.push({
@@ -110,14 +111,15 @@ export const useChatStore = create(
       appendToken: (token) =>
         set((state) => ({ streamBuffer: state.streamBuffer + token })),
 
-      flushBuffer: (finalText) =>
+      flushBuffer: (finalText, tokenUsage) =>
         set((state) => {
           const content = (finalText !== undefined && finalText !== null) ? finalText : state.streamBuffer;
           if (!content) return { isStreaming: false }
           const msg = {
-            id:      crypto.randomUUID(),
-            role:    "assistant",
-            content: content,
+            id:          crypto.randomUUID(),
+            role:        "assistant",
+            content:     content,
+            token_usage: tokenUsage || null,
           }
           return {
             messages:    [...state.messages, msg],

@@ -89,4 +89,12 @@ export const settingsApi = {
   getModels: ()                           => api.get("/api/settings/models"),
 }
 
+// Episodic Memory endpoints
+export const memoriesApi = {
+  list:   (projectId, page = 1, pageSize = 100) =>
+    api.get(`/api/projects/${projectId}/memories`, { params: { page, page_size: pageSize } }),
+  delete: (projectId, memoryId) =>
+    api.delete(`/api/projects/${projectId}/memories/${memoryId}`),
+}
+
 export default api
