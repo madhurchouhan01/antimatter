@@ -350,17 +350,25 @@ export default function SettingsModal({ onClose }) {
             </button>
           </div>
 
-          {/* ── Tab Panels ── */}
+          {/* ── Tab Panels — fixed min-height so card never shrinks on tab switch ── */}
+          <div className="min-h-[520px] flex flex-col">
           {activeTab === "provider" ? (
-            <div className="p-6 flex flex-col gap-6 max-h-[65vh] overflow-y-auto scrollbar-thin">
+            <div className="flex-1 p-6 flex flex-col gap-6 overflow-y-auto" style={{ maxHeight: "calc(65vh - 48px)" }}>
 
               {/* ── Provider Selection ── */}
               <div>
                 <label className="flex items-center gap-1.5 text-[11px] font-semibold text-editor-muted uppercase tracking-widest mb-3">
                   <Cpu size={11} /> Provider
                 </label>
+
+                {/* ── Cloud Providers ── */}
+                <p className="text-[9px] font-semibold text-editor-muted/50 uppercase tracking-widest mb-2">
+                  ☁️ Cloud API
+                </p>
                 <div className="grid grid-cols-3 gap-2">
-                  {Object.entries(PROVIDERS).map(([key, p]) => (
+                  {Object.entries(PROVIDERS)
+                    .filter(([key]) => key !== "ollama")
+                    .map(([key, p]) => (
                     <button
                       key={key}
                       onClick={() => handleProviderChange(key)}
@@ -380,7 +388,43 @@ export default function SettingsModal({ onClose }) {
                   ))}
                 </div>
 
-                {/* Provider description */}
+                {/* ── Local / Self-Hosted ── */}
+                <p className="text-[9px] font-semibold text-editor-muted/50 uppercase tracking-widest mt-4 mb-2">
+                  🖥️ Local / Self-Hosted
+                </p>
+                {(() => {
+                  const p = PROVIDERS.ollama
+                  const isActive = provider === "ollama"
+                  return (
+                    <button
+                      onClick={() => handleProviderChange("ollama")}
+                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border transition-all text-left
+                        ${isActive
+                          ? `bg-gradient-to-br ${p.gradient} ${p.border} shadow-sm`
+                          : "border-editor-border/40 hover:border-editor-border hover:bg-editor-highlight/30"
+                        }`}
+                    >
+                      <span className="flex items-center justify-center w-8 h-8 rounded-lg shrink-0"
+                        style={{ background: `${p.color}18`, border: `1px solid ${p.color}30` }}>
+                        <p.icon size={16} style={{ color: p.color }} />
+                      </span>
+                      <span className="flex-1 min-w-0">
+                        <span className={`block text-[12px] font-semibold ${isActive ? "text-white" : "text-editor-muted"}`}>
+                          {p.label}
+                        </span>
+                        <span className="block text-[10px] text-editor-muted/60 mt-0.5">
+                          {p.description}
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-[9px] font-semibold px-2 py-0.5 rounded-full"
+                        style={{ background: `${p.color}18`, color: p.color, border: `1px solid ${p.color}30` }}>
+                        No API Key
+                      </span>
+                    </button>
+                  )
+                })()}
+
+                {/* Provider description bar */}
                 <div className={`mt-3 px-3 py-2.5 rounded-lg border text-[11px] text-editor-muted bg-gradient-to-r ${meta.gradient} ${meta.border}`}>
                   <span className="inline-flex items-center gap-1 font-semibold" style={{ color: meta.color }}>
                     <meta.icon size={12} className="mr-0.5" />
@@ -389,6 +433,7 @@ export default function SettingsModal({ onClose }) {
                   {" — "}{meta.description}
                 </div>
               </div>
+
 
               {/* ── Model Selection ── */}
               <div>
@@ -628,7 +673,7 @@ export default function SettingsModal({ onClose }) {
                   <input
                     type="text"
                     value={ollamaBaseUrl}
-                    onChange={e => { setOllamaBaseUrl(e.target.value); setOllamaStatus(null) }}
+                    onChange={e => { setOllamaBaseUrl(e.target.value); setOllamaReachable(null); setOllamaError(null) }}
                     placeholder="http://localhost:11434/v1"
                     className="flex-1 bg-editor-bg border border-editor-border focus:border-cyan-500/70 text-white text-[13px] rounded-xl px-4 py-2.5 outline-none transition-colors font-mono placeholder:font-sans placeholder:text-editor-muted/60"
                   />
@@ -661,7 +706,7 @@ export default function SettingsModal({ onClose }) {
             </div>
           ) : (
             /* ── Memories Tab ── */
-            <div className="p-6 flex flex-col gap-4 max-h-[65vh] overflow-y-auto scrollbar-thin">
+            <div className="flex-1 p-6 flex flex-col gap-4 overflow-y-auto" style={{ maxHeight: "calc(65vh - 48px)" }}>
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-[13px] font-semibold text-white">Episodic Memories</p>
@@ -727,6 +772,7 @@ export default function SettingsModal({ onClose }) {
               )}
             </div>
           )}
+          </div>{/* end min-h wrapper */}
 
           {/* ── Footer — only show Save button on provider tab ── */}
           {activeTab === "provider" && (
