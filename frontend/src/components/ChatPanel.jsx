@@ -8,46 +8,7 @@ import { useAgentTraceStore } from "../stores/agentTraceStore"
 import ActivityDropdown from "./ActivityDropdown"
 import Markdown from "./Markdown"
 
-const ROUTE_BADGE_CONFIG = {
-  coding: {
-    label: "Agent Loop",
-    icon: Sparkles,
-    bg: "bg-blue-500/10 border-blue-500/20 text-blue-400",
-  },
-  codebase_question: {
-    label: "Codebase Q&A",
-    icon: Search,
-    bg: "bg-cyan-500/10 border-cyan-500/20 text-cyan-400",
-  },
-  diagram: {
-    label: "Diagram Generator",
-    icon: Globe,
-    bg: "bg-purple-500/10 border-purple-500/20 text-purple-400",
-  },
-  general_chat: {
-    label: "General Chat",
-    icon: Bot,
-    bg: "bg-emerald-500/10 border-emerald-500/20 text-emerald-400",
-  },
-  off_topic: {
-    label: "Off Topic",
-    icon: AlertCircle,
-    bg: "bg-zinc-500/10 border-zinc-500/20 text-zinc-400",
-  },
-}
-
-function RouteBadge({ route }) {
-  const config = ROUTE_BADGE_CONFIG[route]
-  if (!config) return null
-  const Icon = config.icon
-  return (
-    <div className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border text-[10px] font-semibold tracking-wide uppercase mb-2 ${config.bg}`}>
-      <Icon size={10} className="shrink-0" />
-      <span>{config.label}</span>
-    </div>
-  )
-}
-
+// ── Helper: relative time ────────────────────────────────────────────────────
 function formatRelativeTime(dateStr) {
   try {
     const date = new Date(dateStr)
@@ -55,81 +16,43 @@ function formatRelativeTime(dateStr) {
     const diffMs = now - date
     const diffSec = Math.floor(diffMs / 1000)
     const diffMin = Math.floor(diffSec / 60)
-    const diffHr = Math.floor(diffMin / 60)
+    const diffHr  = Math.floor(diffMin / 60)
     const diffDays = Math.floor(diffHr / 24)
-
-    if (diffSec < 60) return "Just now"
-    if (diffMin < 60) return `${diffMin}m ago`
-    if (diffHr < 24) return `${diffHr}h ago`
+    if (diffSec < 60)  return "Just now"
+    if (diffMin < 60)  return `${diffMin}m ago`
+    if (diffHr  < 24)  return `${diffHr}h ago`
     if (diffDays === 1) return "Yesterday"
-    if (diffDays < 7) return `${diffDays}d ago`
-    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-  } catch (e) {
+    if (diffDays < 7)  return `${diffDays}d ago`
+    return date.toLocaleDateString(undefined, { month: "short", day: "numeric" })
+  } catch {
     return ""
   }
 }
 
-// ── Token cost estimator ──────────────────────────────────────────────────────
-const TOKEN_COSTS_PER_1K = {
-  // Groq
-  "llama-3.3-70b-versatile":  { input: 0.00059, output: 0.00079 },
-  "llama-3.1-8b-instant":     { input: 0.00005, output: 0.00008 },
-  "mixtral-8x7b-32768":       { input: 0.00024, output: 0.00024 },
-  // OpenAI
-  "gpt-4o":                   { input: 0.0025,  output: 0.01 },
-  "gpt-4o-mini":              { input: 0.00015, output: 0.0006 },
-  // Anthropic
-  "claude-sonnet-4-5":        { input: 0.003,   output: 0.015 },
-  "claude-3-haiku":           { input: 0.00025, output: 0.00125 },
-  // Gemini
-  "gemini-2.5-flash":         { input: 0.00015, output: 0.0006 },
-  "gemini-1.5-pro":           { input: 0.00125, output: 0.005 },
-  "gemini-1.5-flash":         { input: 0.000075,output: 0.0003 },
-}
-
-function estimateCost(tokenUsage) {
-  if (!tokenUsage) return null
-  const { input_tokens = 0, output_tokens = 0, total_tokens = 0, model = "" } = tokenUsage
-  const rates = TOKEN_COSTS_PER_1K[model]
-  if (!rates) {
-    return { input_tokens, output_tokens, total_tokens, cost: null }
-  }
-  const cost = (input_tokens / 1000) * rates.input + (output_tokens / 1000) * rates.output
-  return { input_tokens, output_tokens, total_tokens, cost }
-}
-
-function formatCost(cost) {
-  if (cost === null || cost === undefined) return null
-  if (cost < 0.0001) return "< $0.0001"
-  if (cost < 0.01) return `$${cost.toFixed(4)}`
-  return `$${cost.toFixed(3)}`
-}
-
 // ── Quick-action prompt templates ────────────────────────────────────────────
 const QUICK_ACTIONS = [
-  { label: "✍️  Write Docstrings",   prompt: "Add clear, concise docstrings to all public functions and classes in the open file." },
-  { label: "🧪  Generate Tests",     prompt: "Write comprehensive pytest tests for the code in the open file, covering edge cases." },
-  { label: "⚡  Refactor Code",      prompt: "Refactor the open file for better readability, performance, and maintainability." },
-  { label: "🐞  Find Bugs",          prompt: "Carefully review the open file and identify any potential bugs, edge cases, or logic errors." },
-  { label: "📋  Explain Code",       prompt: "Explain what the code in the open file does, step by step, in plain language." },
-  { label: "🔒  Security Review",    prompt: "Review the open file for security vulnerabilities and suggest fixes." },
-  { label: "📊  Check Performance",  prompt: "Analyze the open file for any performance bottlenecks and suggest optimizations." },
-  { label: "🔧  Fix Lint Errors",    prompt: "Fix all linting warnings and errors in the open file." },
+  { label: "✍️  Write Docstrings",  prompt: "Add clear, concise docstrings to all public functions and classes in the open file." },
+  { label: "🧪  Generate Tests",    prompt: "Write comprehensive pytest tests for the code in the open file, covering edge cases." },
+  { label: "⚡  Refactor Code",     prompt: "Refactor the open file for better readability, performance, and maintainability." },
+  { label: "🐞  Find Bugs",         prompt: "Carefully review the open file and identify any potential bugs, edge cases, or logic errors." },
+  { label: "📋  Explain Code",      prompt: "Explain what the code in the open file does, step by step, in plain language." },
+  { label: "🔒  Security Review",   prompt: "Review the open file for security vulnerabilities and suggest fixes." },
+  { label: "📊  Check Performance", prompt: "Analyze the open file for any performance bottlenecks and suggest optimizations." },
+  { label: "🔧  Fix Lint Errors",   prompt: "Fix all linting warnings and errors in the open file." },
 ]
 
+// ── Message bubble ────────────────────────────────────────────────────────────
 function MessageBubble({ msg, onRetry }) {
+  // Activity log card (agent tool trace)
   if (msg.role === "activity") {
     return <ActivityDropdown entries={msg.entries} isLive={false} />
   }
+
   const isUser   = msg.role === "user"
   const isTool   = msg.role === "tool_start" || msg.role === "tool_end"
   const isSystem = msg.role === "system"
 
-  // Token usage badge (assistant only)
-  const tokenInfo = msg.role === "assistant" ? estimateCost(msg.token_usage) : null
-  const route = msg.token_usage?.route
-
-  // Actionable Error Cards
+  // ── Error cards ──────────────────────────────────────────────────────────────
   if (msg.role === "error") {
     const errorType = msg.error_type || "generic"
 
@@ -145,14 +68,13 @@ function MessageBubble({ msg, onRetry }) {
           </div>
           {onRetry && (
             <button onClick={() => {
-                const msgs = useChatStore.getState().messages;
-                const lastUser = [...msgs].reverse().find(m => m.role === "user");
-                if(lastUser) onRetry(lastUser.content);
-              }} 
+                const msgs = useChatStore.getState().messages
+                const lastUser = [...msgs].reverse().find(m => m.role === "user")
+                if (lastUser) onRetry(lastUser.content)
+              }}
               className="mt-1.5 self-start flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-500/20 hover:bg-orange-500/30 border border-orange-500/30 text-orange-300 text-xs font-semibold transition-all duration-200"
             >
-              <RefreshCw size={11} />
-              Retry Request
+              <RefreshCw size={11} />Retry Request
             </button>
           )}
         </div>
@@ -171,18 +93,9 @@ function MessageBubble({ msg, onRetry }) {
           </div>
           <div className="mt-1.5 border-t border-amber-500/20 pt-2 flex flex-col gap-1.5 text-[11px] text-amber-300/80">
             <span className="font-semibold text-amber-300 uppercase tracking-wider text-[9px]">Suggested Actions:</span>
-            <span className="flex items-start gap-1">
-              <span className="text-amber-400">•</span>
-              <span>Close open editor tabs that have large file sizes to reduce RAG context.</span>
-            </span>
-            <span className="flex items-start gap-1">
-              <span className="text-amber-400">•</span>
-              <span>Ask a shorter, more specific question.</span>
-            </span>
-            <span className="flex items-start gap-1">
-              <span className="text-amber-400">•</span>
-              <span>Select a model with a larger context window in the top dropdown.</span>
-            </span>
+            <span className="flex items-start gap-1"><span className="text-amber-400">•</span><span>Close open editor tabs that have large file sizes to reduce RAG context.</span></span>
+            <span className="flex items-start gap-1"><span className="text-amber-400">•</span><span>Ask a shorter, more specific question.</span></span>
+            <span className="flex items-start gap-1"><span className="text-amber-400">•</span><span>Select a model with a larger context window in the top dropdown.</span></span>
           </div>
         </div>
       )
@@ -198,12 +111,11 @@ function MessageBubble({ msg, onRetry }) {
           <div className="text-[12.5px] leading-relaxed opacity-95">
             <Markdown text={msg.content} />
           </div>
-          <button 
+          <button
             onClick={() => useSettingsStore.getState().setSettingsOpen(true)}
             className="mt-1.5 self-start flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-300 text-xs font-semibold transition-all duration-200"
           >
-            <Settings size={11} />
-            Configure API Keys
+            <Settings size={11} />Configure API Keys
           </button>
         </div>
       )
@@ -221,21 +133,20 @@ function MessageBubble({ msg, onRetry }) {
           </div>
           {onRetry && (
             <button onClick={() => {
-                const msgs = useChatStore.getState().messages;
-                const lastUser = [...msgs].reverse().find(m => m.role === "user");
-                if(lastUser) onRetry(lastUser.content);
-              }} 
+                const msgs = useChatStore.getState().messages
+                const lastUser = [...msgs].reverse().find(m => m.role === "user")
+                if (lastUser) onRetry(lastUser.content)
+              }}
               className="mt-1.5 self-start flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-500/10 hover:bg-zinc-500/20 border border-zinc-500/25 text-zinc-300 text-xs font-semibold transition-all duration-200"
             >
-              <RefreshCw size={11} />
-              Retry Request
+              <RefreshCw size={11} />Retry Request
             </button>
           )}
         </div>
       )
     }
 
-    // Generic / fallback error card
+    // Generic error
     return (
       <div className="flex flex-col gap-2 p-3.5 rounded-xl bg-red-950/10 border border-red-500/20 text-red-300 self-stretch my-2 shadow-sm animate-in fade-in duration-200">
         <div className="flex items-center gap-2 font-semibold text-red-400">
@@ -243,25 +154,24 @@ function MessageBubble({ msg, onRetry }) {
           <span>Agent Execution Failure</span>
         </div>
         <div className="text-[12.5px] leading-relaxed opacity-90">
-           <Markdown text={msg.content} />
+          <Markdown text={msg.content} />
         </div>
         {onRetry && (
           <button onClick={() => {
-              const msgs = useChatStore.getState().messages;
-              const lastUser = [...msgs].reverse().find(m => m.role === "user");
-              if(lastUser) onRetry(lastUser.content);
-            }} 
+              const msgs = useChatStore.getState().messages
+              const lastUser = [...msgs].reverse().find(m => m.role === "user")
+              if (lastUser) onRetry(lastUser.content)
+            }}
             className="mt-1 self-start flex items-center gap-1.5 px-3 py-1 rounded border border-red-500/20 bg-red-500/10 hover:bg-red-500/20 text-red-300 text-xs transition-colors"
           >
-            <RefreshCw size={12} />
-            Retry
+            <RefreshCw size={12} />Retry
           </button>
         )}
       </div>
     )
   }
 
-  // System messages: slim horizontal notification bar, not a bubble
+  // ── System notification bar ───────────────────────────────────────────────
   if (isSystem) {
     return (
       <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-editor-highlight/30 border border-editor-border/30 text-editor-muted text-[11px] self-stretch animate-in fade-in duration-200">
@@ -271,9 +181,10 @@ function MessageBubble({ msg, onRetry }) {
     )
   }
 
+  // ── Standard message bubble ───────────────────────────────────────────────
   const icons = {
-    user:       <User size={14} className="text-white" />,
-    assistant:  <Bot  size={14} className="text-editor-accent" />,
+    user:       <User   size={14} className="text-white" />,
+    assistant:  <Bot    size={14} className="text-editor-accent" />,
     tool_start: <Wrench size={12} className="text-yellow-400" />,
     tool_end:   <Wrench size={12} className="text-green-400" />,
     error:      <AlertCircle size={14} className="text-red-400" />,
@@ -288,90 +199,93 @@ function MessageBubble({ msg, onRetry }) {
   }
 
   return (
-    <div className={`flex items-start gap-3 px-3.5 py-2.5 rounded-2xl max-w-[92%] ${styles[msg.role] ?? styles.assistant} ${isUser ? 'rounded-tr-sm' : 'rounded-tl-sm'} animate-in fade-in duration-200`}>
+    <div className={`flex items-start gap-3 px-3.5 py-2.5 rounded-2xl max-w-[92%] ${styles[msg.role] ?? styles.assistant} ${isUser ? "rounded-tr-sm" : "rounded-tl-sm"} animate-in fade-in duration-200`}>
       {!isTool && (
-        <div className={`mt-0.5 shrink-0 flex items-center justify-center w-6 h-6 rounded-full ${isUser ? 'bg-white/20' : 'bg-editor-accent/10'}`}>
+        <div className={`mt-0.5 shrink-0 flex items-center justify-center w-6 h-6 rounded-full ${isUser ? "bg-white/20" : "bg-editor-accent/10"}`}>
           {icons[msg.role]}
         </div>
       )}
       {isTool && <div className="mt-0.5 shrink-0">{icons[msg.role]}</div>}
       <div className="flex-1 min-w-0 text-[13px] leading-relaxed">
-        {route && <RouteBadge route={route} />}
         <Markdown text={msg.content} />
-        {/* Token cost badge — only on completed assistant messages */}
-        {tokenInfo && (
-          <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400/80 text-[10px] font-mono">
-              <Coins size={9} />
-              <span>{tokenInfo.total_tokens.toLocaleString()} tokens</span>
-            </div>
-            {tokenInfo.cost !== null && (
-              <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400/80 text-[10px] font-mono">
-                <span>{formatCost(tokenInfo.cost)}</span>
-              </div>
-            )}
-          </div>
-        )}
       </div>
     </div>
   )
 }
 
+// ── Session token counter (shows cumulative tokens from all activity logs) ──
+function SessionTokenBadge({ messages }) {
+  const total = messages.reduce((acc, msg) => {
+    if (msg.role !== "activity" || !msg.entries) return acc
+    return acc + msg.entries.reduce((a2, e) => {
+      if (e.type === "lifecycle" && e.meta?.tokens?.total_tokens) {
+        return a2 + e.meta.tokens.total_tokens
+      }
+      return a2
+    }, 0)
+  }, 0)
+
+  if (!total) return null
+  return (
+    <span
+      className="flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-full"
+      style={{ background: "#7aa2f710", color: "#7aa2f780", border: "1px solid #7aa2f720" }}
+      title="Total tokens used this session"
+    >
+      <Coins size={9} />
+      {total.toLocaleString()}
+    </span>
+  )
+}
+
 export default function ChatPanel() {
-  const project   = useProjectStore((s) => s.activeProject)
-  const { messages, isStreaming, streamBuffer, isConnected, currentRoute } = useChatStore()
-  const { sendMessage, connect, disconnect } = useAgentSocket(project?.id)
-  const entries   = useAgentTraceStore((s) => s.entries)
-  const isActive  = useAgentTraceStore((s) => s.isActive)
-  const input = useChatStore((s) => s.input)
+  const project  = useProjectStore((s) => s.activeProject)
+  const { messages, isStreaming, streamBuffer, isConnected } = useChatStore()
+  const { sendMessage, connect }  = useAgentSocket(project?.id)
+  const entries  = useAgentTraceStore((s) => s.entries)
+  const isActive = useAgentTraceStore((s) => s.isActive)
+  const input    = useChatStore((s) => s.input)
   const setInput = useChatStore((s) => s.setInput)
   const inputPulse = useChatStore((s) => s.inputPulse)
-  const bottomRef = useRef(null)
+  const bottomRef    = useRef(null)
   const containerRef = useRef(null)
 
   // Chat History state
-  const [showHistory, setShowHistory] = useState(false)
-  const [searchQuery, setSearchQuery] = useState("")
-  const [editingConvId, setEditingConvId] = useState(null)
-  const [editTitle, setEditTitle] = useState("")
+  const [showHistory,    setShowHistory]    = useState(false)
+  const [searchQuery,    setSearchQuery]    = useState("")
+  const [editingConvId,  setEditingConvId]  = useState(null)
+  const [editTitle,      setEditTitle]      = useState("")
   const [deletingConvId, setDeletingConvId] = useState(null)
 
-  const conversations = useChatStore((s) => s.conversations)
-  const conversationId = useChatStore((s) => s.conversationId)
+  const conversations      = useChatStore((s) => s.conversations)
+  const conversationId     = useChatStore((s) => s.conversationId)
   const fetchConversations = useChatStore((s) => s.fetchConversations)
-  const loadConversation = useChatStore((s) => s.loadConversation)
+  const loadConversation   = useChatStore((s) => s.loadConversation)
   const renameConversation = useChatStore((s) => s.renameConversation)
   const deleteConversation = useChatStore((s) => s.deleteConversation)
 
-  // Fetch conversation lists when project changes
   useEffect(() => {
-    if (project) {
-      fetchConversations(project.id)
-    }
+    if (project) fetchConversations(project.id)
   }, [project?.id, fetchConversations])
 
-  // Load active conversation's messages from database on mount if messages is empty
   useEffect(() => {
     if (project && conversationId && messages.length === 0) {
       loadConversation(project.id, conversationId)
     }
   }, [project?.id, conversationId, loadConversation, messages.length])
 
-  // Auto-resize input textarea when input changes programmatically (e.g. log injection)
   useEffect(() => {
     const textarea = document.getElementById("chat-input-textarea")
     if (textarea) {
-      textarea.style.height = 'auto'
-      textarea.style.height = Math.min(textarea.scrollHeight, 160) + 'px'
+      textarea.style.height = "auto"
+      textarea.style.height = Math.min(textarea.scrollHeight, 160) + "px"
     }
   }, [input])
 
-  // Pull provider + model from the global settings store
-  const provider    = useSettingsStore((s) => s.provider)
-  const model       = useSettingsStore((s) => s.model)
-  const setModel    = useSettingsStore((s) => s.setModel)
+  const provider = useSettingsStore((s) => s.provider)
+  const model    = useSettingsStore((s) => s.model)
+  const setModel = useSettingsStore((s) => s.setModel)
 
-  // Curated model lists per provider (loaded separately from backend)
   const [modelCatalogue, setModelCatalogue] = useState({})
   useEffect(() => {
     import("../lib/api").then(({ default: api }) => {
@@ -380,52 +294,24 @@ export default function ChatPanel() {
   }, [])
   const availableModels = modelCatalogue[provider] || (model ? [model] : [])
 
-  const THINKING_WORDS = [
-    "reasoning", "deducing", "inducing", "extrapolating",
-    "analyzing", "synthesizing", "categorizing", "deciphering",
-    "assessing", "verifying", "postulating", "thinking", "working"
-  ]
-  const [wordIndex, setWordIndex] = useState(0)
-  const cyclingWord = THINKING_WORDS[wordIndex]
-
-  // Derived state: wait if run is active but we haven't started streaming tokens or executing tools
-  const isWaiting = isActive && !isStreaming && !streamBuffer && entries.length === 0
-
-  // Cycle words every 1.5 s while waiting
-  useEffect(() => {
-    if (!isWaiting) {
-      setWordIndex(0)
-      return
-    }
-    const id = setInterval(() => {
-      setWordIndex((i) => (i + 1) % THINKING_WORDS.length)
-    }, 1500)
-    return () => clearInterval(id)
-  }, [isWaiting])
-
   useEffect(() => {
     if (project) connect()
   }, [project?.id, connect])
 
-  // Instant scroll on stream updates to avoid smooth animation queues/glitches
+  // Instant scroll while streaming
   useEffect(() => {
     const container = containerRef.current
     if (!container || !streamBuffer) return
     const threshold = 150
     const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight <= threshold
-    if (isNearBottom) {
-      container.scrollTop = container.scrollHeight
-    }
+    if (isNearBottom) container.scrollTop = container.scrollHeight
   }, [streamBuffer])
 
-  // Smooth scroll on new message completions or user submissions
+  // Smooth scroll on new messages
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
-    container.scrollTo({
-      top: container.scrollHeight,
-      behavior: "smooth"
-    })
+    container.scrollTo({ top: container.scrollHeight, behavior: "smooth" })
   }, [messages.length])
 
   const handleSend = () => {
@@ -433,19 +319,13 @@ export default function ChatPanel() {
     if (!text || isStreaming) return
     setInput("")
     sendMessage(text, model)
-
     const textarea = document.getElementById("chat-input-textarea")
-    if (textarea) {
-        textarea.style.height = 'auto'
-    }
+    if (textarea) textarea.style.height = "auto"
   }
 
-  const handleRetry = (text) => {
-    sendMessage(text, model)
-  }
+  const handleRetry = (text) => sendMessage(text, model)
 
-  // Filter conversations by search query
-  const filteredConversations = conversations.filter(conv => 
+  const filteredConversations = conversations.filter(conv =>
     (conv.title || "Untitled Conversation").toLowerCase().includes(searchQuery.toLowerCase())
   )
 
@@ -456,9 +336,12 @@ export default function ChatPanel() {
         <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-blue-500/10 border border-blue-500/20">
           <Sparkles size={14} className="text-editor-accent" />
         </div>
-        <span className="text-[13px] font-bold text-white tracking-wide uppercase ml-2">AI Assistant</span>
-        
-        <select 
+        <span className="text-[13px] font-bold text-white tracking-wide uppercase ml-1">AI Assistant</span>
+
+        {/* Session token counter */}
+        <SessionTokenBadge messages={messages} />
+
+        <select
           className="ml-auto bg-editor-bg border border-editor-border text-[11px] text-editor-muted rounded px-2 py-0.5 outline-none hover:border-editor-accent/50 focus:border-editor-accent/80 transition-colors max-w-[120px] truncate cursor-pointer"
           value={model}
           onChange={(e) => setModel(e.target.value)}
@@ -471,22 +354,20 @@ export default function ChatPanel() {
           )}
         </select>
 
-        {/* History Toggle Button */}
+        {/* History Toggle */}
         <button
           onClick={() => {
-            if (project) {
-              fetchConversations(project.id)
-            }
+            if (project) fetchConversations(project.id)
             setShowHistory(!showHistory)
           }}
           className={`ml-2 flex items-center justify-center w-7 h-7 rounded hover:bg-editor-highlight transition-all
-            ${showHistory ? 'bg-editor-accent/20 text-editor-accent border border-editor-accent/30' : 'text-editor-muted hover:text-white'}`}
+            ${showHistory ? "bg-editor-accent/20 text-editor-accent border border-editor-accent/30" : "text-editor-muted hover:text-white"}`}
           title="Chat History"
         >
           <History size={14} />
         </button>
 
-        {/* New Chat Button */}
+        {/* New Chat */}
         <button
           onClick={() => {
             useChatStore.getState().clearChat()
@@ -500,8 +381,8 @@ export default function ChatPanel() {
         </button>
       </div>
 
-      {/* Main Messages area */}
-      <div 
+      {/* Messages */}
+      <div
         ref={containerRef}
         className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 scrollbar-thin"
       >
@@ -514,124 +395,35 @@ export default function ChatPanel() {
             </p>
           </div>
         )}
-        {messages.map((msg) => <MessageBubble key={msg.id} msg={msg} onRetry={handleRetry} />)}
-        
-        {/* Live agent activity dropdown during active run */}
+
+        {messages.map((msg) => (
+          <MessageBubble key={msg.id} msg={msg} onRetry={handleRetry} />
+        ))}
+
+        {/* Live agent activity (during active run) */}
         {isActive && entries.length > 0 && (
           <ActivityDropdown entries={entries} isLive={true} />
         )}
-        
-        {/* ── Thinking shimmer — premium cycling word card ── */}
-        {isWaiting && entries.length === 0 && !streamBuffer && !isStreaming && (
-          <div className="self-start max-w-[92%] relative">
-            {/* Ambient drifting glow behind the card */}
-            <div
-              className="orb-drift absolute -inset-3 rounded-3xl pointer-events-none"
-              style={{
-                background: "radial-gradient(ellipse at 40% 50%, rgba(122,162,247,0.18) 0%, rgba(187,154,247,0.1) 50%, transparent 75%)",
-                filter: "blur(12px)",
-              }}
-            />
 
-            {/* Card */}
-            <div
-              className="relative overflow-hidden rounded-2xl rounded-tl-sm px-4 py-3.5"
-              style={{
-                background: "linear-gradient(135deg, rgba(26,27,38,0.95) 0%, rgba(36,40,59,0.9) 100%)",
-                border: "1px solid rgba(122,162,247,0.18)",
-                boxShadow: "0 0 0 1px rgba(122,162,247,0.06) inset, 0 8px 32px rgba(0,0,0,0.3)",
-                backdropFilter: "blur(20px)",
-              }}
-            >
-              {/* Inner shimmer layer */}
-              <div
-                className="absolute inset-0 pointer-events-none"
-                style={{
-                  background: "linear-gradient(105deg, transparent 40%, rgba(122,162,247,0.04) 50%, transparent 60%)",
-                  backgroundSize: "200% 100%",
-                  animation: "shimmerSweep 3s linear infinite",
-                }}
-              />
-
-              <div className="relative flex items-center gap-3">
-                {/* Pulsing icon ring */}
-                <div className="relative shrink-0">
-                  <div
-                    className="absolute inset-0 rounded-full animate-ping"
-                    style={{ background: "rgba(122,162,247,0.15)", animationDuration: "2s" }}
-                  />
-                  <div
-                    className="w-7 h-7 rounded-full flex items-center justify-center"
-                    style={{
-                      background: "linear-gradient(135deg, rgba(122,162,247,0.2), rgba(187,154,247,0.15))",
-                      border: "1px solid rgba(122,162,247,0.3)",
-                    }}
-                  >
-                    <Bot size={13} className="text-editor-accent" />
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-2 flex-1 min-w-0">
-                  {/* Cycling word */}
-                  <span
-                    key={cyclingWord}
-                    className="word-slide-up text-[13px] font-semibold tracking-wide"
-                    style={{
-                      background: "linear-gradient(90deg, #7aa2f7, #bb9af7, #7dcfff)",
-                      WebkitBackgroundClip: "text",
-                      WebkitTextFillColor: "transparent",
-                      backgroundClip: "text",
-                    }}
-                  >
-                    {cyclingWord}…
-                  </span>
-
-                  {/* Skeleton bars with shimmer sweep */}
-                  <div className="flex flex-col gap-1.5">
-                    <div className="skeleton-bar h-2" style={{ width: "72%" }} />
-                    <div className="skeleton-bar h-2" style={{ width: "48%", animationDelay: "0.3s" }} />
-                  </div>
-                </div>
-              </div>
-
-              {/* Dot pulse row */}
-              <div className="flex gap-1 mt-3 ml-10">
-                {[0, 180, 360].map((delay) => (
-                  <span
-                    key={delay}
-                    className="w-1 h-1 rounded-full animate-bounce"
-                    style={{
-                      background: "rgba(122,162,247,0.6)",
-                      animationDelay: `${delay}ms`,
-                      animationDuration: "1.2s",
-                    }}
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Streaming content: shown once first token arrives */}
+        {/* Streaming bubble */}
         {streamBuffer && (
           <div className="flex items-start gap-3 px-3.5 py-2.5 rounded-2xl rounded-tl-sm max-w-[92%] bg-editor-highlight/50 backdrop-blur-md text-editor-text self-start border border-editor-border/50 shadow-sm">
             <div className="mt-0.5 shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-editor-accent/10">
               <Bot size={14} className="text-editor-accent" />
             </div>
             <div className="flex-1 min-w-0 text-[13px] leading-relaxed">
-              {currentRoute && <RouteBadge route={currentRoute} />}
               <Markdown text={streamBuffer} />
               <span className="animate-pulse inline-block ml-1 text-editor-accent font-bold">▋</span>
             </div>
           </div>
         )}
+
         <div ref={bottomRef} className="h-2 shrink-0" />
       </div>
 
-      {/* History Drawer Overlay */}
+      {/* History Drawer */}
       {showHistory && (
         <div className="absolute inset-x-0 bottom-0 top-12 bg-[#12131a]/98 backdrop-blur-xl z-40 flex flex-col border-t border-editor-border/50 animate-in slide-in-from-left duration-200">
-          {/* Search bar */}
           <div className="p-3 border-b border-editor-border/30 flex gap-2 items-center bg-editor-sidebar">
             <div className="relative flex-1">
               <Search size={13} className="absolute left-2.5 top-2.5 text-editor-muted" />
@@ -643,10 +435,7 @@ export default function ChatPanel() {
                 className="w-full bg-[#1e1f29] border border-editor-border/60 focus:border-editor-accent/80 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder:text-editor-muted outline-none transition-all"
               />
               {searchQuery && (
-                <button 
-                  onClick={() => setSearchQuery("")}
-                  className="absolute right-2 top-2.5 text-editor-muted hover:text-white"
-                >
+                <button onClick={() => setSearchQuery("")} className="absolute right-2 top-2.5 text-editor-muted hover:text-white">
                   <X size={12} />
                 </button>
               )}
@@ -659,7 +448,6 @@ export default function ChatPanel() {
             </button>
           </div>
 
-          {/* Conversations list */}
           <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-2 scrollbar-thin">
             {filteredConversations.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-editor-muted text-xs opacity-70">
@@ -668,8 +456,8 @@ export default function ChatPanel() {
               </div>
             ) : (
               filteredConversations.map((conv) => {
-                const isActive = conv.id === conversationId
-                const isEditing = conv.id === editingConvId
+                const isActiveConv = conv.id === conversationId
+                const isEditing  = conv.id === editingConvId
                 const isDeleting = conv.id === deletingConvId
 
                 return (
@@ -683,8 +471,8 @@ export default function ChatPanel() {
                       }
                     }}
                     className={`group relative flex flex-col p-3.5 rounded-xl border transition-all duration-200 cursor-pointer select-none
-                      ${isActive 
-                        ? "bg-editor-accent/10 border-editor-accent shadow-[0_0_16px_rgba(122,162,247,0.08)]" 
+                      ${isActiveConv
+                        ? "bg-editor-accent/10 border-editor-accent shadow-[0_0_16px_rgba(122,162,247,0.08)]"
                         : "bg-editor-bg/40 border-editor-border/40 hover:bg-editor-highlight/30 hover:border-editor-border/70"
                       }`}
                   >
@@ -698,9 +486,7 @@ export default function ChatPanel() {
                           autoFocus
                           onKeyDown={(e) => {
                             if (e.key === "Enter") {
-                              if (editTitle.trim()) {
-                                renameConversation(project.id, conv.id, editTitle.trim())
-                              }
+                              if (editTitle.trim()) renameConversation(project.id, conv.id, editTitle.trim())
                               setEditingConvId(null)
                             } else if (e.key === "Escape") {
                               setEditingConvId(null)
@@ -709,9 +495,7 @@ export default function ChatPanel() {
                         />
                         <button
                           onClick={() => {
-                            if (editTitle.trim()) {
-                              renameConversation(project.id, conv.id, editTitle.trim())
-                            }
+                            if (editTitle.trim()) renameConversation(project.id, conv.id, editTitle.trim())
                             setEditingConvId(null)
                           }}
                           className="p-1.5 text-green-400 hover:bg-green-500/10 rounded-lg transition-colors"
@@ -732,10 +516,7 @@ export default function ChatPanel() {
                         <span className="text-xs text-red-400 font-semibold animate-pulse">Delete conversation?</span>
                         <div className="flex gap-2">
                           <button
-                            onClick={() => {
-                              deleteConversation(project.id, conv.id)
-                              setDeletingConvId(null)
-                            }}
+                            onClick={() => { deleteConversation(project.id, conv.id); setDeletingConvId(null) }}
                             className="px-3 py-1 text-[11px] font-bold bg-red-500/20 hover:bg-red-500/40 text-red-200 border border-red-500/30 rounded-lg transition-colors"
                           >
                             Delete
@@ -751,24 +532,19 @@ export default function ChatPanel() {
                     ) : (
                       <>
                         <div className="flex items-start justify-between pr-14">
-                          <span className={`text-xs font-semibold truncate ${isActive ? 'text-white' : 'text-editor-text/90 group-hover:text-white'}`}>
+                          <span className={`text-xs font-semibold truncate ${isActiveConv ? "text-white" : "text-editor-text/90 group-hover:text-white"}`}>
                             {conv.title || "Untitled Conversation"}
                           </span>
                         </div>
                         <span className="text-[10px] text-editor-muted mt-1.5 font-medium">
                           {formatRelativeTime(conv.created_at)}
                         </span>
-
-                        {/* Actions drawer triggers on hover */}
-                        <div 
+                        <div
                           className="absolute right-2 top-1/2 -translate-y-1/2 hidden group-hover:flex items-center gap-1 bg-editor-sidebar/85 backdrop-blur-md rounded-lg p-0.5 border border-editor-border/30"
                           onClick={(e) => e.stopPropagation()}
                         >
                           <button
-                            onClick={() => {
-                              setEditingConvId(conv.id)
-                              setEditTitle(conv.title || "")
-                            }}
+                            onClick={() => { setEditingConvId(conv.id); setEditTitle(conv.title || "") }}
                             className="p-1.5 text-editor-muted hover:text-white hover:bg-editor-highlight rounded-lg transition-colors"
                             title="Rename"
                           >
@@ -792,15 +568,15 @@ export default function ChatPanel() {
         </div>
       )}
 
-      {/* Offline warning banner */}
+      {/* Offline banner */}
       {!isConnected && (
         <div className="px-4 py-2 bg-red-950/40 border-t border-red-500/20 text-red-300 text-xs flex items-center justify-between animate-in slide-in-from-bottom-2 duration-300">
           <div className="flex items-center gap-2 font-medium">
             <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping" />
             <span>Connection offline. Reconnecting in a few seconds...</span>
           </div>
-          <button 
-            onClick={() => connect()} 
+          <button
+            onClick={() => connect()}
             className="px-2 py-0.5 rounded bg-red-500/20 hover:bg-red-500/30 text-red-200 border border-red-500/30 font-medium transition-colors pointer-events-auto"
           >
             Retry Now
@@ -810,7 +586,6 @@ export default function ChatPanel() {
 
       {/* Input */}
       <div className="p-4 border-t border-editor-border/50 bg-editor-bg/30 backdrop-blur-md">
-        {/* Quick-Action Pills */}
         {messages.length === 0 && (
           <div className="mb-3 flex gap-2 overflow-x-auto scrollbar-none pb-1">
             {QUICK_ACTIONS.map((action) => (
@@ -834,7 +609,7 @@ export default function ChatPanel() {
           </div>
         )}
 
-        <div className={`flex gap-2 items-end bg-editor-bg border border-editor-border hover:border-editor-accent/50 focus-within:border-editor-accent/80 focus-within:shadow-[0_0_15px_rgba(122,162,247,0.15)] rounded-xl px-3 py-2.5 transition-all ${inputPulse ? 'animate-input-pulse border-editor-accent shadow-[0_0_25px_rgba(122,162,247,0.6)] scale-[1.02]' : ''} ${!isConnected ? 'opacity-50 pointer-events-none' : ''}`}>
+        <div className={`flex gap-2 items-end bg-editor-bg border border-editor-border hover:border-editor-accent/50 focus-within:border-editor-accent/80 focus-within:shadow-[0_0_15px_rgba(122,162,247,0.15)] rounded-xl px-3 py-2.5 transition-all ${inputPulse ? "animate-input-pulse border-editor-accent shadow-[0_0_25px_rgba(122,162,247,0.6)] scale-[1.02]" : ""} ${!isConnected ? "opacity-50 pointer-events-none" : ""}`}>
           <textarea
             id="chat-input-textarea"
             className="flex-1 bg-transparent text-white text-[13px] resize-none outline-none max-h-40 min-h-[20px] placeholder:text-editor-muted"
@@ -844,8 +619,8 @@ export default function ChatPanel() {
             disabled={!isConnected}
             onChange={(e) => {
               setInput(e.target.value)
-              e.target.style.height = 'auto'
-              e.target.style.height = Math.min(e.target.scrollHeight, 160) + 'px'
+              e.target.style.height = "auto"
+              e.target.style.height = Math.min(e.target.scrollHeight, 160) + "px"
             }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
