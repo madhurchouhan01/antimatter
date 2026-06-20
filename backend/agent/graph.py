@@ -288,7 +288,19 @@ Do not output anything else. No explanation, no markdown formatting. Just the ca
             prompt += f"\n\n### Previous Attempt Error:\n{validation_errors}\n\n### Previous Attempt Diagram:\n{diagram_markdown}\n\nPlease correct the syntax error above and output the fully corrected diagram."
 
         system_msg = SystemMessage(content=prompt)
-        cleaned_messages = [m for m in messages if not isinstance(m, SystemMessage)]
+
+        # Strip heavy RAG codebase_context from HumanMessages — the diagram
+        # generator only needs the user intent, not the full RAG dump.
+        cleaned_messages = []
+        for m in messages:
+            if isinstance(m, SystemMessage):
+                continue
+            if isinstance(m, HumanMessage) and "<codebase_context>" in m.content:
+                content = re.sub(r'<codebase_context>.*?</codebase_context>\n\n', '', m.content, flags=re.DOTALL)
+                cleaned_messages.append(HumanMessage(content=content))
+            else:
+                cleaned_messages.append(m)
+
         llm_messages = [system_msg] + cleaned_messages
         
         response = await generator_llm.ainvoke(llm_messages)

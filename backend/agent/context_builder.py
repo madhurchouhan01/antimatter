@@ -3,7 +3,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from context.retriever import hybrid_search, RetrievedChunk
 from services.file_service import FileService
 
-MAX_CONTEXT_TOKENS = 8000   # rough char limit for injected context
+MAX_CONTEXT_TOKENS = 4000   # ~4k chars of injected context — enough signal, not bloated
+OPEN_FILE_SNIPPET  = 1500   # chars per open file (first N chars)
+RAG_TOP_K          = 5      # fewer chunks = less noise + fewer tokens
 
 async def build_rag_context(
     db: AsyncSession,
@@ -26,7 +28,7 @@ async def build_rag_context(
         for file_path in open_files[:3]:   # max 3 open files
             try:
                 content = await fs.read(file_path)
-                snippet = content[:2000]   # first 2000 chars
+                snippet = content[:OPEN_FILE_SNIPPET]
                 parts.append(
                     f"=== OPEN FILE: {file_path} ===\n{snippet}"
                 )
@@ -36,7 +38,7 @@ async def build_rag_context(
 
     # 2. RAG retrieved chunks
     if budget > 0:
-        chunks = await hybrid_search(db, project_id, query, top_k=10)
+        chunks = await hybrid_search(db, project_id, query, top_k=RAG_TOP_K)
         for chunk in chunks:
             entry = (
                 f"=== {chunk.file_path} "
