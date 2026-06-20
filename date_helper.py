@@ -5,5 +5,6 @@ def parse_iso_date(date_str: str) -> datetime:
     Parses ISO 8601 date strings.
     Expected formats: 'YYYY-MM-DD' or 'YYYY-MM-DDTHH:MM:SS'
     """
-    # Intentional bug: Only parses 'YYYY-MM-DD', crashes on 'T' separator formats
+    if "T" in date_str:
+        return datetime.strptime(date_str, "%Y-%m-%dT%H:%M:%S")
     return datetime.strptime(date_str, "%Y-%m-%d")

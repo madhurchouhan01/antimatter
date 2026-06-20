@@ -28,6 +28,55 @@ def merge_diagram_into_message(content: str, diagram_markdown: str) -> str:
     return f"{content.strip()}\n\n### Diagram Visualization\n```mermaid\n{diagram_markdown}\n```"
 
 
+def extract_token_usage(resp) -> dict | None:
+    if not resp:
+        return None
+    
+    # 1. Standard LangChain usage_metadata attribute
+    usage = getattr(resp, "usage_metadata", None)
+    if usage and isinstance(usage, dict):
+        input_tokens = usage.get("input_tokens") or usage.get("prompt_tokens") or 0
+        output_tokens = usage.get("output_tokens") or usage.get("completion_tokens") or 0
+        total_tokens = usage.get("total_tokens") or (input_tokens + output_tokens)
+        if total_tokens > 0:
+            return {
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "total_tokens": total_tokens
+            }
+
+    # 2. Check response_metadata dict
+    resp_metadata = getattr(resp, "response_metadata", None) or {}
+    
+    # 2a. Check token_usage inside response_metadata
+    token_usage = resp_metadata.get("token_usage")
+    if token_usage and isinstance(token_usage, dict):
+        input_tokens = token_usage.get("prompt_tokens") or token_usage.get("input_tokens") or 0
+        output_tokens = token_usage.get("completion_tokens") or token_usage.get("output_tokens") or 0
+        total_tokens = token_usage.get("total_tokens") or (input_tokens + output_tokens)
+        if total_tokens > 0:
+            return {
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "total_tokens": total_tokens
+            }
+
+    # 2b. Check usage inside response_metadata
+    usage = resp_metadata.get("usage")
+    if usage and isinstance(usage, dict):
+        input_tokens = usage.get("input_tokens") or usage.get("prompt_tokens") or 0
+        output_tokens = usage.get("output_tokens") or usage.get("completion_tokens") or 0
+        total_tokens = usage.get("total_tokens") or (input_tokens + output_tokens)
+        if total_tokens > 0:
+            return {
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "total_tokens": total_tokens
+            }
+
+    return None
+
+
 async def _write_memory_bg(
     project_id: str,
     user_id: str,
@@ -244,7 +293,7 @@ async def run_agent_streaming(
             elif kind == "on_chat_model_end":
                 # Capture token usage from any agent/classifier/generator LLM call
                 resp = event["data"].get("output")
-                usage = getattr(resp, "usage_metadata", None) or {}
+                usage = extract_token_usage(resp)
                 if usage:
                     accumulated_token_usage = {
                         "input_tokens":  accumulated_token_usage.get("input_tokens", 0) + usage.get("input_tokens", 0),

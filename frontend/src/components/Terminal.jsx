@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react"
+  import { useEffect, useRef } from "react"
 import { Terminal as XTerm } from "@xterm/xterm"
 import { FitAddon } from "@xterm/addon-fit"
 import { WebLinksAddon } from "@xterm/addon-web-links"
@@ -99,7 +99,7 @@ export default function Terminal({ terminalId }) {
 
         if (isFirstConnectRef.current) {
           // Set a premium, colorful prompt prefix (⚛ Antimatter /workspace ❯) and enable ls colors
-          const initCmd = 'export PS1="\\[\\e[1;35m\\]⚛ Antimatter \\[\\e[1;36m\\]\\w \\[\\e[1;30m\\]❯ \\[\\e[0m\\]" && alias ls="ls --color=auto" && clear\n';
+          const initCmd = 'export PS1="\\[\\e[1;35m\\]⚡ Antimatter \\[\\e[1;36m\\]\\w \\[\\e[1;30m\\]❯ \\[\\e[0m\\]" && alias ls="ls --color=auto" && clear\n';
           sendCmdFn(initCmd);
 
           setTimeout(() => {

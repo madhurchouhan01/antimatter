@@ -177,6 +177,7 @@ def get_llm(
             temperature=0,
             streaming=True,
             max_retries=3,
+            stream_options={"include_usage": True},
         )
 
     elif provider == "openai":
@@ -189,6 +190,7 @@ def get_llm(
             temperature=0,
             streaming=True,
             max_retries=3,
+            stream_options={"include_usage": True},
         )
 
     elif provider == "openrouter":
@@ -207,6 +209,7 @@ def get_llm(
                 "HTTP-Referer": "https://antimatter.dev",
                 "X-Title": "AntiMatter IDE",
             },
+            stream_options={"include_usage": True},
         )
 
     elif provider == "anthropic":
@@ -245,6 +248,7 @@ def get_llm(
             temperature=0,
             streaming=True,
             max_retries=2,
+            stream_options={"include_usage": True},
         )
 
     else:
