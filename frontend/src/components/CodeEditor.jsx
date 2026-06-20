@@ -636,6 +636,21 @@ export default function CodeEditor() {
           <button
             onClick={() => {
               setInlineChat({ line: selection.line, selectedText: selection.text })
+              setSelection(null)
+              setSelectionButtonPos((prev) => ({ ...prev, visible: false }))
+              if (editorRef.current) {
+                const sel = editorRef.current.getSelection()
+                if (sel) {
+                  const endLine = sel.endLineNumber
+                  const endCol = sel.endColumn
+                  editorRef.current.setSelection({
+                    startLineNumber: endLine,
+                    startColumn: endCol,
+                    endLineNumber: endLine,
+                    endColumn: endCol
+                  })
+                }
+              }
             }}
             className="group flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white text-sm font-semibold rounded-lg shadow-lg hover:shadow-2xl hover:shadow-blue-500/40 transition-all duration-150 transform hover:scale-105 active:scale-95 border border-blue-400/30"
             title="Send selected code to agent (Ctrl+K)"
