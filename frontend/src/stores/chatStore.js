@@ -98,9 +98,11 @@ export const useChatStore = create(
       isConnected:    false,
       input:          "",
       inputPulse:     false,
+      currentRoute:   null,
 
       setInput: (val) => set({ input: val }),
       setInputPulse: (val) => set({ inputPulse: val }),
+      setCurrentRoute: (route) => set({ currentRoute: route }),
 
       addMessage: (msg) =>
         set((state) => ({ messages: [...state.messages, msg] })),
@@ -114,7 +116,7 @@ export const useChatStore = create(
       flushBuffer: (finalText, tokenUsage) =>
         set((state) => {
           const content = (finalText !== undefined && finalText !== null) ? finalText : state.streamBuffer;
-          if (!content) return { isStreaming: false }
+          if (!content) return { isStreaming: false, currentRoute: null }
           const msg = {
             id:          crypto.randomUUID(),
             role:        "assistant",
@@ -125,11 +127,12 @@ export const useChatStore = create(
             messages:    [...state.messages, msg],
             streamBuffer: "",
             isStreaming:  false,
+            currentRoute:  null,
           }
         }),
 
       setConversationId: (id) => set({ conversationId: id }),
-      clearChat: () => set({ messages: [], conversationId: null, streamBuffer: "", isConnected: false, input: "" }),
+      clearChat: () => set({ messages: [], conversationId: null, streamBuffer: "", isConnected: false, input: "", currentRoute: null }),
 
       fetchConversations: async (projectId) => {
         if (!projectId) return

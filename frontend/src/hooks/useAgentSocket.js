@@ -92,6 +92,10 @@ export function useAgentSocket(projectId) {
           
           return
       }
+      if (msg.type === "route") {
+          useChatStore.getState().setCurrentRoute(msg.route)
+          return
+      }
       if (msg.type === "token") {
         setStreaming(true)
         appendToken(msg.content)
@@ -166,6 +170,8 @@ export function useAgentSocket(projectId) {
       useAgentTraceStore.getState().startRun()
       // Reset any previous done-state so the banner hides while agent works
       useDiffStore.getState().resetAgentDone()
+      // Reset current route for the new stream
+      useChatStore.getState().setCurrentRoute(null)
 
       // Read the active provider from settingsStore at send-time
       const provider = useSettingsStore.getState().provider || "groq"

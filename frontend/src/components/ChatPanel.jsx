@@ -8,6 +8,46 @@ import { useAgentTraceStore } from "../stores/agentTraceStore"
 import ActivityDropdown from "./ActivityDropdown"
 import Markdown from "./Markdown"
 
+const ROUTE_BADGE_CONFIG = {
+  coding: {
+    label: "Agent Loop",
+    icon: Sparkles,
+    bg: "bg-blue-500/10 border-blue-500/20 text-blue-400",
+  },
+  codebase_question: {
+    label: "Codebase Q&A",
+    icon: Search,
+    bg: "bg-cyan-500/10 border-cyan-500/20 text-cyan-400",
+  },
+  diagram: {
+    label: "Diagram Generator",
+    icon: Globe,
+    bg: "bg-purple-500/10 border-purple-500/20 text-purple-400",
+  },
+  general_chat: {
+    label: "General Chat",
+    icon: Bot,
+    bg: "bg-emerald-500/10 border-emerald-500/20 text-emerald-400",
+  },
+  off_topic: {
+    label: "Off Topic",
+    icon: AlertCircle,
+    bg: "bg-zinc-500/10 border-zinc-500/20 text-zinc-400",
+  },
+}
+
+function RouteBadge({ route }) {
+  const config = ROUTE_BADGE_CONFIG[route]
+  if (!config) return null
+  const Icon = config.icon
+  return (
+    <div className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border text-[10px] font-semibold tracking-wide uppercase mb-2 ${config.bg}`}>
+      <Icon size={10} className="shrink-0" />
+      <span>{config.label}</span>
+    </div>
+  )
+}
+
 function formatRelativeTime(dateStr) {
   try {
     const date = new Date(dateStr)
@@ -87,6 +127,7 @@ function MessageBubble({ msg, onRetry }) {
 
   // Token usage badge (assistant only)
   const tokenInfo = msg.role === "assistant" ? estimateCost(msg.token_usage) : null
+  const route = msg.token_usage?.route
 
   // Actionable Error Cards
   if (msg.role === "error") {
@@ -255,6 +296,7 @@ function MessageBubble({ msg, onRetry }) {
       )}
       {isTool && <div className="mt-0.5 shrink-0">{icons[msg.role]}</div>}
       <div className="flex-1 min-w-0 text-[13px] leading-relaxed">
+        {route && <RouteBadge route={route} />}
         <Markdown text={msg.content} />
         {/* Token cost badge — only on completed assistant messages */}
         {tokenInfo && (
@@ -277,7 +319,7 @@ function MessageBubble({ msg, onRetry }) {
 
 export default function ChatPanel() {
   const project   = useProjectStore((s) => s.activeProject)
-  const { messages, isStreaming, streamBuffer, isConnected } = useChatStore()
+  const { messages, isStreaming, streamBuffer, isConnected, currentRoute } = useChatStore()
   const { sendMessage, connect, disconnect } = useAgentSocket(project?.id)
   const entries   = useAgentTraceStore((s) => s.entries)
   const isActive  = useAgentTraceStore((s) => s.isActive)
@@ -577,6 +619,7 @@ export default function ChatPanel() {
               <Bot size={14} className="text-editor-accent" />
             </div>
             <div className="flex-1 min-w-0 text-[13px] leading-relaxed">
+              {currentRoute && <RouteBadge route={currentRoute} />}
               <Markdown text={streamBuffer} />
               <span className="animate-pulse inline-block ml-1 text-editor-accent font-bold">▋</span>
             </div>

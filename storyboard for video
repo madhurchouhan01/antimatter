@@ -194,3 +194,9 @@ def test_parse_datetime_with_t():
 *   **Pacing (Speeding Up):** Real agent runs take time to stream tokens. Speed up the middle section of the video (where the agent is writing the code) by **3x to 5x** so the viewer doesn't lose interest. The entire video should feel snappy and move fast.
 
 Let me know once you have created the files and are ready to run the demo! I can help you debug any issues with the test setup.
+
+
+
+------
+1. select offline model from ollama to run agent locally. 
+2. specifically designed for less token uses. Query classifier agent classifies user query. 

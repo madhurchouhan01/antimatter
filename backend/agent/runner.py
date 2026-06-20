@@ -209,9 +209,9 @@ async def run_agent_streaming(
 
             if kind == "on_chat_model_stream":
                 node = event.get("metadata", {}).get("langgraph_node")
-                # Only stream tokens if they belong to the main coding agent
-                if node == "agent":
-                    chunk = event["data"]["chunk"]
+                chunk = event["data"]["chunk"]
+                # Only stream tokens if they belong to the main coding agent or general chat
+                if node in ("agent", "general_chat"):
                     token = chunk.content
                     if token:
                         await send_json({"type": "token", "content": token})
@@ -242,21 +242,27 @@ async def run_agent_streaming(
                 })
                 
             elif kind == "on_chat_model_end":
-                # Capture token usage from any agent LLM call
-                node = event.get("metadata", {}).get("langgraph_node")
-                if node == "agent":
-                    resp = event["data"].get("output")
-                    usage = getattr(resp, "usage_metadata", None) or {}
-                    if usage:
-                        accumulated_token_usage = {
-                            "input_tokens":  usage.get("input_tokens", 0),
-                            "output_tokens": usage.get("output_tokens", 0),
-                            "total_tokens":  usage.get("total_tokens", 0),
-                            "model": model_name,
-                        }
+                # Capture token usage from any agent/classifier/generator LLM call
+                resp = event["data"].get("output")
+                usage = getattr(resp, "usage_metadata", None) or {}
+                if usage:
+                    accumulated_token_usage = {
+                        "input_tokens":  accumulated_token_usage.get("input_tokens", 0) + usage.get("input_tokens", 0),
+                        "output_tokens": accumulated_token_usage.get("output_tokens", 0) + usage.get("output_tokens", 0),
+                        "total_tokens":  accumulated_token_usage.get("total_tokens", 0) + usage.get("total_tokens", 0),
+                        "model": model_name,
+                    }
 
             elif kind == "on_chain_end":
                 log.info(f"Chain ended: name={event['name']}")
+                node = event.get("metadata", {}).get("langgraph_node")
+                if node == "classifier" and event["name"] == "classifier":
+                    output = event["data"].get("output")
+                    if isinstance(output, dict):
+                        route = output.get("route")
+                        if route:
+                            await send_json({"type": "route", "route": route})
+
                 if event["name"].startswith("antimatter/"):
                     log.debug("I am just before write memory bg:end")
                     # The top-level graph finished. We can grab the final state to save everything accurately!
@@ -297,8 +303,13 @@ async def run_agent_streaming(
                         elif isinstance(m, ToolMessage):
                             tool_calls = {"id": m.tool_call_id, "name": m.name}
                         
-                        # Attach token usage to the last non-tool-calling AI message
-                        msg_token_usage = accumulated_token_usage if (i == last_ai_idx and accumulated_token_usage) else None
+                        # Attach token usage and route to the last non-tool-calling AI message
+                        msg_token_usage = None
+                        if i == last_ai_idx:
+                            msg_token_usage = {}
+                            if accumulated_token_usage:
+                                msg_token_usage.update(accumulated_token_usage)
+                            msg_token_usage["route"] = final_output.get("route", "coding")
 
                         db.add(Message(
                             conversation_id=conv.id,

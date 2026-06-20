@@ -295,58 +295,58 @@ export default function SettingsModal({ onClose }) {
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
+        className="fixed inset-0 z-50 bg-black/75 backdrop-blur-md transition-opacity duration-300"
         onClick={onClose}
       />
 
       {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div
-          className="w-full max-w-xl pointer-events-auto rounded-2xl border border-editor-border/60 shadow-[0_0_80px_rgba(0,0,0,0.6)] overflow-hidden"
+          className="w-full max-w-xl pointer-events-auto rounded-3xl border border-white/[0.08] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.8)] overflow-hidden transition-all duration-300"
           style={{
-            background: "linear-gradient(160deg, rgba(22,24,37,0.98) 0%, rgba(17,18,27,0.99) 100%)",
+            background: "linear-gradient(150deg, rgba(22, 24, 38, 0.99) 0%, rgba(12, 13, 20, 0.99) 100%)",
             backdropFilter: "blur(24px)",
           }}
           onClick={e => e.stopPropagation()}
         >
           {/* ── Header ── */}
-          <div className="flex items-center gap-3 px-6 py-4 border-b border-editor-border/40 bg-white/[0.02]">
-            <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-editor-accent/10 border border-editor-accent/20">
-              <Settings size={15} className="text-editor-accent" />
+          <div className="flex items-center gap-3.5 px-6 py-5 border-b border-white/[0.06] bg-white/[0.02]">
+            <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-editor-accent/10 border border-editor-accent/25">
+              <Settings size={16} className="text-editor-accent" />
             </div>
             <div>
-              <h2 className="text-[14px] font-bold text-white tracking-wide">Settings</h2>
-              <p className="text-[11px] text-editor-muted">Configure model, provider, and manage memories</p>
+              <h2 className="text-[15px] font-bold text-white tracking-wide">Settings</h2>
+              <p className="text-[11px] text-white/50 mt-0.5">Configure model, provider, and manage memories</p>
             </div>
             <button
               onClick={onClose}
-              className="ml-auto p-1.5 rounded-lg text-editor-muted hover:text-white hover:bg-editor-highlight transition-colors"
+              className="ml-auto p-1.5 rounded-lg text-white/40 hover:text-white hover:bg-white/[0.05] transition-all duration-200"
             >
-              <X size={15} />
+              <X size={16} />
             </button>
           </div>
 
           {/* ── Tab Switcher ── */}
-          <div className="flex border-b border-editor-border/40 bg-white/[0.01]">
+          <div className="flex border-b border-white/[0.06] bg-white/[0.01]">
             <button
               onClick={() => setActiveTab("provider")}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[12px] font-semibold transition-colors ${
+              className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-[12px] font-semibold tracking-wide transition-all duration-250 ${
                 activeTab === "provider"
-                  ? "text-editor-accent border-b-2 border-editor-accent"
-                  : "text-editor-muted hover:text-white border-b-2 border-transparent"
+                  ? "text-editor-accent border-b-2 border-editor-accent bg-editor-accent/[0.02]"
+                  : "text-white/40 hover:text-white border-b-2 border-transparent"
               }`}
             >
-              <Cpu size={12} /> Provider Settings
+              <Cpu size={13} /> Provider Settings
             </button>
             <button
               onClick={() => setActiveTab("memories")}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[12px] font-semibold transition-colors ${
+              className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-[12px] font-semibold tracking-wide transition-all duration-250 ${
                 activeTab === "memories"
-                  ? "text-editor-accent border-b-2 border-editor-accent"
-                  : "text-editor-muted hover:text-white border-b-2 border-transparent"
+                  ? "text-editor-accent border-b-2 border-editor-accent bg-editor-accent/[0.02]"
+                  : "text-white/40 hover:text-white border-b-2 border-transparent"
               }`}
             >
-              <Brain size={12} /> Episodic Memory
+              <Brain size={13} /> Episodic Memory
             </button>
           </div>
 
@@ -356,88 +356,139 @@ export default function SettingsModal({ onClose }) {
             <div className="flex-1 p-6 flex flex-col gap-6 overflow-y-auto" style={{ maxHeight: "calc(65vh - 48px)" }}>
 
               {/* ── Provider Selection ── */}
-              <div>
-                <label className="flex items-center gap-1.5 text-[11px] font-semibold text-editor-muted uppercase tracking-widest mb-3">
-                  <Cpu size={11} /> Provider
+              <div className="flex flex-col gap-4">
+                <label className="flex items-center gap-1.5 text-[11px] font-semibold text-white/50 uppercase tracking-widest mb-1">
+                  <Cpu size={11} /> Provider Selection
                 </label>
 
-                {/* ── Cloud Providers ── */}
-                <p className="text-[9px] font-semibold text-editor-muted/50 uppercase tracking-widest mb-2">
-                  ☁️ Cloud API
-                </p>
-                <div className="grid grid-cols-3 gap-2">
-                  {Object.entries(PROVIDERS)
-                    .filter(([key]) => key !== "ollama")
-                    .map(([key, p]) => (
-                    <button
-                      key={key}
-                      onClick={() => handleProviderChange(key)}
-                      className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-all text-center
-                        ${provider === key
-                          ? `bg-gradient-to-br ${p.gradient} ${p.border} shadow-sm`
-                          : "border-editor-border/40 hover:border-editor-border hover:bg-editor-highlight/30"
-                        }`}
-                    >
-                      <span className="flex items-center justify-center p-0.5">
-                        <p.icon size={16} style={{ color: p.color }} />
-                      </span>
-                      <span className={`text-[10px] font-semibold ${provider === key ? "text-white" : "text-editor-muted"}`}>
-                        {p.label}
-                      </span>
-                    </button>
-                  ))}
+                {/* ── Group 1: Core Cloud LLMs ── */}
+                <div className="flex flex-col gap-2.5">
+                  <p className="text-[9px] font-bold text-white/30 uppercase tracking-widest flex items-center gap-1.5">
+                    ⚡ Core Cloud API
+                  </p>
+                  <div className="grid grid-cols-3 gap-2.5">
+                    {["openai", "anthropic", "gemini"].map((key) => {
+                      const p = PROVIDERS[key]
+                      if (!p) return null
+                      const isActive = provider === key
+                      return (
+                        <button
+                          key={key}
+                          onClick={() => handleProviderChange(key)}
+                          className={`flex flex-col items-center gap-2 p-3.5 rounded-2xl border transition-all duration-300 ease-out text-center cursor-pointer
+                            ${isActive
+                              ? `bg-gradient-to-br ${p.gradient} ${p.border} shadow-[0_8px_20px_-4px_${p.color}25] scale-[1.03] -translate-y-0.5`
+                              : "border-white/[0.05] bg-white/[0.01] hover:bg-white/[0.03] hover:border-white/[0.15] hover:scale-[1.03] hover:-translate-y-0.5 active:scale-[0.97]"
+                            }`}
+                        >
+                          <span className="flex items-center justify-center p-0.5">
+                            <p.icon size={16} style={{ color: p.color }} />
+                          </span>
+                          <span className={`text-[10px] font-semibold transition-colors ${isActive ? "text-white font-bold" : "text-white/60"}`}>
+                            {p.label}
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
                 </div>
 
-                {/* ── Local / Self-Hosted ── */}
-                <p className="text-[9px] font-semibold text-editor-muted/50 uppercase tracking-widest mt-4 mb-2">
-                  🖥️ Local / Self-Hosted
-                </p>
-                {(() => {
-                  const p = PROVIDERS.ollama
-                  const isActive = provider === "ollama"
-                  return (
-                    <button
-                      onClick={() => handleProviderChange("ollama")}
-                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border transition-all text-left
-                        ${isActive
-                          ? `bg-gradient-to-br ${p.gradient} ${p.border} shadow-sm`
-                          : "border-editor-border/40 hover:border-editor-border hover:bg-editor-highlight/30"
-                        }`}
-                    >
-                      <span className="flex items-center justify-center w-8 h-8 rounded-lg shrink-0"
-                        style={{ background: `${p.color}18`, border: `1px solid ${p.color}30` }}>
-                        <p.icon size={16} style={{ color: p.color }} />
-                      </span>
-                      <span className="flex-1 min-w-0">
-                        <span className={`block text-[12px] font-semibold ${isActive ? "text-white" : "text-editor-muted"}`}>
-                          {p.label}
-                        </span>
-                        <span className="block text-[10px] text-editor-muted/60 mt-0.5">
-                          {p.description}
-                        </span>
-                      </span>
-                      <span className="shrink-0 text-[9px] font-semibold px-2 py-0.5 rounded-full"
-                        style={{ background: `${p.color}18`, color: p.color, border: `1px solid ${p.color}30` }}>
-                        No API Key
-                      </span>
-                    </button>
-                  )
-                })()}
+                {/* Divider */}
+                <div className="border-t border-white/[0.05] my-1" />
 
-                {/* Provider description bar */}
-                <div className={`mt-3 px-3 py-2.5 rounded-lg border text-[11px] text-editor-muted bg-gradient-to-r ${meta.gradient} ${meta.border}`}>
-                  <span className="inline-flex items-center gap-1 font-semibold" style={{ color: meta.color }}>
-                    <meta.icon size={12} className="mr-0.5" />
-                    {meta.label}
-                  </span>
-                  {" — "}{meta.description}
+                {/* ── Group 2: Specialty & Aggregators ── */}
+                <div className="flex flex-col gap-2.5">
+                  <p className="text-[9px] font-bold text-white/30 uppercase tracking-widest flex items-center gap-1.5">
+                    🌐 Aggregators & Specialized Cloud
+                  </p>
+                  <div className="grid grid-cols-3 gap-2.5">
+                    {["github", "openrouter", "groq"].map((key) => {
+                      const p = PROVIDERS[key]
+                      if (!p) return null
+                      const isActive = provider === key
+                      return (
+                        <button
+                          key={key}
+                          onClick={() => handleProviderChange(key)}
+                          className={`flex flex-col items-center gap-2 p-3.5 rounded-2xl border transition-all duration-300 ease-out text-center cursor-pointer
+                            ${isActive
+                              ? `bg-gradient-to-br ${p.gradient} ${p.border} shadow-[0_8px_20px_-4px_${p.color}25] scale-[1.03] -translate-y-0.5`
+                              : "border-white/[0.05] bg-white/[0.01] hover:bg-white/[0.03] hover:border-white/[0.15] hover:scale-[1.03] hover:-translate-y-0.5 active:scale-[0.97]"
+                            }`}
+                        >
+                          <span className="flex items-center justify-center p-0.5">
+                            <p.icon size={16} style={{ color: p.color }} />
+                          </span>
+                          <span className={`text-[10px] font-semibold transition-colors ${isActive ? "text-white font-bold" : "text-white/60"}`}>
+                            {p.label}
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* Divider */}
+                <div className="border-t border-white/[0.05] my-1" />
+
+                {/* ── Group 3: Local ── */}
+                <div className="flex flex-col gap-2.5">
+                  <p className="text-[9px] font-bold text-white/30 uppercase tracking-widest flex items-center gap-1.5">
+                    🖥️ Local / Self-Hosted
+                  </p>
+                  {(() => {
+                    const p = PROVIDERS.ollama
+                    const isActive = provider === "ollama"
+                    return (
+                      <button
+                        onClick={() => handleProviderChange("ollama")}
+                        className={`w-full flex items-center gap-3.5 px-4.5 py-3.5 rounded-2xl border transition-all duration-300 ease-out text-left cursor-pointer
+                          ${isActive
+                            ? `bg-gradient-to-br ${p.gradient} ${p.border} shadow-[0_8px_20px_-4px_${p.color}25] scale-[1.01]`
+                            : "border-white/[0.05] bg-white/[0.01] hover:bg-white/[0.03] hover:border-white/[0.15] hover:scale-[1.01]"
+                          }`}
+                      >
+                        <span className="flex items-center justify-center w-8 h-8 rounded-xl shrink-0"
+                          style={{ background: `${p.color}15`, border: `1px solid ${p.color}25` }}>
+                          <p.icon size={16} style={{ color: p.color }} />
+                        </span>
+                        <span className="flex-1 min-w-0">
+                          <span className={`block text-[12px] font-semibold transition-colors ${isActive ? "text-white font-bold" : "text-white/60"}`}>
+                            {p.label}
+                          </span>
+                          <span className="block text-[10px] text-white/40 mt-0.5">
+                            {p.description}
+                          </span>
+                        </span>
+                        <span className="shrink-0 text-[9px] font-semibold px-2 py-0.5 rounded-full"
+                          style={{ background: `${p.color}15`, color: p.color, border: `1px solid ${p.color}25` }}>
+                          No API Key
+                        </span>
+                      </button>
+                    )
+                  })()}
+                </div>
+
+                {/* Selected Provider Description Card */}
+                <div className="border-t border-white/[0.05] pt-4 mt-5">
+                  <p className="text-[9px] font-bold text-white/30 uppercase tracking-widest mb-2.5 flex items-center gap-1.5">
+                    ℹ️ Provider Description
+                  </p>
+                  <div className={`px-4 py-3.5 rounded-2xl border text-[11px] leading-relaxed text-white/70 bg-white/[0.01] border-white/[0.05] shadow-inner`}>
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <meta.icon size={15} style={{ color: meta.color }} />
+                      <span className="font-bold text-white text-[12px]">{meta.label}</span>
+                    </div>
+                    <p className="text-[10px] text-white/50 leading-normal">{meta.description}</p>
+                  </div>
                 </div>
               </div>
 
 
+
               {/* ── Model Selection ── */}
               <div>
-                <label className="flex items-center gap-1.5 text-[11px] font-semibold text-editor-muted uppercase tracking-widest mb-3">
+                <label className="flex items-center gap-1.5 text-[11px] font-semibold text-white/50 uppercase tracking-widest mb-3">
                   <Sparkles size={11} /> Model
                 </label>
 
@@ -462,8 +513,8 @@ export default function SettingsModal({ onClose }) {
                         {ollamaError && (
                           <p className="text-[10px] text-red-300/70 leading-relaxed">{ollamaError}</p>
                         )}
-                        <p className="text-[10px] text-editor-muted">
-                          Run <code className="font-mono bg-editor-highlight px-1 rounded">ollama serve</code> then click Fetch again.
+                        <p className="text-[10px] text-white/40">
+                          Run <code className="font-mono bg-white/[0.05] px-1 rounded text-white/80">ollama serve</code> then click Fetch again.
                           {" "}<a href="https://ollama.com" target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:underline">Install Ollama →</a>
                         </p>
                       </div>
@@ -479,13 +530,13 @@ export default function SettingsModal({ onClose }) {
                           <select
                             value={model}
                             onChange={e => setModel(e.target.value)}
-                            className="w-full appearance-none bg-editor-bg border border-emerald-500/40 text-white text-[13px] rounded-xl px-4 py-2.5 pr-8 outline-none focus:border-emerald-500/70 transition-colors cursor-pointer"
+                            className="w-full appearance-none bg-white/[0.02] border border-emerald-500/20 text-white text-[13px] rounded-xl px-4 py-2.5 pr-8 outline-none focus:border-emerald-500/50 transition-colors cursor-pointer"
                           >
                             {ollamaInstalled.map(m => (
                               <option key={m} value={m}>{m}</option>
                             ))}
                           </select>
-                          <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-editor-muted pointer-events-none" />
+                          <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
                         </div>
                       </div>
                     )}
@@ -501,7 +552,7 @@ export default function SettingsModal({ onClose }) {
                           value={model}
                           onChange={e => setModel(e.target.value)}
                           placeholder="e.g. qwen2.5-coder:7b"
-                          className="w-full bg-editor-bg border border-editor-border focus:border-cyan-500/70 text-white text-[13px] rounded-xl px-4 py-2.5 outline-none transition-colors"
+                          className="w-full bg-white/[0.02] border border-white/[0.06] focus:border-cyan-500/50 text-white text-[13px] rounded-xl px-4 py-2.5 outline-none transition-colors"
                         />
                       </div>
                     )}
@@ -509,7 +560,7 @@ export default function SettingsModal({ onClose }) {
                     {/* ── Ollama offline — manual entry ── */}
                     {ollamaReachable === false && (
                       <div>
-                        <p className="text-[10px] text-editor-muted font-semibold uppercase tracking-wider mb-1.5">
+                        <p className="text-[10px] text-white/40 font-semibold uppercase tracking-wider mb-1.5">
                           Or type a model name manually
                         </p>
                         <input
@@ -517,7 +568,7 @@ export default function SettingsModal({ onClose }) {
                           value={model}
                           onChange={e => setModel(e.target.value)}
                           placeholder="e.g. qwen2.5-coder:7b"
-                          className="w-full bg-editor-bg border border-editor-border focus:border-cyan-500/70 text-white text-[13px] rounded-xl px-4 py-2.5 outline-none transition-colors"
+                          className="w-full bg-white/[0.02] border border-white/[0.06] focus:border-cyan-500/50 text-white text-[13px] rounded-xl px-4 py-2.5 outline-none transition-colors"
                         />
                       </div>
                     )}
@@ -525,18 +576,18 @@ export default function SettingsModal({ onClose }) {
                     {/* ── Recommended (not installed) ── */}
                     {ollamaRecommended.length > 0 && (
                       <div>
-                        <p className="text-[10px] text-editor-muted font-semibold uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                        <p className="text-[10px] text-white/40 font-semibold uppercase tracking-wider mb-1.5 flex items-center gap-1">
                           <AlertTriangle size={9} className="text-amber-400" /> Not installed — pull to use
                         </p>
                         <div className="flex flex-col gap-1 max-h-36 overflow-y-auto pr-1 scrollbar-thin">
                           {ollamaRecommended.map(r => (
                             <div
                               key={r.name}
-                              className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-editor-highlight/20 border border-editor-border/30 group"
+                              className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-white/[0.01] border border-white/[0.05] group"
                             >
                               <div className="flex-1 min-w-0">
-                                <span className="font-mono text-[11px] text-editor-muted/80">{r.name}</span>
-                                <span className="ml-2 text-[10px] text-editor-muted/50">{r.note}</span>
+                                <span className="font-mono text-[11px] text-white/60">{r.name}</span>
+                                <span className="ml-2 text-[10px] text-white/30">{r.note}</span>
                               </div>
                               <button
                                 onClick={() => {
@@ -555,8 +606,8 @@ export default function SettingsModal({ onClose }) {
 
                     {/* ── No fetch attempted yet ── */}
                     {ollamaReachable === null && !ollamaFetching && (
-                      <p className="text-[11px] text-editor-muted">
-                        Click <strong className="text-white">Fetch</strong> to detect your installed models.
+                      <p className="text-[11px] text-white/40">
+                        Click <strong className="text-white/60">Fetch</strong> to detect your installed models.
                       </p>
                     )}
                   </div>
@@ -565,7 +616,7 @@ export default function SettingsModal({ onClose }) {
                     <select
                       value={model}
                       onChange={e => setModel(e.target.value)}
-                      className="w-full appearance-none bg-editor-bg border border-editor-border text-white text-[13px] rounded-xl px-4 py-2.5 pr-8 outline-none focus:border-editor-accent/70 transition-colors cursor-pointer"
+                      className="w-full appearance-none bg-white/[0.02] border border-white/[0.06] hover:border-white/[0.12] focus:border-editor-accent/40 text-white text-[13px] rounded-xl px-4 py-2.5 pr-8 outline-none transition-colors cursor-pointer"
                     >
                       {models.map(m => (
                         <option key={m} value={m}>{m}</option>
@@ -574,7 +625,7 @@ export default function SettingsModal({ onClose }) {
                         <option value={model}>{model}</option>
                       )}
                     </select>
-                    <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-editor-muted pointer-events-none" />
+                    <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
                   </div>
                 ) : (
                   <input
@@ -582,13 +633,13 @@ export default function SettingsModal({ onClose }) {
                     value={customModel}
                     onChange={e => setCustomModel(e.target.value)}
                     placeholder="e.g. openai/gpt-4.1-nano"
-                    className="w-full bg-editor-bg border border-editor-border focus:border-editor-accent/70 text-white text-[13px] rounded-xl px-4 py-2.5 outline-none transition-colors"
+                    className="w-full bg-white/[0.02] border border-white/[0.06] focus:border-editor-accent/40 text-white text-[13px] rounded-xl px-4 py-2.5 outline-none transition-colors"
                   />
                 )}
                 {provider !== "ollama" && (
                   <button
                     onClick={() => { setUseCustom(p => !p); setCustomModel("") }}
-                    className="mt-2 text-[10px] text-editor-muted hover:text-editor-accent transition-colors"
+                    className="mt-2 text-[10px] text-white/40 hover:text-editor-accent transition-colors cursor-pointer"
                   >
                     {useCustom ? "← Back to model list" : "Enter custom model name →"}
                   </button>
@@ -598,7 +649,7 @@ export default function SettingsModal({ onClose }) {
               {/* ── API Key —— hidden for Ollama ── */}
               {provider !== "ollama" ? (
               <div>
-                <label className="flex items-center gap-1.5 text-[11px] font-semibold text-editor-muted uppercase tracking-widest mb-3">
+                <label className="flex items-center gap-1.5 text-[11px] font-semibold text-white/50 uppercase tracking-widest mb-3">
                   <Key size={11} /> API Key
                   {hasApiKey && !clearKey && (
                     <span className="ml-auto flex items-center gap-1 text-emerald-400 normal-case font-medium tracking-normal">
@@ -618,12 +669,12 @@ export default function SettingsModal({ onClose }) {
                           ? "••••••••••••  (saved — leave blank to keep)"
                           : meta.keyPlaceholder
                       }
-                      className="w-full bg-editor-bg border border-editor-border focus:border-editor-accent/70 text-white text-[13px] rounded-xl px-4 py-2.5 pr-10 outline-none transition-colors font-mono placeholder:font-sans placeholder:text-editor-muted/60"
+                      className="w-full bg-white/[0.02] border border-white/[0.06] hover:border-white/[0.12] focus:border-editor-accent/40 text-white text-[13px] rounded-xl px-4 py-2.5 pr-10 outline-none transition-colors font-mono placeholder:font-sans placeholder:text-white/20"
                     />
                     <button
                       type="button"
                       onClick={() => setShowKey(p => !p)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-editor-muted hover:text-white transition-colors"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white transition-colors"
                     >
                       {showKey ? <EyeOff size={14} /> : <Eye size={14} />}
                     </button>
@@ -631,7 +682,7 @@ export default function SettingsModal({ onClose }) {
                   {hasApiKey && !clearKey && (
                     <button
                       onClick={() => { setClearKey(true); setApiKey("") }}
-                      className="shrink-0 px-3 py-2.5 rounded-xl border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-[11px] font-medium transition-colors"
+                      className="shrink-0 px-3.5 py-2.5 rounded-xl border border-red-500/20 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-[11px] font-semibold transition-colors cursor-pointer"
                       title="Clear saved key"
                     >
                       Clear
@@ -656,9 +707,9 @@ export default function SettingsModal({ onClose }) {
                 </a>
 
                 {/* Security note */}
-                <div className="mt-3 flex items-start gap-2 px-3 py-2 rounded-lg bg-editor-highlight/20 border border-editor-border/30">
-                  <Shield size={12} className="text-editor-muted shrink-0 mt-0.5" />
-                  <p className="text-[10px] text-editor-muted leading-relaxed">
+                <div className="mt-3 flex items-start gap-2 px-3 py-2.5 rounded-xl bg-white/[0.01] border border-white/[0.05]">
+                  <Shield size={13} className="text-white/30 shrink-0 mt-0.5" />
+                  <p className="text-[10px] text-white/40 leading-relaxed">
                     Your API key is stored securely server-side and tied to your account. It is never returned to the browser after saving. Your key overrides AntiMatter's backend fallback key for this provider.
                   </p>
                 </div>
@@ -666,7 +717,7 @@ export default function SettingsModal({ onClose }) {
               ) : (
               /* ── Ollama: Base URL + Fetch button instead of API key ── */
               <div>
-                <label className="flex items-center gap-1.5 text-[11px] font-semibold text-editor-muted uppercase tracking-widest mb-3">
+                <label className="flex items-center gap-1.5 text-[11px] font-semibold text-white/50 uppercase tracking-widest mb-3">
                   <Server size={11} /> Ollama Endpoint
                 </label>
                 <div className="flex gap-2">
@@ -675,12 +726,12 @@ export default function SettingsModal({ onClose }) {
                     value={ollamaBaseUrl}
                     onChange={e => { setOllamaBaseUrl(e.target.value); setOllamaReachable(null); setOllamaError(null) }}
                     placeholder="http://localhost:11434/v1"
-                    className="flex-1 bg-editor-bg border border-editor-border focus:border-cyan-500/70 text-white text-[13px] rounded-xl px-4 py-2.5 outline-none transition-colors font-mono placeholder:font-sans placeholder:text-editor-muted/60"
+                    className="flex-1 bg-white/[0.02] border border-white/[0.06] hover:border-white/[0.12] focus:border-cyan-500/40 text-white text-[13px] rounded-xl px-4 py-2.5 outline-none transition-colors font-mono placeholder:font-sans placeholder:text-white/20"
                   />
                   <button
                     onClick={() => fetchOllamaModels(ollamaBaseUrl)}
                     disabled={ollamaFetching}
-                    className="shrink-0 flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-cyan-500/30 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 text-[12px] font-medium transition-all disabled:opacity-50"
+                    className="shrink-0 flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-cyan-500/20 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 text-[12px] font-semibold transition-all disabled:opacity-50 cursor-pointer"
                     title="Fetch installed models from Ollama"
                   >
                     {ollamaFetching
@@ -689,7 +740,7 @@ export default function SettingsModal({ onClose }) {
                     {ollamaFetching ? "Fetching…" : "Fetch"}
                   </button>
                 </div>
-                <p className="mt-2 text-[10px] text-editor-muted">
+                <p className="mt-2 text-[10px] text-white/40">
                   No API key needed. Ollama runs entirely on your machine.
                   {" "}<a href="https://ollama.com" target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:underline">Install Ollama →</a>
                 </p>
@@ -698,7 +749,7 @@ export default function SettingsModal({ onClose }) {
 
               {/* ── Error banner ── */}
               {error && (
-                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-900/20 border border-red-500/30 text-red-300 text-[12px]">
+                <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-red-950/20 border border-red-500/20 text-red-300 text-[12px]">
                   <AlertCircle size={13} className="shrink-0 text-red-400" />
                   {error}
                 </div>
@@ -710,12 +761,12 @@ export default function SettingsModal({ onClose }) {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-[13px] font-semibold text-white">Episodic Memories</p>
-                  <p className="text-[11px] text-editor-muted mt-0.5">Lessons learned from past agent sessions in this project.</p>
+                  <p className="text-[11px] text-white/50 mt-0.5">Lessons learned from past agent sessions in this project.</p>
                 </div>
                 <button
                   onClick={handleCopyAsSystemPrompt}
                   disabled={memories.length === 0 || copiedPrompt}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 text-[12px] font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-indigo-500/20 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 text-[12px] font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                   title="Copy all memories as a system prompt to clipboard"
                 >
                   {copiedPrompt ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
@@ -725,40 +776,40 @@ export default function SettingsModal({ onClose }) {
 
               {memLoading ? (
                 <div className="flex items-center justify-center py-12">
-                  <Loader2 size={20} className="animate-spin text-editor-muted" />
+                  <Loader2 size={20} className="animate-spin text-white/30" />
                 </div>
               ) : memories.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-editor-muted text-center">
-                  <Brain size={32} className="mb-3 opacity-30" />
-                  <p className="text-[13px] font-medium">No memories yet</p>
-                  <p className="text-[11px] mt-1 opacity-60">Memories are created automatically after worthy agent runs.</p>
+                <div className="flex flex-col items-center justify-center py-12 text-white/30 text-center">
+                  <Brain size={32} className="mb-3 opacity-20" />
+                  <p className="text-[13px] font-semibold">No memories yet</p>
+                  <p className="text-[11px] mt-1 opacity-60">Memories are created automatically after agent tasks.</p>
                 </div>
               ) : (
                 <div className="flex flex-col gap-3">
                   {memories.map((mem) => (
                     <div
                       key={mem.id}
-                      className="p-4 rounded-xl border border-editor-border/40 bg-editor-highlight/20 hover:border-editor-border/70 transition-colors group"
+                      className="p-4 rounded-2xl border border-white/[0.05] bg-white/[0.01] hover:border-white/[0.1] transition-colors duration-200 group"
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1 min-w-0">
-                          <p className="text-[12px] font-semibold text-white/90 truncate">{mem.task_description}</p>
+                          <p className="text-[12px] font-bold text-white truncate">{mem.task_description}</p>
                           <p className="text-[11px] text-indigo-300/80 mt-1.5 leading-relaxed">{mem.generalizable_lesson}</p>
                           {mem.what_worked && (
-                            <p className="text-[10px] text-emerald-400/70 mt-1">✓ {mem.what_worked}</p>
+                            <p className="text-[10px] text-emerald-400/80 mt-1">✓ {mem.what_worked}</p>
                           )}
                           {mem.what_failed_first && (
-                            <p className="text-[10px] text-red-400/70 mt-0.5">✗ {mem.what_failed_first}</p>
+                            <p className="text-[10px] text-red-400/80 mt-0.5">✗ {mem.what_failed_first}</p>
                           )}
                           <div className="flex items-center gap-3 mt-2">
-                            <span className="text-[9px] text-editor-muted font-mono">{new Date(mem.created_at).toLocaleDateString()}</span>
-                            <span className="text-[9px] text-editor-muted">Retrieved {mem.retrieval_count}×</span>
+                            <span className="text-[9px] text-white/30 font-mono">{new Date(mem.created_at).toLocaleDateString()}</span>
+                            <span className="text-[9px] text-white/30">Retrieved {mem.retrieval_count}×</span>
                           </div>
                         </div>
                         <button
                           onClick={() => handleDeleteMemory(mem.id)}
                           disabled={deletingId === mem.id}
-                          className="shrink-0 p-1.5 rounded-lg text-editor-muted hover:text-red-400 hover:bg-red-500/10 transition-colors opacity-0 group-hover:opacity-100"
+                          className="shrink-0 p-1.5 rounded-lg text-white/30 hover:text-red-400 hover:bg-red-500/10 transition-colors opacity-0 group-hover:opacity-100 cursor-pointer"
                           title="Delete memory"
                         >
                           {deletingId === mem.id
@@ -774,22 +825,22 @@ export default function SettingsModal({ onClose }) {
           )}
           </div>{/* end min-h wrapper */}
 
-          {/* ── Footer — only show Save button on provider tab ── */}
+          {/* ── Footer ── */}
           {activeTab === "provider" && (
-            <div className="flex items-center justify-between px-6 py-4 border-t border-editor-border/40 bg-white/[0.02]">
+            <div className="flex items-center justify-between px-6 py-4.5 border-t border-white/[0.06] bg-white/[0.02]">
               <button
                 onClick={onClose}
-                className="px-4 py-2 rounded-xl text-[13px] text-editor-muted hover:text-white hover:bg-editor-highlight transition-colors"
+                className="px-4 py-2.5 rounded-xl text-[13px] font-medium text-white/60 hover:text-white hover:bg-white/[0.05] transition-all duration-200 cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSave}
                 disabled={isSaving}
-                className={`flex items-center gap-2 px-5 py-2 rounded-xl text-[13px] font-semibold transition-all shadow-lg
+                className={`flex items-center gap-2 px-6 py-3 rounded-xl text-[13px] font-bold transition-all duration-200 shadow-lg cursor-pointer
                   ${saveOk
-                    ? "bg-emerald-500/20 border border-emerald-500/40 text-emerald-400"
-                    : "bg-editor-accent hover:bg-editor-accentHover text-editor-bg disabled:bg-editor-highlight disabled:text-editor-muted"
+                    ? "bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 shadow-emerald-500/5"
+                    : "bg-editor-accent hover:bg-editor-accent/90 hover:scale-[1.02] active:scale-[0.98] text-editor-bg shadow-editor-accent/15 disabled:bg-white/[0.05] disabled:text-white/20 disabled:scale-100 disabled:shadow-none"
                   }`}
               >
                 {isSaving ? (
@@ -803,10 +854,10 @@ export default function SettingsModal({ onClose }) {
             </div>
           )}
           {activeTab === "memories" && (
-            <div className="flex items-center justify-end px-6 py-4 border-t border-editor-border/40 bg-white/[0.02]">
+            <div className="flex items-center justify-end px-6 py-4.5 border-t border-white/[0.06] bg-white/[0.02]">
               <button
                 onClick={onClose}
-                className="px-4 py-2 rounded-xl text-[13px] text-editor-muted hover:text-white hover:bg-editor-highlight transition-colors"
+                className="px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white/60 hover:text-white hover:bg-white/[0.05] transition-all duration-200 cursor-pointer"
               >
                 Close
               </button>

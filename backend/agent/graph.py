@@ -20,6 +20,7 @@ You have access to the user's project workspace through these tools:
 {TOOLS_LIST}
 
 Rules:
+- Prioritize taking action (using tools to read, create, or update files) rather than just showing code blocks in the chat window. If you think a task should be done in code, do that (creating, updating, and reading a file)!
 - Always read a file before editing it unless you're creating it from scratch.
 - write_file, replace_file_content, and multi_replace_file_content propose a diff — the user must accept it before you can assume it was written.
 - Never propose multiple diffs at once. Propose one file at a time.
@@ -96,6 +97,7 @@ class AgentState(TypedDict):
     validation_errors: str
     validation_retries: int
     needs_diagram: bool
+    route: str  # New key for classification route
 
 async def validate_mermaid_diagram(project_id: str, user_id: str, code: str) -> dict:
     fs = FileService(project_id, user_id)
@@ -152,6 +154,26 @@ async def validate_mermaid_diagram(project_id: str, user_id: str, code: str) -> 
     except Exception as e:
         return {"valid": False, "error": f"Failed to parse validator output: {output}. Error: {e}"}
 
+def check_fast_path(text: str) -> str | None:
+    text_stripped = text.strip()
+    if text_stripped.startswith("/"):
+        return "coding"
+    if "```" in text_stripped:
+        return "coding"
+    
+    # Check for file paths: e.g. *.py, etc.
+    file_extensions = r'\.(py|js|ts|tsx|jsx|html|css|md|txt|json|sh|yml|yaml|ini|cfg|db|sql|mdx|svg|png|jpg|jpeg|gif)\b'
+    if re.search(file_extensions, text, re.IGNORECASE):
+        return "coding"
+    
+    # Also check if it looks like a path with slashes
+    if "/" in text_stripped or "\\" in text_stripped:
+        path_pattern = r'(\w+[\/\\]\w+)'
+        if re.search(path_pattern, text_stripped):
+            return "coding"
+            
+    return None
+
 def build_graph(
     project_id: str,
     user_id: str,
@@ -164,6 +186,84 @@ def build_graph(
     tools = make_tools(project_id, user_id, emit_fn=emit_fn)
     llm = get_llm(provider=provider, model_name=model_name, api_key=api_key, ollama_base_url=ollama_base_url).bind_tools(tools)
     generator_llm = get_llm(provider=provider, model_name=model_name, api_key=api_key, ollama_base_url=ollama_base_url)
+
+    async def classifier_node(state: AgentState):
+        messages = state["messages"]
+        last_human = None
+        for m in reversed(messages):
+            if isinstance(m, HumanMessage):
+                last_human = m.content
+                break
+        
+        if not last_human:
+            return {"route": "coding"}
+            
+        fast_route = check_fast_path(last_human)
+        if fast_route:
+            log.info(f"Classifier skipped (fast-path): {fast_route}")
+            return {"route": fast_route}
+            
+        prompt = """You are a query classifier. Categorize the user's message into one of these 5 categories:
+- 'coding': A request to write, refactor, fix, or debug code, run terminal commands, run tests, or install packages.
+- 'diagram': A request to generate, draw, or visualize a flowchart, architecture, sequence diagram, or Mermaid diagram.
+- 'codebase_question': A question asking about the architecture, files, functions, classes, or how things work in this codebase.
+- 'general_chat': A general question, greeting, or conversational query (e.g., greetings, how are you, general programming questions unrelated to this codebase).
+- 'off_topic': A query that is completely unrelated to programming, coding, software development, or the codebase (e.g., food recipes, history, sports, politics, etc.).
+
+Respond with EXACTLY one of these words: coding, diagram, codebase_question, general_chat, off_topic.
+Do not output anything else. No explanation, no markdown formatting. Just the category name."""
+
+        response = await generator_llm.ainvoke([
+            SystemMessage(content=prompt),
+            HumanMessage(content=last_human)
+        ])
+        
+        classification = response.content.strip().lower()
+        classification = re.sub(r'[^a-z_]', '', classification)
+        
+        valid_routes = {"coding", "diagram", "codebase_question", "general_chat", "off_topic"}
+        if classification not in valid_routes:
+            classification = "coding"
+            
+        log.info(f"Classifier result: {classification} (input: {last_human[:60]})")
+        return {"route": classification}
+
+    async def general_chat_node(state: AgentState):
+        messages = state["messages"]
+        prompt = "You are a helpful programming assistant. Answer the user's query directly and concisely."
+        system_msg = SystemMessage(content=prompt)
+        
+        cleaned_messages = []
+        for m in messages:
+            if isinstance(m, SystemMessage):
+                continue
+            if isinstance(m, HumanMessage) and "<codebase_context>" in m.content:
+                content = re.sub(r'<codebase_context>.*?</codebase_context>\n\n', '', m.content, flags=re.DOTALL)
+                cleaned_messages.append(HumanMessage(content=content))
+            else:
+                cleaned_messages.append(m)
+                
+        llm_messages = [system_msg] + cleaned_messages
+        response = await generator_llm.ainvoke(llm_messages)
+        return {"messages": [response]}
+
+    async def off_topic_node(state: AgentState):
+        rejection_text = "I am a dedicated coding assistant and can only help with software development, programming, and codebase-related tasks. Please ask a coding or codebase question!"
+        
+        if emit_fn:
+            import random
+            words = rejection_text.split(" ")
+            shuffled_words = words.copy()
+            random.shuffle(shuffled_words)
+            for i, word in enumerate(shuffled_words):
+                # Exponential wait before changing the word
+                delay = 0.02 * (1.1 ** i)
+                await asyncio.sleep(delay)
+                space = " " if i > 0 else ""
+                await emit_fn({"type": "token", "content": space + word})
+                
+        rejection_msg = AIMessage(content=rejection_text)
+        return {"messages": [rejection_msg]}
 
     def agent_node(state: AgentState):
         messages = state["messages"]
@@ -204,9 +304,14 @@ def build_graph(
         # Auto-fix common label syntax errors before the validator sees the diagram
         diagram = sanitize_mermaid_labels(diagram)
 
+        state_messages = []
+        if state.get("route") == "diagram":
+            state_messages = [AIMessage(content="Here is the diagram visualization based on your request:")]
+
         return {
             "diagram_markdown": diagram,
-            "validation_retries": validation_retries
+            "validation_retries": validation_retries,
+            "messages": state_messages
         }
 
     async def diagram_validator_node(state: AgentState):
@@ -291,16 +396,34 @@ def build_graph(
 
     tool_node = ToolNode(tools)
 
+    def route_from_classifier(state: AgentState):
+        route = state.get("route", "coding")
+        if route in ("coding", "codebase_question"):
+            return "agent"
+        elif route == "diagram":
+            return "diagram_generator"
+        elif route == "general_chat":
+            return "general_chat"
+        elif route == "off_topic":
+            return "off_topic"
+        return "agent"
+
     graph = StateGraph(AgentState)
+    graph.add_node("classifier", classifier_node)
     graph.add_node("agent", agent_node)
     graph.add_node("tools", tool_node)
     graph.add_node("diagram_generator", diagram_generator_node)
     graph.add_node("diagram_validator", diagram_validator_node)
+    graph.add_node("general_chat", general_chat_node)
+    graph.add_node("off_topic", off_topic_node)
     
-    graph.set_entry_point("agent")
+    graph.set_entry_point("classifier")
+    graph.add_conditional_edges("classifier", route_from_classifier)
     graph.add_conditional_edges("agent", should_continue)
     graph.add_edge("tools", "agent")
     graph.add_edge("diagram_generator", "diagram_validator")
     graph.add_conditional_edges("diagram_validator", check_validation)
+    graph.add_edge("general_chat", END)
+    graph.add_edge("off_topic", END)
 
     return graph.compile()
