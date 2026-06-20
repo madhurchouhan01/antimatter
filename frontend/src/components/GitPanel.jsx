@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { GitBranch, GitCommit, RefreshCw, Check } from "lucide-react"
 import { useGitStore } from "../stores/gitStore"
 import { useProjectStore } from "../stores/projectStore"
@@ -10,7 +10,7 @@ export default function GitPanel() {
   const [message, setMessage] = useState("")
   const [activeDiffFile, setActiveDiffFile] = useState(null)
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!project) return
     setLoading(true)
     try {
@@ -20,10 +20,12 @@ export default function GitPanel() {
       ])
       setStatus(statusRes.data)
       setCommits(logRes.data.commits)
+    } catch (err) {
+      console.error("Failed to load git details:", err)
     } finally {
       setLoading(false)
     }
-  }
+  }, [project, setStatus, setCommits, setLoading])
 
   const loadDiff = async (filePath) => {
     const res = await api.get(`/api/git/${project.id}/diff`, {

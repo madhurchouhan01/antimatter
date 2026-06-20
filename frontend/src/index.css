@@ -204,4 +204,13 @@ body { margin: 0; background: #1a1b26; color: #a9b1d6; }
   animation: inputPulse 0.6s cubic-bezier(0.25, 1, 0.5, 1) forwards;
 }
 
+/* Hide scrollbars utility */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
 
