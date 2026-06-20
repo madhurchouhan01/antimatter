@@ -153,10 +153,12 @@ export default function SettingsModal({ onClose }) {
   const [saveOk,   setSaveOk]         = useState(false)
 
   // Ollama-specific state
-  const [ollamaBaseUrl, setOllamaBaseUrl]   = useState("http://localhost:11434/v1")
-  const [ollamaModels,  setOllamaModels]    = useState([])
-  const [ollamaFetching, setOllamaFetching] = useState(false)
-  const [ollamaStatus,  setOllamaStatus]    = useState(null) // null | "ok" | "error"
+  const [ollamaBaseUrl,    setOllamaBaseUrl]    = useState("http://localhost:11434/v1")
+  const [ollamaInstalled,  setOllamaInstalled]  = useState([])   // models actually pulled
+  const [ollamaRecommended,setOllamaRecommended]= useState([])   // curated but not installed
+  const [ollamaFetching,   setOllamaFetching]   = useState(false)
+  const [ollamaReachable,  setOllamaReachable]  = useState(null) // null | true | false
+  const [ollamaError,      setOllamaError]      = useState(null) // error message string
 
   // Memories state
   const [memories, setMemories]       = useState([])
@@ -174,19 +176,25 @@ export default function SettingsModal({ onClose }) {
   // Auto-fetch Ollama models when switching to Ollama provider
   const fetchOllamaModels = useCallback(async (url) => {
     setOllamaFetching(true)
-    setOllamaStatus(null)
+    setOllamaReachable(null)
+    setOllamaError(null)
     try {
       const params = url ? `?base_url=${encodeURIComponent(url)}` : ""
       const res = await api.get(`/api/settings/ollama/models${params}`)
-      const fetched = res.data.models || []
-      setOllamaModels(fetched)
-      setOllamaStatus(fetched.length > 0 ? "ok" : "error")
-      if (fetched.length > 0 && !fetched.includes(model)) {
-        setModel(fetched[0])
+      const data = res.data
+      setOllamaReachable(data.reachable)
+      setOllamaInstalled(data.installed || [])
+      setOllamaRecommended(data.recommended || [])
+      setOllamaError(data.error || null)
+      // Auto-select first installed model if current model not in installed list
+      if (data.reachable && data.installed?.length > 0 && !data.installed.includes(model)) {
+        setModel(data.installed[0])
       }
-    } catch {
-      setOllamaStatus("error")
-      setOllamaModels([])
+    } catch (err) {
+      setOllamaReachable(false)
+      setOllamaInstalled([])
+      setOllamaRecommended([])
+      setOllamaError("Failed to reach the backend. Is AntiMatter running?")
     } finally {
       setOllamaFetching(false)
     }
@@ -219,7 +227,11 @@ export default function SettingsModal({ onClose }) {
     setCustomModel("")
     setApiKey("")
     setClearKey(false)
-    setOllamaStatus(null)
+    // Reset Ollama state
+    setOllamaReachable(null)
+    setOllamaError(null)
+    setOllamaInstalled([])
+    setOllamaRecommended([])
   }
 
   const handleDeleteMemory = async (memoryId) => {
@@ -386,54 +398,122 @@ export default function SettingsModal({ onClose }) {
 
                 {/* ── Ollama: special model picker ── */}
                 {provider === "ollama" ? (
-                  <div className="flex flex-col gap-2">
-                    {/* Status badge */}
-                    {ollamaStatus === "ok" && (
-                      <div className="flex items-center gap-1.5 text-[11px] text-emerald-400">
-                        <CheckCircle2 size={11} /> {ollamaModels.length} model{ollamaModels.length !== 1 ? "s" : ""} found
+                  <div className="flex flex-col gap-3">
+
+                    {/* ── Status header ── */}
+                    {ollamaReachable === true && (
+                      <div className="flex items-center gap-1.5 text-[11px] text-emerald-400 font-medium">
+                        <CheckCircle2 size={11} /> Ollama connected
+                        {ollamaInstalled.length > 0
+                          ? ` — ${ollamaInstalled.length} model${ollamaInstalled.length !== 1 ? "s" : ""} installed`
+                          : " — no models pulled yet"}
                       </div>
                     )}
-                    {ollamaStatus === "error" && (
-                      <div className="flex items-center gap-1.5 text-[11px] text-amber-400">
-                        <WifiOff size={11} /> Ollama unreachable — type a model name manually
+                    {ollamaReachable === false && (
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-1.5 text-[11px] text-red-400 font-medium">
+                          <WifiOff size={11} /> Ollama not reachable
+                        </div>
+                        {ollamaError && (
+                          <p className="text-[10px] text-red-300/70 leading-relaxed">{ollamaError}</p>
+                        )}
+                        <p className="text-[10px] text-editor-muted">
+                          Run <code className="font-mono bg-editor-highlight px-1 rounded">ollama serve</code> then click Fetch again.
+                          {" "}<a href="https://ollama.com" target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:underline">Install Ollama →</a>
+                        </p>
                       </div>
                     )}
 
-                    {/* Model input: dropdown if models fetched, text input if not */}
-                    {ollamaModels.length > 0 ? (
-                      <div className="relative">
-                        <select
+                    {/* ── Installed models — selectable dropdown ── */}
+                    {ollamaInstalled.length > 0 && (
+                      <div>
+                        <p className="text-[10px] text-emerald-400 font-semibold uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                          <CheckCircle2 size={9} /> Installed — select to use
+                        </p>
+                        <div className="relative">
+                          <select
+                            value={model}
+                            onChange={e => setModel(e.target.value)}
+                            className="w-full appearance-none bg-editor-bg border border-emerald-500/40 text-white text-[13px] rounded-xl px-4 py-2.5 pr-8 outline-none focus:border-emerald-500/70 transition-colors cursor-pointer"
+                          >
+                            {ollamaInstalled.map(m => (
+                              <option key={m} value={m}>{m}</option>
+                            ))}
+                          </select>
+                          <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-editor-muted pointer-events-none" />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── Not yet pulled but no installed models ── type manually ── */}
+                    {ollamaReachable === true && ollamaInstalled.length === 0 && (
+                      <div>
+                        <p className="text-[10px] text-amber-400 font-semibold uppercase tracking-wider mb-1.5">
+                          No models pulled — type a model name manually
+                        </p>
+                        <input
+                          type="text"
                           value={model}
                           onChange={e => setModel(e.target.value)}
-                          className="w-full appearance-none bg-editor-bg border border-editor-border text-white text-[13px] rounded-xl px-4 py-2.5 pr-8 outline-none focus:border-cyan-500/70 transition-colors cursor-pointer"
-                        >
-                          {ollamaModels.map(m => (
-                            <option key={m} value={m}>{m}</option>
-                          ))}
-                        </select>
-                        <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-editor-muted pointer-events-none" />
+                          placeholder="e.g. qwen2.5-coder:7b"
+                          className="w-full bg-editor-bg border border-editor-border focus:border-cyan-500/70 text-white text-[13px] rounded-xl px-4 py-2.5 outline-none transition-colors"
+                        />
                       </div>
-                    ) : (
-                      <input
-                        type="text"
-                        value={model}
-                        onChange={e => setModel(e.target.value)}
-                        placeholder="e.g. qwen2.5-coder:7b"
-                        className="w-full bg-editor-bg border border-editor-border focus:border-cyan-500/70 text-white text-[13px] rounded-xl px-4 py-2.5 outline-none transition-colors"
-                      />
                     )}
 
-                    {/* Tool-calling warning */}
-                    <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20">
-                      <AlertTriangle size={11} className="text-amber-400 shrink-0 mt-0.5" />
-                      <p className="text-[10px] text-amber-300/80 leading-relaxed">
-                        For best results, use models with <strong>tool-calling support</strong>:
-                        {" "}<span className="font-mono">qwen2.5-coder</span>,{" "}
-                        <span className="font-mono">llama3.3</span>,{" "}
-                        <span className="font-mono">mistral-nemo</span>.
-                        Gemma and some others have limited tool support.
+                    {/* ── Ollama offline — manual entry ── */}
+                    {ollamaReachable === false && (
+                      <div>
+                        <p className="text-[10px] text-editor-muted font-semibold uppercase tracking-wider mb-1.5">
+                          Or type a model name manually
+                        </p>
+                        <input
+                          type="text"
+                          value={model}
+                          onChange={e => setModel(e.target.value)}
+                          placeholder="e.g. qwen2.5-coder:7b"
+                          className="w-full bg-editor-bg border border-editor-border focus:border-cyan-500/70 text-white text-[13px] rounded-xl px-4 py-2.5 outline-none transition-colors"
+                        />
+                      </div>
+                    )}
+
+                    {/* ── Recommended (not installed) ── */}
+                    {ollamaRecommended.length > 0 && (
+                      <div>
+                        <p className="text-[10px] text-editor-muted font-semibold uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                          <AlertTriangle size={9} className="text-amber-400" /> Not installed — pull to use
+                        </p>
+                        <div className="flex flex-col gap-1 max-h-36 overflow-y-auto pr-1 scrollbar-thin">
+                          {ollamaRecommended.map(r => (
+                            <div
+                              key={r.name}
+                              className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-editor-highlight/20 border border-editor-border/30 group"
+                            >
+                              <div className="flex-1 min-w-0">
+                                <span className="font-mono text-[11px] text-editor-muted/80">{r.name}</span>
+                                <span className="ml-2 text-[10px] text-editor-muted/50">{r.note}</span>
+                              </div>
+                              <button
+                                onClick={() => {
+                                  navigator.clipboard.writeText(`ollama pull ${r.name}`)
+                                }}
+                                className="shrink-0 ml-2 opacity-0 group-hover:opacity-100 text-[9px] text-cyan-400 hover:text-cyan-300 font-mono transition-all px-1.5 py-0.5 rounded border border-cyan-500/30 hover:border-cyan-400/50"
+                                title="Copy pull command"
+                              >
+                                copy pull cmd
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── No fetch attempted yet ── */}
+                    {ollamaReachable === null && !ollamaFetching && (
+                      <p className="text-[11px] text-editor-muted">
+                        Click <strong className="text-white">Fetch</strong> to detect your installed models.
                       </p>
-                    </div>
+                    )}
                   </div>
                 ) : !useCustom ? (
                   <div className="relative">

@@ -96,25 +96,39 @@ _OPENROUTER_BASE  = "https://openrouter.ai/api/v1"
 _OLLAMA_DEFAULT_BASE = "http://localhost:11434/v1"
 
 
-async def fetch_ollama_models(base_url: str | None = None) -> list[str]:
+async def fetch_ollama_models(base_url: str | None = None) -> dict:
     """
-    Hit the Ollama /api/tags endpoint and return a list of model names
-    that are installed on the user's local Ollama instance.
-    Falls back to the curated PROVIDER_MODELS["ollama"] list on any error.
+    Probe the user's Ollama instance and return structured status.
+
+    Returns:
+        {
+            "reachable": bool,       # whether Ollama responded at all
+            "installed": list[str],  # models the user has already pulled
+            "error": str | None,     # human-readable error if unreachable
+        }
     """
     url = (base_url or _OLLAMA_DEFAULT_BASE).rstrip("/")
-    # Strip /v1 suffix — Ollama's native tags endpoint is at /api/tags
-    url = url.replace("/v1", "").rstrip("/")
+    # Strip /v1 suffix — Ollama's native /api/tags is NOT under /v1
+    root_url = url.replace("/v1", "").rstrip("/")
     try:
-        async with httpx.AsyncClient(timeout=4.0) as client:
-            r = await client.get(f"{url}/api/tags")
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            r = await client.get(f"{root_url}/api/tags")
             r.raise_for_status()
             data = r.json()
-            names = [m["name"] for m in data.get("models", [])]
-            return names if names else PROVIDER_MODELS["ollama"]
+            installed = [m["name"] for m in data.get("models", [])]
+            return {"reachable": True, "installed": installed, "error": None}
+    except httpx.ConnectError:
+        msg = f"Could not connect to Ollama at {root_url}. Is Ollama running?"
+        log.warning("Ollama unreachable", url=root_url)
+        return {"reachable": False, "installed": [], "error": msg}
+    except httpx.TimeoutException:
+        msg = f"Connection to Ollama at {root_url} timed out."
+        log.warning("Ollama timeout", url=root_url)
+        return {"reachable": False, "installed": [], "error": msg}
     except Exception as exc:
-        log.warning("Could not reach Ollama instance", url=url, error=str(exc))
-        return PROVIDER_MODELS["ollama"]
+        msg = f"Unexpected error reaching Ollama: {exc}"
+        log.warning("Ollama probe failed", url=root_url, error=str(exc))
+        return {"reachable": False, "installed": [], "error": msg}
 
 
 def get_llm(
