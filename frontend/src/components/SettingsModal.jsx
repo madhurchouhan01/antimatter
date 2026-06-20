@@ -302,7 +302,7 @@ export default function SettingsModal({ onClose }) {
       {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div
-          className="w-full max-w-xl pointer-events-auto rounded-3xl border border-white/[0.08] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.8)] overflow-hidden transition-all duration-300"
+          className="w-full max-w-xl max-h-[85vh] flex flex-col pointer-events-auto rounded-3xl border border-white/[0.08] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.8)] overflow-hidden transition-all duration-300"
           style={{
             background: "linear-gradient(150deg, rgba(22, 24, 38, 0.99) 0%, rgba(12, 13, 20, 0.99) 100%)",
             backdropFilter: "blur(24px)",
@@ -350,10 +350,10 @@ export default function SettingsModal({ onClose }) {
             </button>
           </div>
 
-          {/* ── Tab Panels — fixed min-height so card never shrinks on tab switch ── */}
-          <div className="min-h-[520px] flex flex-col">
+          {/* ── Tab Panels ── */}
+          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
           {activeTab === "provider" ? (
-            <div className="flex-1 p-6 flex flex-col gap-6 overflow-y-auto" style={{ maxHeight: "calc(65vh - 48px)" }}>
+            <div className="flex-1 p-6 flex flex-col gap-6 overflow-y-auto">
 
               {/* ── Provider Selection ── */}
               <div className="flex flex-col gap-4">
@@ -757,7 +757,7 @@ export default function SettingsModal({ onClose }) {
             </div>
           ) : (
             /* ── Memories Tab ── */
-            <div className="flex-1 p-6 flex flex-col gap-4 overflow-y-auto" style={{ maxHeight: "calc(65vh - 48px)" }}>
+            <div className="flex-1 p-6 flex flex-col gap-4 overflow-y-auto">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-[13px] font-semibold text-white">Episodic Memories</p>
@@ -827,17 +827,17 @@ export default function SettingsModal({ onClose }) {
 
           {/* ── Footer ── */}
           {activeTab === "provider" && (
-            <div className="flex items-center justify-between px-6 py-4.5 border-t border-white/[0.06] bg-white/[0.02]">
+            <div className="flex items-center justify-between px-6 py-3.5 border-t border-white/[0.06] bg-white/[0.02]">
               <button
                 onClick={onClose}
-                className="px-4 py-2.5 rounded-xl text-[13px] font-medium text-white/60 hover:text-white hover:bg-white/[0.05] transition-all duration-200 cursor-pointer"
+                className="px-4 py-2 rounded-xl text-[13px] font-medium text-white/60 hover:text-white hover:bg-white/[0.05] transition-all duration-200 cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSave}
                 disabled={isSaving}
-                className={`flex items-center gap-2 px-6 py-3 rounded-xl text-[13px] font-bold transition-all duration-200 shadow-lg cursor-pointer
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-bold transition-all duration-200 shadow-lg cursor-pointer
                   ${saveOk
                     ? "bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 shadow-emerald-500/5"
                     : "bg-editor-accent hover:bg-editor-accent/90 hover:scale-[1.02] active:scale-[0.98] text-editor-bg shadow-editor-accent/15 disabled:bg-white/[0.05] disabled:text-white/20 disabled:scale-100 disabled:shadow-none"
@@ -854,10 +854,10 @@ export default function SettingsModal({ onClose }) {
             </div>
           )}
           {activeTab === "memories" && (
-            <div className="flex items-center justify-end px-6 py-4.5 border-t border-white/[0.06] bg-white/[0.02]">
+            <div className="flex items-center justify-end px-6 py-3.5 border-t border-white/[0.06] bg-white/[0.02]">
               <button
                 onClick={onClose}
-                className="px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white/60 hover:text-white hover:bg-white/[0.05] transition-all duration-200 cursor-pointer"
+                className="px-5 py-2 rounded-xl text-[13px] font-semibold text-white/60 hover:text-white hover:bg-white/[0.05] transition-all duration-200 cursor-pointer"
               >
                 Close
               </button>
