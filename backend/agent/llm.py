@@ -6,6 +6,7 @@ Priority for API key:
   2. Backend environment variable / settings fallback
 """
 
+import httpx
 from langchain_groq import ChatGroq
 from langchain_openai import ChatOpenAI
 from langchain_anthropic import ChatAnthropic
@@ -70,25 +71,67 @@ PROVIDER_MODELS: dict[str, list[str]] = {
         "gemini-1.5-pro",
         "gemini-1.5-flash",
     ],
+    # Ollama: dynamic — populated at runtime from the user's local instance.
+    # The list here is a curated set of tool-calling-capable models as a fallback.
+    "ollama": [
+        "qwen2.5-coder:14b",
+        "qwen2.5-coder:7b",
+        "qwen2.5:14b",
+        "qwen2.5:7b",
+        "llama3.3:70b",
+        "llama3.2:3b",
+        "mistral:7b",
+        "mistral-nemo:12b",
+        "deepseek-coder-v2:16b",
+        "gemma3:12b",
+        "gemma3:4b",
+        "phi4:14b",
+        "smollm2:1.7b",
+    ],
 }
 
 # GitHub Marketplace Azure AI Inference endpoint
 _GITHUB_ENDPOINT = "https://models.github.ai/inference"
 _OPENROUTER_BASE  = "https://openrouter.ai/api/v1"
+_OLLAMA_DEFAULT_BASE = "http://localhost:11434/v1"
+
+
+async def fetch_ollama_models(base_url: str | None = None) -> list[str]:
+    """
+    Hit the Ollama /api/tags endpoint and return a list of model names
+    that are installed on the user's local Ollama instance.
+    Falls back to the curated PROVIDER_MODELS["ollama"] list on any error.
+    """
+    url = (base_url or _OLLAMA_DEFAULT_BASE).rstrip("/")
+    # Strip /v1 suffix — Ollama's native tags endpoint is at /api/tags
+    url = url.replace("/v1", "").rstrip("/")
+    try:
+        async with httpx.AsyncClient(timeout=4.0) as client:
+            r = await client.get(f"{url}/api/tags")
+            r.raise_for_status()
+            data = r.json()
+            names = [m["name"] for m in data.get("models", [])]
+            return names if names else PROVIDER_MODELS["ollama"]
+    except Exception as exc:
+        log.warning("Could not reach Ollama instance", url=url, error=str(exc))
+        return PROVIDER_MODELS["ollama"]
 
 
 def get_llm(
     provider: str = "groq",
     model_name: str | None = None,
     api_key: str | None = None,
+    ollama_base_url: str | None = None,
 ):
     """
     Build and return a LangChain chat model for the given provider.
 
     Args:
-        provider:   One of groq | github | openai | openrouter | anthropic | gemini
-        model_name: Model identifier. Falls back to provider default if None.
-        api_key:    User-supplied key. Falls back to backend env key if None/empty.
+        provider:        One of groq | github | openai | openrouter | anthropic | gemini | ollama
+        model_name:      Model identifier. Falls back to provider default if None.
+        api_key:         User-supplied key. Falls back to backend env key if None/empty.
+        ollama_base_url: Override the Ollama endpoint (e.g. http://192.168.1.10:11434/v1).
+                         If None, falls back to OLLAMA_BASE_URL env/config or localhost.
     """
     settings = get_settings()
 
@@ -173,6 +216,21 @@ def get_llm(
             model=model,
             temperature=0,
             streaming=True,
+        )
+
+    elif provider == "ollama":
+        settings = get_settings()
+        # Priority: per-request override > user settings URL > backend config default
+        base_url = ollama_base_url or settings.ollama_base_url or _OLLAMA_DEFAULT_BASE
+        model = model_name or "qwen2.5-coder:7b"
+        log.debug("Building Ollama local LLM", model=model, base_url=base_url)
+        return ChatOpenAI(
+            api_key="ollama",       # Required field; Ollama ignores it
+            model=model,
+            base_url=base_url,
+            temperature=0,
+            streaming=True,
+            max_retries=2,
         )
 
     else:

@@ -159,10 +159,11 @@ def build_graph(
     model_name: str = "llama-3.3-70b-versatile",
     provider: str = "groq",
     api_key: str | None = None,
+    ollama_base_url: str | None = None,
 ):
     tools = make_tools(project_id, user_id, emit_fn=emit_fn)
-    llm = get_llm(provider=provider, model_name=model_name, api_key=api_key).bind_tools(tools)
-    generator_llm = get_llm(provider=provider, model_name=model_name, api_key=api_key)
+    llm = get_llm(provider=provider, model_name=model_name, api_key=api_key, ollama_base_url=ollama_base_url).bind_tools(tools)
+    generator_llm = get_llm(provider=provider, model_name=model_name, api_key=api_key, ollama_base_url=ollama_base_url)
 
     def agent_node(state: AgentState):
         messages = state["messages"]

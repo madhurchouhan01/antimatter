@@ -8,6 +8,7 @@ export const useSettingsStore = create(
       provider: "groq",
       model: "llama-3.3-70b-versatile",
       hasApiKey: false,
+      ollamaBaseUrl: "http://localhost:11434/v1",
       isLoading: false,
       isSaving: false,
       error: null,
@@ -23,6 +24,7 @@ export const useSettingsStore = create(
             provider: data.provider,
             model: data.model,
             hasApiKey: data.has_api_key,
+            ollamaBaseUrl: data.ollama_base_url || "http://localhost:11434/v1",
             isLoading: false,
           })
         } catch (err) {
@@ -31,19 +33,22 @@ export const useSettingsStore = create(
       },
 
       /** Save settings to backend; apiKey="" means clear the existing key */
-      saveSettings: async (provider, model, apiKey) => {
+      saveSettings: async (provider, model, apiKey, ollamaBaseUrl) => {
         set({ isSaving: true, error: null })
         try {
           const body = { provider, model }
           // Only include api_key in the payload if the user actually typed something
           // or explicitly passed "" to clear it
           if (apiKey !== undefined) body.api_key = apiKey
+          // Include ollama_base_url when saving Ollama settings
+          if (ollamaBaseUrl !== undefined) body.ollama_base_url = ollamaBaseUrl
 
           const { data } = await api.put("/api/settings/", body)
           set({
             provider: data.provider,
             model: data.model,
             hasApiKey: data.has_api_key,
+            ollamaBaseUrl: data.ollama_base_url || "http://localhost:11434/v1",
             isSaving: false,
           })
           return true
@@ -61,8 +66,8 @@ export const useSettingsStore = create(
     }),
     {
       name: "antimatter-settings",
-      // Only persist provider/model locally as cache — canonical source is backend
-      partialize: (state) => ({ provider: state.provider, model: state.model }),
+      // Only persist provider/model/ollamaBaseUrl locally as cache — canonical source is backend
+      partialize: (state) => ({ provider: state.provider, model: state.model, ollamaBaseUrl: state.ollamaBaseUrl }),
     }
   )
 )

@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     # Google Gemini
     gemini_api_key: str = ""
 
+    # Ollama (local models)
+    ollama_base_url: str = "http://localhost:11434/v1"  # Override for remote Ollama instances
+
+
     # LangSmith — supports both old LANGCHAIN_* and new LANGSMITH_* naming
     # New-style keys (preferred, set in .env as LANGSMITH_*)
     langsmith_api_key: str = ""

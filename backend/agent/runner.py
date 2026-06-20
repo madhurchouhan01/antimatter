@@ -111,6 +111,7 @@ async def run_agent_streaming(
     model_name: str = "llama-3.3-70b-versatile",
     provider: str = "groq",
     api_key: str | None = None,
+    ollama_base_url: str | None = None,
 ):
     final_text = None
     accumulated_token_usage = {}  # {input_tokens, output_tokens, total_tokens, model}
@@ -158,6 +159,7 @@ async def run_agent_streaming(
             model_name=model_name,
             provider=provider,
             api_key=api_key,
+            ollama_base_url=ollama_base_url,
         )
 
         # Retrieve relevant past memories and inject into initial state

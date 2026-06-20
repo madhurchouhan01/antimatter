@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import {
   X, Settings, Key, ChevronDown, Eye, EyeOff, CheckCircle2,
   AlertCircle, Loader2, ExternalLink, Cpu, Sparkles, Shield,
-  Zap, Shuffle, Brain, Trash2, Copy, Check
+  Zap, Shuffle, Brain, Trash2, Copy, Check, Server, RefreshCw,
+  AlertTriangle, WifiOff
 } from "lucide-react"
 import { useSettingsStore } from "../stores/settingsStore"
 import { useProjectStore } from "../stores/projectStore"
@@ -110,6 +111,19 @@ const PROVIDERS = {
     keyPlaceholder: "AIza...",
     defaultModel: "gemini-2.5-flash",
   },
+  ollama: {
+    label: "Ollama",
+    icon: Server,
+    color: "#22d3ee",
+    gradient: "from-cyan-500/20 to-teal-500/10",
+    border: "border-cyan-500/30",
+    description: "Local open-source models on your hardware",
+    docsUrl: "https://ollama.com/library",
+    docsLabel: "Browse Ollama Models →",
+    keyPlaceholder: "",
+    defaultModel: "qwen2.5-coder:7b",
+    isLocal: true,
+  },
 }
 
 export default function SettingsModal({ onClose }) {
@@ -138,6 +152,12 @@ export default function SettingsModal({ onClose }) {
   const [useCustom, setUseCustom]     = useState(false)
   const [saveOk,   setSaveOk]         = useState(false)
 
+  // Ollama-specific state
+  const [ollamaBaseUrl, setOllamaBaseUrl]   = useState("http://localhost:11434/v1")
+  const [ollamaModels,  setOllamaModels]    = useState([])
+  const [ollamaFetching, setOllamaFetching] = useState(false)
+  const [ollamaStatus,  setOllamaStatus]    = useState(null) // null | "ok" | "error"
+
   // Memories state
   const [memories, setMemories]       = useState([])
   const [memLoading, setMemLoading]   = useState(false)
@@ -150,6 +170,34 @@ export default function SettingsModal({ onClose }) {
   useEffect(() => {
     api.get("/api/settings/models").then(res => setProviderModels(res.data)).catch(() => {})
   }, [])
+
+  // Auto-fetch Ollama models when switching to Ollama provider
+  const fetchOllamaModels = useCallback(async (url) => {
+    setOllamaFetching(true)
+    setOllamaStatus(null)
+    try {
+      const params = url ? `?base_url=${encodeURIComponent(url)}` : ""
+      const res = await api.get(`/api/settings/ollama/models${params}`)
+      const fetched = res.data.models || []
+      setOllamaModels(fetched)
+      setOllamaStatus(fetched.length > 0 ? "ok" : "error")
+      if (fetched.length > 0 && !fetched.includes(model)) {
+        setModel(fetched[0])
+      }
+    } catch {
+      setOllamaStatus("error")
+      setOllamaModels([])
+    } finally {
+      setOllamaFetching(false)
+    }
+  }, [model])
+
+  useEffect(() => {
+    if (provider === "ollama") {
+      fetchOllamaModels(ollamaBaseUrl)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [provider])
 
   // Fetch memories when Memories tab is opened
   useEffect(() => {
@@ -171,6 +219,7 @@ export default function SettingsModal({ onClose }) {
     setCustomModel("")
     setApiKey("")
     setClearKey(false)
+    setOllamaStatus(null)
   }
 
   const handleDeleteMemory = async (memoryId) => {
@@ -208,6 +257,13 @@ export default function SettingsModal({ onClose }) {
     if (!finalModel) return
 
     let keyPayload = undefined
+    if (provider === "ollama") {
+      // Ollama has no API key — just save URL and model
+      const ok = await saveSettings(provider, finalModel, undefined, ollamaBaseUrl)
+      if (ok) { setSaveOk(true); setTimeout(() => setSaveOk(false), 2000) }
+      return
+    }
+
     if (clearKey) {
       keyPayload = ""   // explicit empty = clear
     } else if (apiKey.trim()) {
@@ -327,7 +383,59 @@ export default function SettingsModal({ onClose }) {
                 <label className="flex items-center gap-1.5 text-[11px] font-semibold text-editor-muted uppercase tracking-widest mb-3">
                   <Sparkles size={11} /> Model
                 </label>
-                {!useCustom ? (
+
+                {/* ── Ollama: special model picker ── */}
+                {provider === "ollama" ? (
+                  <div className="flex flex-col gap-2">
+                    {/* Status badge */}
+                    {ollamaStatus === "ok" && (
+                      <div className="flex items-center gap-1.5 text-[11px] text-emerald-400">
+                        <CheckCircle2 size={11} /> {ollamaModels.length} model{ollamaModels.length !== 1 ? "s" : ""} found
+                      </div>
+                    )}
+                    {ollamaStatus === "error" && (
+                      <div className="flex items-center gap-1.5 text-[11px] text-amber-400">
+                        <WifiOff size={11} /> Ollama unreachable — type a model name manually
+                      </div>
+                    )}
+
+                    {/* Model input: dropdown if models fetched, text input if not */}
+                    {ollamaModels.length > 0 ? (
+                      <div className="relative">
+                        <select
+                          value={model}
+                          onChange={e => setModel(e.target.value)}
+                          className="w-full appearance-none bg-editor-bg border border-editor-border text-white text-[13px] rounded-xl px-4 py-2.5 pr-8 outline-none focus:border-cyan-500/70 transition-colors cursor-pointer"
+                        >
+                          {ollamaModels.map(m => (
+                            <option key={m} value={m}>{m}</option>
+                          ))}
+                        </select>
+                        <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-editor-muted pointer-events-none" />
+                      </div>
+                    ) : (
+                      <input
+                        type="text"
+                        value={model}
+                        onChange={e => setModel(e.target.value)}
+                        placeholder="e.g. qwen2.5-coder:7b"
+                        className="w-full bg-editor-bg border border-editor-border focus:border-cyan-500/70 text-white text-[13px] rounded-xl px-4 py-2.5 outline-none transition-colors"
+                      />
+                    )}
+
+                    {/* Tool-calling warning */}
+                    <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                      <AlertTriangle size={11} className="text-amber-400 shrink-0 mt-0.5" />
+                      <p className="text-[10px] text-amber-300/80 leading-relaxed">
+                        For best results, use models with <strong>tool-calling support</strong>:
+                        {" "}<span className="font-mono">qwen2.5-coder</span>,{" "}
+                        <span className="font-mono">llama3.3</span>,{" "}
+                        <span className="font-mono">mistral-nemo</span>.
+                        Gemma and some others have limited tool support.
+                      </p>
+                    </div>
+                  </div>
+                ) : !useCustom ? (
                   <div className="relative">
                     <select
                       value={model}
@@ -352,15 +460,18 @@ export default function SettingsModal({ onClose }) {
                     className="w-full bg-editor-bg border border-editor-border focus:border-editor-accent/70 text-white text-[13px] rounded-xl px-4 py-2.5 outline-none transition-colors"
                   />
                 )}
-                <button
-                  onClick={() => { setUseCustom(p => !p); setCustomModel("") }}
-                  className="mt-2 text-[10px] text-editor-muted hover:text-editor-accent transition-colors"
-                >
-                  {useCustom ? "← Back to model list" : "Enter custom model name →"}
-                </button>
+                {provider !== "ollama" && (
+                  <button
+                    onClick={() => { setUseCustom(p => !p); setCustomModel("") }}
+                    className="mt-2 text-[10px] text-editor-muted hover:text-editor-accent transition-colors"
+                  >
+                    {useCustom ? "← Back to model list" : "Enter custom model name →"}
+                  </button>
+                )}
               </div>
 
-              {/* ── API Key ── */}
+              {/* ── API Key —— hidden for Ollama ── */}
+              {provider !== "ollama" ? (
               <div>
                 <label className="flex items-center gap-1.5 text-[11px] font-semibold text-editor-muted uppercase tracking-widest mb-3">
                   <Key size={11} /> API Key
@@ -427,6 +538,38 @@ export default function SettingsModal({ onClose }) {
                   </p>
                 </div>
               </div>
+              ) : (
+              /* ── Ollama: Base URL + Fetch button instead of API key ── */
+              <div>
+                <label className="flex items-center gap-1.5 text-[11px] font-semibold text-editor-muted uppercase tracking-widest mb-3">
+                  <Server size={11} /> Ollama Endpoint
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={ollamaBaseUrl}
+                    onChange={e => { setOllamaBaseUrl(e.target.value); setOllamaStatus(null) }}
+                    placeholder="http://localhost:11434/v1"
+                    className="flex-1 bg-editor-bg border border-editor-border focus:border-cyan-500/70 text-white text-[13px] rounded-xl px-4 py-2.5 outline-none transition-colors font-mono placeholder:font-sans placeholder:text-editor-muted/60"
+                  />
+                  <button
+                    onClick={() => fetchOllamaModels(ollamaBaseUrl)}
+                    disabled={ollamaFetching}
+                    className="shrink-0 flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-cyan-500/30 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 text-[12px] font-medium transition-all disabled:opacity-50"
+                    title="Fetch installed models from Ollama"
+                  >
+                    {ollamaFetching
+                      ? <Loader2 size={13} className="animate-spin" />
+                      : <RefreshCw size={13} />}
+                    {ollamaFetching ? "Fetching…" : "Fetch"}
+                  </button>
+                </div>
+                <p className="mt-2 text-[10px] text-editor-muted">
+                  No API key needed. Ollama runs entirely on your machine.
+                  {" "}<a href="https://ollama.com" target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:underline">Install Ollama →</a>
+                </p>
+              </div>
+              )}
 
               {/* ── Error banner ── */}
               {error && (

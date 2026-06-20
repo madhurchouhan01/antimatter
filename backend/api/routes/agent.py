@@ -86,6 +86,8 @@ async def agent_ws(
                 provider = data.get("provider") or (user_settings.provider if user_settings else "groq")
                 model    = data.get("model")    or (user_settings.model    if user_settings else "llama-3.3-70b-versatile")
                 user_api_key = user_settings.api_key if user_settings else None
+                # Ollama: read the persisted base URL (falls back to default in get_llm)
+                ollama_base_url = getattr(user_settings, "ollama_base_url", None) if user_settings else None
 
                 log.info(
                     "Agent request received",
@@ -107,6 +109,7 @@ async def agent_ws(
                     model_name=model,
                     provider=provider,
                     api_key=user_api_key,
+                    ollama_base_url=ollama_base_url,
                 )
 
         except (WebSocketDisconnect, RuntimeError):
