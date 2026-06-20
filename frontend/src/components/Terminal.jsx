@@ -15,6 +15,7 @@ export default function Terminal({ terminalId }) {
   const token      = useAuthStore((s) => s.token)
   const project    = useProjectStore((s) => s.activeProject)
   const activeSession = useTerminalStore((s) => s.activeSession)
+  const isFirstConnectRef = useRef(true)
 
   // Active terminal tab sendCommand synchronization
   useEffect(() => {
@@ -90,12 +91,33 @@ export default function Terminal({ terminalId }) {
       wsRef.current = ws
 
       ws.onopen = () => {
-        term.writeln("\r\n\x1b[32mTerminal connected.\x1b[0m\r\n")
-        
         const sendCmdFn = (cmd) => {
           if (ws && ws.readyState === WebSocket.OPEN) {
             ws.send(new TextEncoder().encode(cmd))
           }
+        }
+
+        if (isFirstConnectRef.current) {
+          // Set a premium, colorful prompt prefix (⚛ Antimatter /workspace ❯) and enable ls colors
+          const initCmd = 'export PS1="\\[\\e[1;35m\\]⚛ Antimatter \\[\\e[1;36m\\]\\w \\[\\e[1;30m\\]❯ \\[\\e[0m\\]" && alias ls="ls --color=auto" && clear\n';
+          sendCmdFn(initCmd);
+
+          setTimeout(() => {
+            if (isDisposed) return;
+            term.write("\x1b[2J\x1b[H"); // Clear screen and home cursor
+            term.writeln("\x1b[1;35m    ___          __  _ __  ___      __  __           \x1b[0m")
+            term.writeln("\x1b[1;34m   /   |  ____  / /_(_)  |/  /___ _/ /_/ /____  _____\x1b[0m")
+            term.writeln("\x1b[1;36m  / /| | / __ \\/ __/ / /|_/ / __ `/ __/ __/ _ \\/ ___/\x1b[0m")
+            term.writeln("\x1b[1;34m / ___ |/ / / / /_/ / /  / / /_/ / /_/ /_/  __/ /    \x1b[0m")
+            term.writeln("\x1b[1;35m/_/  |_/_/ /_/\\__/_/_/  /_/\\__,_/\\__/\\__/\\___/_/     \x1b[0m")
+            term.writeln("")
+            term.writeln("\x1b[90m  ── Isolated Developer Workspace Ready ──\x1b[0m")
+            term.writeln("\x1b[32m  ✔ Connected to environment sandbox securely\x1b[0m")
+            term.writeln("\x1b[36m  ⚡ Type commands below to execute them\x1b[0m\r\n")
+          }, 120);
+          isFirstConnectRef.current = false;
+        } else {
+          term.writeln("\r\n\x1b[1;32m✔ Reconnected to session.\x1b[0m\r\n")
         }
 
         // If this terminal is currently active, register its sendCommand handler
@@ -131,13 +153,13 @@ export default function Terminal({ terminalId }) {
       ws.onclose = () => {
         if (pingInterval) clearInterval(pingInterval)
         if (!isDisposed) {
-          term.writeln("\r\n\x1b[33mDisconnected. Retrying connection...\x1b[0m")
+          term.writeln("\r\n\x1b[1;33m⚠️ Connection lost. Retrying in 3s...\x1b[0m")
           reconnectTimeout = setTimeout(connectSocket, 3000)
         }
       }
 
       ws.onerror = () => {
-        term.writeln("\r\n\x1b[31mConnection error.\x1b[0m")
+        term.writeln("\r\n\x1b[1;31m❌ Connection error.\x1b[0m")
       }
     }
 

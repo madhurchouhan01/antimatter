@@ -302,7 +302,7 @@ export default function SettingsModal({ onClose }) {
       {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div
-          className="w-full max-w-xl max-h-[85vh] flex flex-col pointer-events-auto rounded-3xl border border-white/[0.08] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.8)] overflow-hidden transition-all duration-300"
+          className="w-full max-w-xl h-[620px] max-h-[85vh] flex flex-col pointer-events-auto rounded-3xl border border-white/[0.08] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.8)] overflow-hidden transition-all duration-300"
           style={{
             background: "linear-gradient(150deg, rgba(22, 24, 38, 0.99) 0%, rgba(12, 13, 20, 0.99) 100%)",
             backdropFilter: "blur(24px)",
@@ -375,7 +375,7 @@ export default function SettingsModal({ onClose }) {
                         <button
                           key={key}
                           onClick={() => handleProviderChange(key)}
-                          className={`flex flex-col items-center gap-2 p-3.5 rounded-2xl border transition-all duration-300 ease-out text-center cursor-pointer
+                          className={`flex flex-col items-center gap-2 p-4 rounded-2xl border transition-all duration-300 ease-out text-center cursor-pointer
                             ${isActive
                               ? `bg-gradient-to-br ${p.gradient} ${p.border} shadow-[0_8px_20px_-4px_${p.color}25] scale-[1.03] -translate-y-0.5`
                               : "border-white/[0.05] bg-white/[0.01] hover:bg-white/[0.03] hover:border-white/[0.15] hover:scale-[1.03] hover:-translate-y-0.5 active:scale-[0.97]"
@@ -410,7 +410,7 @@ export default function SettingsModal({ onClose }) {
                         <button
                           key={key}
                           onClick={() => handleProviderChange(key)}
-                          className={`flex flex-col items-center gap-2 p-3.5 rounded-2xl border transition-all duration-300 ease-out text-center cursor-pointer
+                          className={`flex flex-col items-center gap-2 p-4 rounded-2xl border transition-all duration-300 ease-out text-center cursor-pointer
                             ${isActive
                               ? `bg-gradient-to-br ${p.gradient} ${p.border} shadow-[0_8px_20px_-4px_${p.color}25] scale-[1.03] -translate-y-0.5`
                               : "border-white/[0.05] bg-white/[0.01] hover:bg-white/[0.03] hover:border-white/[0.15] hover:scale-[1.03] hover:-translate-y-0.5 active:scale-[0.97]"
@@ -442,7 +442,7 @@ export default function SettingsModal({ onClose }) {
                     return (
                       <button
                         onClick={() => handleProviderChange("ollama")}
-                        className={`w-full flex items-center gap-3.5 px-4.5 py-3.5 rounded-2xl border transition-all duration-300 ease-out text-left cursor-pointer
+                        className={`w-full flex items-center gap-3 px-5 py-3 rounded-2xl border transition-all duration-300 ease-out text-left cursor-pointer
                           ${isActive
                             ? `bg-gradient-to-br ${p.gradient} ${p.border} shadow-[0_8px_20px_-4px_${p.color}25] scale-[1.01]`
                             : "border-white/[0.05] bg-white/[0.01] hover:bg-white/[0.03] hover:border-white/[0.15] hover:scale-[1.01]"
@@ -474,7 +474,7 @@ export default function SettingsModal({ onClose }) {
                   <p className="text-[9px] font-bold text-white/30 uppercase tracking-widest mb-2.5 flex items-center gap-1.5">
                     ℹ️ Provider Description
                   </p>
-                  <div className={`px-4 py-3.5 rounded-2xl border text-[11px] leading-relaxed text-white/70 bg-white/[0.01] border-white/[0.05] shadow-inner`}>
+                  <div className={`px-4 py-3 rounded-2xl border text-[11px] leading-relaxed text-white/70 bg-white/[0.01] border-white/[0.05] shadow-inner`}>
                     <div className="flex items-center gap-2 mb-1.5">
                       <meta.icon size={15} style={{ color: meta.color }} />
                       <span className="font-bold text-white text-[12px]">{meta.label}</span>
