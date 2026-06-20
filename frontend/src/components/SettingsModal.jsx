@@ -161,6 +161,39 @@ export default function SettingsModal({ onClose }) {
   const [ollamaError,      setOllamaError]      = useState(null) // error message string
 
   // Memories state
+  const DUMMY_MEMORIES = [
+    {
+      id: "__demo_1",
+      task_description: "Set up Python virtual environment and install dependencies",
+      generalizable_lesson: "Always check if a venv is active before running pip. Use `python -m venv .venv && source .venv/bin/activate` to isolate dependencies.",
+      what_worked: "Creating a fresh `.venv` inside the project root and adding it to `.gitignore`",
+      what_failed_first: "Installing packages globally caused version conflicts with system Python",
+      retrieval_count: 7,
+      created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+      __isDummy: true,
+    },
+    {
+      id: "__demo_2",
+      task_description: "Fix CORS errors when calling FastAPI backend from the React frontend",
+      generalizable_lesson: "FastAPI requires explicit CORS middleware. Add `CORSMiddleware` with `allow_origins=[\"*\"]` (or specific origins) during development, then restrict in production.",
+      what_worked: "Adding `app.add_middleware(CORSMiddleware, ...)` before any route definitions",
+      what_failed_first: "Setting headers in the Axios interceptor alone did not bypass the browser CORS check",
+      retrieval_count: 12,
+      created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+      __isDummy: true,
+    },
+    {
+      id: "__demo_3",
+      task_description: "Implement WebSocket heartbeat to prevent idle terminal disconnects",
+      generalizable_lesson: "Browsers and proxies kill idle WebSocket connections after ~60 s. Send a lightweight JSON ping every 20–30 s from the client side to keep the connection alive.",
+      what_worked: "A `setInterval` sending `{type: 'ping'}` every 20 s; the backend ignores it gracefully",
+      what_failed_first: "Relying on the OS TCP keep-alive was insufficient inside the browser sandbox",
+      retrieval_count: 4,
+      created_at: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
+      __isDummy: true,
+    },
+  ]
+
   const [memories, setMemories]       = useState([])
   const [memLoading, setMemLoading]   = useState(false)
   const [deletingId, setDeletingId]   = useState(null)
@@ -209,13 +242,21 @@ export default function SettingsModal({ onClose }) {
 
   // Fetch memories when Memories tab is opened
   useEffect(() => {
-    if (activeTab === "memories" && activeProject?.id) {
-      setMemLoading(true)
-      memoriesApi.list(activeProject.id)
-        .then(res => setMemories(res.data.items || []))
-        .catch(() => setMemories([]))
-        .finally(() => setMemLoading(false))
+    if (activeTab === "memories") {
+      if (activeProject?.id) {
+        setMemLoading(true)
+        memoriesApi.list(activeProject.id)
+          .then(res => {
+            const real = res.data.items || []
+            setMemories(real.length > 0 ? real : DUMMY_MEMORIES)
+          })
+          .catch(() => setMemories(DUMMY_MEMORIES))
+          .finally(() => setMemLoading(false))
+      } else {
+        setMemories(DUMMY_MEMORIES)
+      }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, activeProject?.id])
 
   // When provider changes, switch model to provider's default
@@ -302,7 +343,7 @@ export default function SettingsModal({ onClose }) {
       {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div
-          className="w-full max-w-xl h-[620px] max-h-[85vh] flex flex-col pointer-events-auto rounded-3xl border border-white/[0.08] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.8)] overflow-hidden transition-all duration-300"
+          className="w-full max-w-xl max-h-[85vh] flex flex-col pointer-events-auto rounded-3xl border border-white/[0.08] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.8)] overflow-hidden transition-all duration-300"
           style={{
             background: "linear-gradient(150deg, rgba(22, 24, 38, 0.99) 0%, rgba(12, 13, 20, 0.99) 100%)",
             backdropFilter: "blur(24px)",
@@ -351,9 +392,9 @@ export default function SettingsModal({ onClose }) {
           </div>
 
           {/* ── Tab Panels ── */}
-          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+          <div className="flex-1 min-h-0 flex flex-col overflow-hidden" style={{ minHeight: 0 }}>
           {activeTab === "provider" ? (
-            <div className="flex-1 p-6 flex flex-col gap-6 overflow-y-auto">
+            <div className="flex-1 p-6 flex flex-col gap-6 overflow-y-auto" style={{ minHeight: 0 }}>
 
               {/* ── Provider Selection ── */}
               <div className="flex flex-col gap-4">
@@ -757,7 +798,7 @@ export default function SettingsModal({ onClose }) {
             </div>
           ) : (
             /* ── Memories Tab ── */
-            <div className="flex-1 p-6 flex flex-col gap-4 overflow-y-auto">
+            <div className="flex-1 p-6 flex flex-col gap-4 overflow-y-auto" style={{ minHeight: 0 }}>
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-[13px] font-semibold text-white">Episodic Memories</p>
@@ -786,6 +827,13 @@ export default function SettingsModal({ onClose }) {
                 </div>
               ) : (
                 <div className="flex flex-col gap-3">
+                  {/* Demo badge when showing placeholder memories */}
+                  {/* {memories.some(m => m.__isDummy) && (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-indigo-500/5 border border-indigo-500/20 text-indigo-300/70 text-[11px]">
+                      <Brain size={11} className="shrink-0" />
+                      Sample memories shown. Real memories appear automatically after agent sessions.
+                    </div>
+                  )} */}
                   {memories.map((mem) => (
                     <div
                       key={mem.id}
@@ -807,10 +855,14 @@ export default function SettingsModal({ onClose }) {
                           </div>
                         </div>
                         <button
-                          onClick={() => handleDeleteMemory(mem.id)}
-                          disabled={deletingId === mem.id}
-                          className="shrink-0 p-1.5 rounded-lg text-white/30 hover:text-red-400 hover:bg-red-500/10 transition-colors opacity-0 group-hover:opacity-100 cursor-pointer"
-                          title="Delete memory"
+                          onClick={() => !mem.__isDummy && handleDeleteMemory(mem.id)}
+                          disabled={deletingId === mem.id || mem.__isDummy}
+                          className={`shrink-0 p-1.5 rounded-lg transition-colors opacity-0 group-hover:opacity-100 cursor-pointer ${
+                            mem.__isDummy
+                              ? "text-white/10 cursor-default"
+                              : "text-white/30 hover:text-red-400 hover:bg-red-500/10"
+                          }`}
+                          title={mem.__isDummy ? "Sample memory" : "Delete memory"}
                         >
                           {deletingId === mem.id
                             ? <Loader2 size={13} className="animate-spin" />

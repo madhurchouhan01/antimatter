@@ -1,7 +1,8 @@
 import { useEffect, useState, useRef } from "react"
 import {
   ChevronRight, ChevronDown, File, Folder, Upload, Trash2, RefreshCw, FolderOpen,
-  FileCode, FileText, Settings, AlertTriangle, FileSpreadsheet, Terminal
+  FileCode, FileText, Settings, AlertTriangle, FileSpreadsheet, Terminal,
+  FilePlus, FolderPlus, Check, X
 } from "lucide-react"
 import { filesApi } from "../lib/api"
 import { useEditorStore } from "../stores/editorStore"
@@ -88,9 +89,78 @@ function getFileIcon(filename) {
   return FILE_ICONS[ext] || <File size={14} className="text-editor-muted shrink-0" />
 }
 
+// Inline input for creating a new file or folder inside a directory node
+function InlineCreator({ depth, type, parentPath, projectId, onDone, onRefresh }) {
+  const [name, setName] = useState("")
+  const inputRef = useRef(null)
+
+  useEffect(() => {
+    inputRef.current?.focus()
+  }, [])
+
+  const handleConfirm = async () => {
+    const trimmed = name.trim()
+    if (!trimmed) { onDone(); return }
+
+    const fullPath = parentPath ? `${parentPath}/${trimmed}` : trimmed
+
+    try {
+      if (type === "file") {
+        await filesApi.write(projectId, fullPath, "")
+      } else {
+        // Create a .gitkeep to materialise the directory
+        await filesApi.write(projectId, `${fullPath}/.gitkeep`, "")
+      }
+      onRefresh()
+    } catch (err) {
+      console.error("Create failed", err)
+    }
+    onDone()
+  }
+
+  const handleKey = (e) => {
+    if (e.key === "Enter") handleConfirm()
+    if (e.key === "Escape") onDone()
+  }
+
+  return (
+    <div
+      className="flex items-center gap-1.5 px-2 py-0.5"
+      style={{ paddingLeft: `${depth * 12 + 8}px` }}
+    >
+      {type === "folder"
+        ? <Folder size={13} className="text-yellow-400 shrink-0" />
+        : <File size={13} className="text-editor-muted shrink-0" />}
+      <input
+        ref={inputRef}
+        value={name}
+        onChange={e => setName(e.target.value)}
+        onKeyDown={handleKey}
+        placeholder={type === "folder" ? "folder-name" : "filename.ext"}
+        className="flex-1 min-w-0 bg-editor-highlight/80 border border-editor-accent/40 text-white text-[12px] rounded px-2 py-0.5 outline-none placeholder:text-white/30"
+      />
+      <button
+        onClick={handleConfirm}
+        className="shrink-0 p-0.5 rounded text-emerald-400 hover:bg-emerald-500/20 transition-colors"
+        title="Confirm"
+      >
+        <Check size={12} />
+      </button>
+      <button
+        onClick={onDone}
+        className="shrink-0 p-0.5 rounded text-white/40 hover:bg-white/10 transition-colors"
+        title="Cancel"
+      >
+        <X size={12} />
+      </button>
+    </div>
+  )
+}
+
 function TreeNode({ node, projectId, depth = 0, onRefresh }) {
-  const [open, setOpen]       = useState(false)
-  const [children, setChildren] = useState([])
+  const [open, setOpen]           = useState(false)
+  const [children, setChildren]   = useState([])
+  const [creating, setCreating]   = useState(null)   // null | "file" | "folder"
   const openFile = useEditorStore((s) => s.openFile)
 
   const handleClick = async () => {
@@ -122,6 +192,20 @@ function TreeNode({ node, projectId, depth = 0, onRefresh }) {
     }
   }
 
+  const startCreate = (e, type) => {
+    e.stopPropagation()
+    // Ensure folder is open so the inline input shows inside it
+    if (!open) {
+      filesApi.list(projectId, node.path).then(res => {
+        setChildren(res.data)
+        setOpen(true)
+      })
+    } else {
+      setOpen(true)
+    }
+    setCreating(type)
+  }
+
   return (
     <div>
       <div
@@ -138,22 +222,60 @@ function TreeNode({ node, projectId, depth = 0, onRefresh }) {
             : getFileIcon(node.name)}
           <span className="truncate">{node.name}</span>
         </div>
-        <Trash2
-          size={14}
-          className="text-editor-muted hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity duration-150 shrink-0 ml-2 animate-fade-in"
-          onClick={handleDelete}
-          title={`Delete ${node.name}`}
-        />
+
+        {/* Action buttons — visible on hover */}
+        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+          {node.is_dir && (
+            <>
+              <button
+                onClick={(e) => startCreate(e, "file")}
+                className="p-1 rounded text-editor-muted hover:text-editor-accent hover:bg-editor-accent/10 transition-colors"
+                title="New file here"
+              >
+                <FilePlus size={12} />
+              </button>
+              <button
+                onClick={(e) => startCreate(e, "folder")}
+                className="p-1 rounded text-editor-muted hover:text-yellow-400 hover:bg-yellow-400/10 transition-colors"
+                title="New folder here"
+              >
+                <FolderPlus size={12} />
+              </button>
+            </>
+          )}
+          <button
+            onClick={handleDelete}
+            className="p-1 rounded text-editor-muted hover:text-red-500 hover:bg-red-500/10 transition-colors"
+            title={`Delete ${node.name}`}
+          >
+            <Trash2 size={12} />
+          </button>
+        </div>
       </div>
-      {open && children.map((child) => (
-        <TreeNode
-          key={child.path}
-          node={child}
-          projectId={projectId}
-          depth={depth + 1}
-          onRefresh={handleRefresh}
-        />
-      ))}
+
+      {open && (
+        <>
+          {children.map((child) => (
+            <TreeNode
+              key={child.path}
+              node={child}
+              projectId={projectId}
+              depth={depth + 1}
+              onRefresh={handleRefresh}
+            />
+          ))}
+          {creating && (
+            <InlineCreator
+              depth={depth + 1}
+              type={creating}
+              parentPath={node.path}
+              projectId={projectId}
+              onDone={() => setCreating(null)}
+              onRefresh={handleRefresh}
+            />
+          )}
+        </>
+      )}
     </div>
   )
 }
@@ -161,11 +283,12 @@ function TreeNode({ node, projectId, depth = 0, onRefresh }) {
 export default function FileTree() {
   const project = useProjectStore((s) => s.activeProject)
   const { dirtyPaths, clearDirty, syncing } = useFileTreeStore()
-  const [roots, setRoots]   = useState([])
+  const [roots, setRoots]     = useState([])
   const [loading, setLoading] = useState(false)
-  const fileInputRef = useRef(null)
+  const [rootCreating, setRootCreating] = useState(null) // null | "file" | "folder"
+  const fileInputRef   = useRef(null)
   const folderInputRef = useRef(null)
-  
+
   const refreshRoots = async () => {
     if (!project) return
     setLoading(true)
@@ -218,7 +341,6 @@ export default function FileTree() {
     const files = e.target.files
     if (!files || !project) return
     try {
-      // Upload each file with its folder structure
       for (let i = 0; i < files.length; i++) {
         const file = files[i]
         const relativePath = file.webkitRelativePath || file.name
@@ -255,6 +377,20 @@ export default function FileTree() {
             onClick={refreshRoots}
             title="Refresh file tree"
           />
+          {/* New file at root */}
+          <FilePlus
+            size={14}
+            className="text-editor-muted hover:text-editor-accent cursor-pointer transition-colors"
+            onClick={() => setRootCreating("file")}
+            title="New file at root"
+          />
+          {/* New folder at root */}
+          <FolderPlus
+            size={14}
+            className="text-editor-muted hover:text-yellow-400 cursor-pointer transition-colors"
+            onClick={() => setRootCreating("folder")}
+            title="New folder at root"
+          />
           <FolderOpen
             size={14}
             className="text-editor-muted hover:text-editor-text cursor-pointer"
@@ -284,6 +420,7 @@ export default function FileTree() {
         webkitdirectory=""
         mozdirectory=""
       />
+
       {roots.map((node) => (
         <TreeNode
           key={node.path}
@@ -292,6 +429,18 @@ export default function FileTree() {
           onRefresh={refreshRoots}
         />
       ))}
+
+      {/* Inline creator at root level */}
+      {rootCreating && (
+        <InlineCreator
+          depth={0}
+          type={rootCreating}
+          parentPath=""
+          projectId={project.id}
+          onDone={() => setRootCreating(null)}
+          onRefresh={refreshRoots}
+        />
+      )}
     </div>
   )
 }
