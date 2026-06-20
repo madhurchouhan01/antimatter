@@ -132,7 +132,7 @@ export const useChatStore = create(
         }),
 
       setConversationId: (id) => set({ conversationId: id }),
-      clearChat: () => set({ messages: [], conversationId: null, streamBuffer: "", isConnected: false, input: "", currentRoute: null }),
+      clearChat: () => set({ messages: [], conversationId: null, streamBuffer: "", input: "", currentRoute: null }),
 
       fetchConversations: async (projectId) => {
         if (!projectId) return

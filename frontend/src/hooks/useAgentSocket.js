@@ -56,7 +56,10 @@ export function useAgentSocket(projectId) {
 
   const connect = useCallback(() => {
     if (!projectId) return                                        // no project yet
-    if (globalWs?.readyState === WebSocket.OPEN) return
+    if (globalWs?.readyState === WebSocket.OPEN) {
+      setConnected(true)
+      return
+    }
     if (globalWs?.readyState === WebSocket.CONNECTING) return
 
     const url = `ws://127.0.0.1:1842/api/agent/ws/${projectId}?token=${token}`
