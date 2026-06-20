@@ -98,23 +98,6 @@ export default function Terminal({ terminalId }) {
         }
 
         if (isFirstConnectRef.current) {
-          // Set a premium, colorful prompt prefix (⚛ Antimatter /workspace ❯) and enable ls colors
-          const initCmd = 'export PS1="\\[\\e[1;35m\\]⚡ Antimatter \\[\\e[1;36m\\]\\w \\[\\e[1;30m\\]❯ \\[\\e[0m\\]" && alias ls="ls --color=auto" && clear\n';
-          sendCmdFn(initCmd);
-
-          setTimeout(() => {
-            if (isDisposed) return;
-            term.write("\x1b[2J\x1b[H"); // Clear screen and home cursor
-            term.writeln("\x1b[1;35m    ___          __  _ __  ___      __  __           \x1b[0m")
-            term.writeln("\x1b[1;34m   /   |  ____  / /_(_)  |/  /___ _/ /_/ /____  _____\x1b[0m")
-            term.writeln("\x1b[1;36m  / /| | / __ \\/ __/ / /|_/ / __ `/ __/ __/ _ \\/ ___/\x1b[0m")
-            term.writeln("\x1b[1;34m / ___ |/ / / / /_/ / /  / / /_/ / /_/ /_/  __/ /    \x1b[0m")
-            term.writeln("\x1b[1;35m/_/  |_/_/ /_/\\__/_/_/  /_/\\__,_/\\__/\\__/\\___/_/     \x1b[0m")
-            term.writeln("")
-            term.writeln("\x1b[90m  ── Isolated Developer Workspace Ready ──\x1b[0m")
-            term.writeln("\x1b[32m  ✔ Connected to environment sandbox securely\x1b[0m")
-            term.writeln("\x1b[36m  ⚡ Type commands below to execute them\x1b[0m\r\n")
-          }, 120);
           isFirstConnectRef.current = false;
         } else {
           term.writeln("\r\n\x1b[1;32m✔ Reconnected to session.\x1b[0m\r\n")
