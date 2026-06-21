@@ -1,5 +1,10 @@
-import { useEffect, useRef, useState } from "react"
-import { Send, Wrench, Bot, User, AlertCircle, Sparkles, Info, Zap, PlusSquare, RefreshCw, Settings, Globe, History, Edit2, Trash2, Check, X, Search, Coins } from "lucide-react"
+import { useEffect, useRef, useState, useCallback } from "react"
+import {
+  Send, Wrench, Bot, User, AlertCircle, Sparkles, Info, Zap, PlusSquare, RefreshCw,
+  Settings, Globe, History, Edit2, Trash2, Check, X, Search, Coins,
+  Brain, Database, Cpu, FileText, ChevronDown, ChevronUp, Loader2, Clock,
+  Terminal as TermIcon, CheckCircle2, Activity
+} from "lucide-react"
 import { useChatStore } from "../stores/chatStore"
 import { useProjectStore } from "../stores/projectStore"
 import { useSettingsStore } from "../stores/settingsStore"
@@ -42,7 +47,7 @@ const QUICK_ACTIONS = [
 ]
 
 // ── Message bubble ────────────────────────────────────────────────────────────
-function MessageBubble({ msg, onRetry }) {
+function MessageBubble({ msg, onRetry, thoughtProcess }) {
   // Activity log card (agent tool trace)
   if (msg.role === "activity") {
     return <ActivityDropdown entries={msg.entries} isLive={false} />
@@ -199,42 +204,243 @@ function MessageBubble({ msg, onRetry }) {
   }
 
   return (
-    <div className={`flex items-start gap-3 px-3.5 py-2.5 rounded-2xl max-w-[92%] ${styles[msg.role] ?? styles.assistant} ${isUser ? "rounded-tr-sm" : "rounded-tl-sm"} animate-in fade-in duration-200`}>
-      {!isTool && (
-        <div className={`mt-0.5 shrink-0 flex items-center justify-center w-6 h-6 rounded-full ${isUser ? "bg-white/20" : "bg-editor-accent/10"}`}>
-          {icons[msg.role]}
-        </div>
+    <div className={`flex flex-col max-w-[92%] ${msg.role === "user" ? "self-end" : "self-start"}`}>
+      {/* Thought process collapsible (assistant only, if prior activity exists) */}
+      {msg.role === "assistant" && thoughtProcess && (
+        <ThoughtProcess entries={thoughtProcess} />
       )}
-      {isTool && <div className="mt-0.5 shrink-0">{icons[msg.role]}</div>}
-      <div className="flex-1 min-w-0 text-[13px] leading-relaxed">
-        <Markdown text={msg.content} />
+      <div className={`flex items-start gap-3 px-3.5 py-2.5 rounded-2xl ${styles[msg.role] ?? styles.assistant} ${msg.role === "user" ? "rounded-tr-sm" : "rounded-tl-sm"} animate-in fade-in duration-200`}>
+        {!isTool && (
+          <div className={`mt-0.5 shrink-0 flex items-center justify-center w-6 h-6 rounded-full ${msg.role === "user" ? "bg-white/20" : "bg-editor-accent/10"}`}>
+            {icons[msg.role]}
+          </div>
+        )}
+        {isTool && <div className="mt-0.5 shrink-0">{icons[msg.role]}</div>}
+        <div className="flex-1 min-w-0 text-[13px] leading-relaxed">
+          <Markdown text={msg.content} />
+        </div>
       </div>
     </div>
   )
 }
 
-// ── Session token counter (shows cumulative tokens from all activity logs) ──
-function SessionTokenBadge({ messages }) {
+// ── Animated Token Ticker ─────────────────────────────────────────────────────
+function AnimatedTokenTicker({ messages }) {
   const total = messages.reduce((acc, msg) => {
     if (msg.role !== "activity" || !msg.entries) return acc
     return acc + msg.entries.reduce((a2, e) => {
-      if (e.type === "lifecycle" && e.meta?.tokens?.total_tokens) {
-        return a2 + e.meta.tokens.total_tokens
-      }
+      if (e.type === "lifecycle" && e.meta?.tokens?.total_tokens) return a2 + e.meta.tokens.total_tokens
       return a2
     }, 0)
   }, 0)
 
+  const [displayed, setDisplayed] = useState(total)
+  const prevRef = useRef(total)
+
+  useEffect(() => {
+    if (total === prevRef.current) return
+    const start  = prevRef.current
+    const end    = total
+    const dur    = 600
+    const t0     = performance.now()
+    prevRef.current = total
+    const tick = (now) => {
+      const pct  = Math.min((now - t0) / dur, 1)
+      // ease-out cubic
+      const ease = 1 - (1 - pct) ** 3
+      setDisplayed(Math.round(start + (end - start) * ease))
+      if (pct < 1) requestAnimationFrame(tick)
+    }
+    requestAnimationFrame(tick)
+  }, [total])
+
   if (!total) return null
   return (
     <span
-      className="flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-full"
-      style={{ background: "#7aa2f710", color: "#7aa2f780", border: "1px solid #7aa2f720" }}
+      className="flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-full transition-all"
+      style={{ background: "#ff9e6410", color: "#ff9e64aa", border: "1px solid #ff9e6425" }}
       title="Total tokens used this session"
     >
       <Coins size={9} />
-      {total.toLocaleString()}
+      {displayed.toLocaleString()}
     </span>
+  )
+}
+
+// ── Thinking Indicator with live tool context ─────────────────────────────────
+const THINKING_STEPS = [
+  { kind: "classify",    icon: Brain,    color: "#bb9af7", label: "Understanding query" },
+  { kind: "context",     icon: Database, color: "#7dcfff", label: "Building context" },
+  { kind: "llm_call",   icon: Cpu,      color: "#7aa2f7", label: "Streaming response" },
+  { kind: "finalize",   icon: CheckCircle2, color: "#9ece6a", label: "Finalizing" },
+  { kind: "tool",       icon: TermIcon, color: "#bb9af7", label: "Running tool" },
+]
+
+function ThinkingIndicator({ entries, isActive }) {
+  if (!isActive) return null
+
+  // Find the most recent running entry
+  const running = [...entries].reverse().find(e => e.status === "running")
+  let Icon  = Brain
+  let color = "#7aa2f7"
+  let label = "Agent thinking"
+
+  if (running) {
+    if (running.type === "lifecycle") {
+      const meta = THINKING_STEPS.find(s => s.kind === running.kind)
+      if (meta) { Icon = meta.icon; color = meta.color; label = running.label || meta.label }
+    } else if (running.type === "tool") {
+      Icon  = TermIcon
+      color = "#bb9af7"
+      const toolName = running.tool?.replace(/_/g, " ") ?? "Tool"
+      label = toolName.charAt(0).toUpperCase() + toolName.slice(1)
+    }
+  }
+
+  return (
+    <div
+      className="flex items-center gap-3 self-start px-4 py-3 rounded-2xl rounded-tl-sm max-w-[92%]
+        border border-editor-border/40 shadow-sm animate-in fade-in duration-300"
+      style={{
+        background: `linear-gradient(135deg, ${color}08 0%, rgba(18,19,28,0.9) 100%)`,
+        borderColor: color + "25",
+      }}
+    >
+      {/* Animated icon */}
+      <div
+        className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center"
+        style={{ background: color + "15", border: `1px solid ${color}30` }}
+      >
+        <Loader2 size={13} className="animate-spin" style={{ color }} />
+      </div>
+
+      <div className="flex flex-col gap-0.5">
+        {/* Step label */}
+        <span
+          className="text-[12px] font-semibold transition-all duration-500"
+          style={{ color }}
+        >
+          {label}
+        </span>
+        {/* Animated dots */}
+        <div className="flex items-center gap-1">
+          {[0, 1, 2].map(i => (
+            <span
+              key={i}
+              className="w-1 h-1 rounded-full animate-pulse"
+              style={{ background: color + "80", animationDelay: `${i * 180}ms` }}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Token Budget Bar ──────────────────────────────────────────────────────────
+const MODEL_CTX_MAP = {
+  "gpt-4o": 128_000, "gpt-4-turbo": 128_000, "gpt-3.5-turbo": 16_385,
+  "claude-3-5-sonnet": 200_000, "claude-3-opus": 200_000, "claude-sonnet-4-5": 200_000,
+  "gemini-1.5-pro": 1_048_576, "gemini-1.5-flash": 1_048_576,
+  "llama-3.3-70b-versatile": 128_000, "llama-3.1-8b-instant": 128_000,
+  "mixtral-8x7b-32768": 32_768,
+  default: 128_000,
+}
+function getCtx(model) {
+  if (!model) return MODEL_CTX_MAP.default
+  for (const [k, v] of Object.entries(MODEL_CTX_MAP)) {
+    if (model.toLowerCase().includes(k)) return v
+  }
+  return MODEL_CTX_MAP.default
+}
+
+function TokenBudgetBar({ messages, model }) {
+  const totalInput = messages.reduce((acc, msg) => {
+    if (msg.role !== "activity" || !msg.entries) return acc
+    return acc + msg.entries.reduce((a2, e) => {
+      if (e.type === "lifecycle" && e.meta?.tokens?.input_tokens) return a2 + e.meta.tokens.input_tokens
+      return a2
+    }, 0)
+  }, 0)
+  if (!totalInput) return null
+  const ctx  = getCtx(model)
+  const pct  = Math.min(100, (totalInput / ctx) * 100)
+  const color = pct < 60 ? "#9ece6a" : pct < 85 ? "#ff9e64" : "#f7768e"
+  return (
+    <div className="h-[3px] w-full bg-editor-highlight/30 shrink-0" title={`Context: ${pct.toFixed(1)}% of ${(ctx/1000).toFixed(0)}k tokens used`}>
+      <div
+        className="h-full transition-all duration-700"
+        style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${color}60, ${color})` }}
+      />
+    </div>
+  )
+}
+
+// ── Thought Process Collapsible ───────────────────────────────────────────────
+function ThoughtProcess({ entries }) {
+  const [open, setOpen] = useState(false)
+  if (!entries || entries.length === 0) return null
+
+  const toolCalls = entries.filter(e => e.type === "tool")
+  const lifecycle = entries.filter(e => e.type === "lifecycle")
+  const totalTokens = lifecycle.reduce((acc, e) => {
+    return acc + (e.meta?.tokens?.total_tokens ?? 0)
+  }, 0)
+  const totalMs = entries.reduce((acc, e) => acc + (e.durationMs ?? 0), 0)
+
+  return (
+    <div className="mb-1">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider
+          text-editor-muted/60 hover:text-editor-muted/90 transition-colors px-1 py-0.5 rounded"
+      >
+        <Activity size={10} />
+        <span>Thought process</span>
+        {toolCalls.length > 0 && (
+          <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-editor-highlight/40 text-editor-muted/70">
+            {toolCalls.length} tool{toolCalls.length !== 1 ? "s" : ""}
+          </span>
+        )}
+        {totalTokens > 0 && (
+          <span className="flex items-center gap-0.5 text-[9px] font-mono px-1.5 py-0.5 rounded bg-editor-highlight/40 text-editor-muted/70">
+            <Coins size={8} />{totalTokens.toLocaleString()}
+          </span>
+        )}
+        {totalMs > 0 && (
+          <span className="flex items-center gap-0.5 text-[9px] font-mono px-1.5 py-0.5 rounded bg-editor-highlight/40 text-editor-muted/70">
+            <Clock size={8} />{totalMs < 1000 ? `${totalMs}ms` : `${(totalMs/1000).toFixed(1)}s`}
+          </span>
+        )}
+        <span className="ml-auto">
+          {open ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+        </span>
+      </button>
+      {open && (
+        <div className="mt-1 pl-3 border-l border-editor-border/30 flex flex-col gap-1 animate-in fade-in duration-150">
+          {entries.map((e, i) => {
+            const isRunning = e.status === "running"
+            const isDone    = e.status === "done"
+            const isError   = e.status === "error"
+            const label = e.type === "lifecycle"
+              ? (e.label || e.kind)
+              : (e.tool?.replace(/_/g, " ") ?? "Tool")
+            const color = isError ? "#f7768e" : isDone ? "#9ece6a80" : "#7aa2f780"
+            return (
+              <div key={e.id || i} className="flex items-center gap-2 py-0.5">
+                <div className="w-1 h-1 rounded-full shrink-0" style={{ background: color }} />
+                <span className="text-[10px] text-editor-muted/70 truncate">{label}</span>
+                {e.durationMs != null && (
+                  <span className="ml-auto text-[9px] font-mono text-editor-muted/40 shrink-0">
+                    {e.durationMs < 1000 ? `${e.durationMs}ms` : `${(e.durationMs/1000).toFixed(1)}s`}
+                  </span>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -338,8 +544,8 @@ export default function ChatPanel() {
         </div>
         <span className="text-[13px] font-bold text-white tracking-wide uppercase ml-1">AI Assistant</span>
 
-        {/* Session token counter */}
-        <SessionTokenBadge messages={messages} />
+        {/* Animated token ticker */}
+        <AnimatedTokenTicker messages={messages} />
 
         <select
           className="ml-auto bg-editor-bg border border-editor-border text-[11px] text-editor-muted rounded px-2 py-0.5 outline-none hover:border-editor-accent/50 focus:border-editor-accent/80 transition-colors max-w-[120px] truncate cursor-pointer"
@@ -381,6 +587,9 @@ export default function ChatPanel() {
         </button>
       </div>
 
+      {/* Token Budget Bar — thin progress bar below header */}
+      <TokenBudgetBar messages={messages} model={model} />
+
       {/* Messages */}
       <div
         ref={containerRef}
@@ -396,11 +605,21 @@ export default function ChatPanel() {
           </div>
         )}
 
-        {messages.map((msg) => (
-          <MessageBubble key={msg.id} msg={msg} onRetry={handleRetry} />
-        ))}
+        {messages.map((msg, idx) => {
+          // Attach the preceding activity block as thoughtProcess for assistant messages
+          const prevMsg = idx > 0 ? messages[idx - 1] : null
+          const thoughtProcess = (msg.role === "assistant" && prevMsg?.role === "activity")
+            ? prevMsg.entries
+            : null
+          return (
+            <MessageBubble key={msg.id} msg={msg} onRetry={handleRetry} thoughtProcess={thoughtProcess} />
+          )
+        })}
 
-        {/* Live agent activity (during active run) */}
+        {/* Live thinking indicator (shown when agent active) */}
+        <ThinkingIndicator entries={entries} isActive={isActive} />
+
+        {/* Live agent activity dropdown */}
         {isActive && entries.length > 0 && (
           <ActivityDropdown entries={entries} isLive={true} />
         )}

@@ -5,6 +5,7 @@
  * All shortcuts use Ctrl (Windows/Linux) — no Cmd key mapping needed.
  *
  * Shortcut map:
+ *   Ctrl+P              — Open Command Palette
  *   Ctrl+B              — Toggle sidebar
  *   Ctrl+J              — Toggle terminal
  *   Ctrl+\              — Toggle AI chat panel
@@ -21,7 +22,8 @@
  *   Ctrl+Shift+N        — New chat
  *   Ctrl+Shift+F        — Toggle terminal fullscreen
  *   Ctrl+Shift+H        — Open shortcuts help overlay
- *   Escape              — Close shortcuts overlay
+ *   Ctrl+Shift+D        — Open Workspace Dashboard
+ *   Escape              — Close overlays
  */
 
 import { useEffect, useCallback } from "react"
@@ -44,6 +46,8 @@ export function useShortcuts({
   setSidebarTab,
   openShortcutsHelp,
   closeShortcutsHelp,
+  openCommandPalette,
+  openDashboard,
 }) {
   const project = useProjectStore((s) => s.activeProject)
 
@@ -53,7 +57,7 @@ export function useShortcuts({
       const shift = e.shiftKey
       const key   = e.key
 
-      // ── Escape: close help overlay ───────────────────────────────────
+      // ── Escape: close overlays ────────────────────────────────────────
       if (key === "Escape") {
         closeShortcutsHelp?.()
         return
@@ -62,6 +66,13 @@ export function useShortcuts({
       if (!ctrl) return
 
       switch (true) {
+
+        // ── Ctrl+P: Open Command Palette ──────────────────────────────
+        case key === "p" && !shift: {
+          e.preventDefault()
+          openCommandPalette?.()
+          break
+        }
 
         // ── Ctrl+B: Toggle sidebar ───────────────────────────────────
         case key === "b" && !shift: {
@@ -221,12 +232,19 @@ export function useShortcuts({
           break
         }
 
+        // ── Ctrl+Shift+D: Open Workspace Dashboard ────────────────────────
+        case key === "D" && shift: {
+          e.preventDefault()
+          openDashboard?.()
+          break
+        }
+
         default:
           break
       }
     },
     [toggleSidebar, toggleChat, toggleTerminal, setSidebarTab,
-     openShortcutsHelp, closeShortcutsHelp, project]
+     openShortcutsHelp, closeShortcutsHelp, openCommandPalette, openDashboard, project]
   )
 
   useEffect(() => {
@@ -238,8 +256,9 @@ export function useShortcuts({
 /** Master shortcut reference — used by ShortcutsOverlay */
 export const SHORTCUTS = [
   {
-    group: "Panels",
+    group: "Navigation",
     items: [
+      { keys: ["Ctrl", "P"],           label: "Command Palette" },
       { keys: ["Ctrl", "B"],           label: "Toggle sidebar" },
       { keys: ["Ctrl", "J"],           label: "Toggle terminal" },
       { keys: ["Ctrl", "\\"],          label: "Toggle AI chat panel" },
@@ -278,9 +297,10 @@ export const SHORTCUTS = [
     ],
   },
   {
-    group: "Help",
+    group: "Overlays & Help",
     items: [
-      { keys: ["Ctrl", "Shift", "H"],  label: "Show shortcuts" },
+      { keys: ["Ctrl", "Shift", "H"],  label: "Keyboard shortcuts" },
+      { keys: ["Ctrl", "Shift", "D"],  label: "Workspace dashboard" },
       { keys: ["Escape"],              label: "Close overlay" },
     ],
   },
