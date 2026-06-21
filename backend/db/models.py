@@ -53,6 +53,7 @@ class Message(Base):
     role: Mapped[str] = mapped_column(String(50))        # "user" | "assistant" | "tool"
     content: Mapped[str] = mapped_column(Text)
     tool_calls: Mapped[dict | None] = mapped_column(JSONB)
+    token_usage: Mapped[dict | None] = mapped_column(JSONB, nullable=True)  # {input_tokens, output_tokens, total_tokens, model}
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     conversation: Mapped["Conversation"] = relationship(back_populates="messages")
 

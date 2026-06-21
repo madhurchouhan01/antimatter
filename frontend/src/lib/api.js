@@ -46,6 +46,8 @@ export const projectsApi = {
   create: (name, description) =>
     api.post("/api/projects/", { name, description }),
   delete: (id)       => api.delete(`/api/projects/${id}`),
+  update: (id, name, description) =>
+    api.put(`/api/projects/${id}`, { name, description }),
 }
 
 // File endpoints
@@ -87,6 +89,14 @@ export const settingsApi = {
   get:       ()                           => api.get("/api/settings/"),
   save:      (provider, model, apiKey)    => api.put("/api/settings/", { provider, model, api_key: apiKey }),
   getModels: ()                           => api.get("/api/settings/models"),
+}
+
+// Episodic Memory endpoints
+export const memoriesApi = {
+  list:   (projectId, page = 1, pageSize = 100) =>
+    api.get(`/api/projects/${projectId}/memories`, { params: { page, page_size: pageSize } }),
+  delete: (projectId, memoryId) =>
+    api.delete(`/api/projects/${projectId}/memories/${memoryId}`),
 }
 
 export default api

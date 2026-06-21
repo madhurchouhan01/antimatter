@@ -23,7 +23,11 @@ class DockerPTYSession:
         def _create_and_start():
             exec_id = self.client.api.exec_create(
                 self.container.id,
-                cmd=["/bin/bash", "-i"],
+                cmd=[
+                    "/bin/bash",
+                    "-c",
+                    f"which tmux >/dev/null 2>&1 && exec tmux new-session -A -s '{self.session_id}' -c /workspace \\; set-option status off || exec /bin/bash -i"
+                ],
                 stdin=True,
                 stdout=True,
                 stderr=True,

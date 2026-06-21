@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react"
+  import { useEffect, useRef } from "react"
 import { Terminal as XTerm } from "@xterm/xterm"
 import { FitAddon } from "@xterm/addon-fit"
 import { WebLinksAddon } from "@xterm/addon-web-links"
@@ -15,6 +15,7 @@ export default function Terminal({ terminalId }) {
   const token      = useAuthStore((s) => s.token)
   const project    = useProjectStore((s) => s.activeProject)
   const activeSession = useTerminalStore((s) => s.activeSession)
+  const isFirstConnectRef = useRef(true)
 
   // Active terminal tab sendCommand synchronization
   useEffect(() => {
@@ -74,50 +75,82 @@ export default function Terminal({ terminalId }) {
     fitRef.current   = fitAddon
     registerTerminalInstance(terminalId, term)
 
-    // Connect WebSocket passing terminal_id parameter
-    const ws = new WebSocket(
-      `ws://127.0.0.1:1842/api/terminal/ws/${project.id}?token=${token}&terminal_id=${terminalId}`
-    )
-    ws.binaryType = "arraybuffer"
-    wsRef.current = ws
+    let ws = null
+    let pingInterval = null
+    let reconnectTimeout = null
+    let isDisposed = false
 
-    ws.onopen = () => {
-      term.writeln("\r\n\x1b[32mTerminal connected.\x1b[0m\r\n")
-      
-      const sendCmdFn = (cmd) => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(new TextEncoder().encode(cmd))
+    const connectSocket = () => {
+      if (isDisposed) return
+
+      // Connect WebSocket passing terminal_id parameter
+      ws = new WebSocket(
+        `ws://127.0.0.1:1842/api/terminal/ws/${project.id}?token=${token}&terminal_id=${terminalId}`
+      )
+      ws.binaryType = "arraybuffer"
+      wsRef.current = ws
+
+      ws.onopen = () => {
+        const sendCmdFn = (cmd) => {
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(new TextEncoder().encode(cmd))
+          }
+        }
+
+        if (isFirstConnectRef.current) {
+          isFirstConnectRef.current = false;
+        } else {
+          term.writeln("\r\n\x1b[1;32m✔ Reconnected to session.\x1b[0m\r\n")
+        }
+
+        // If this terminal is currently active, register its sendCommand handler
+        const currentActive = useTerminalStore.getState().activeSession
+        if (terminalId === currentActive) {
+          useTerminalStore.setState({ sendCommand: sendCmdFn })
+        }
+
+        // Flush pending commands
+        const { pendingCommands, clearPendingCommands } = useTerminalStore.getState()
+        if (pendingCommands.length > 0) {
+          pendingCommands.forEach((cmd) => {
+            sendCmdFn(cmd)
+          })
+          clearPendingCommands()
+        }
+
+        // Keep-alive heartbeat to prevent idle connection drop
+        if (pingInterval) clearInterval(pingInterval)
+        pingInterval = setInterval(() => {
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: "ping" }))
+          }
+        }, 20000)
+      }
+
+      ws.onmessage = (e) => {
+        if (e.data instanceof ArrayBuffer) {
+          term.write(new Uint8Array(e.data))
         }
       }
 
-      // If this terminal is currently active, register its sendCommand handler
-      const currentActive = useTerminalStore.getState().activeSession
-      if (terminalId === currentActive) {
-        useTerminalStore.setState({ sendCommand: sendCmdFn })
+      ws.onclose = () => {
+        if (pingInterval) clearInterval(pingInterval)
+        if (!isDisposed) {
+          term.writeln("\r\n\x1b[1;33m⚠️ Connection lost. Retrying in 3s...\x1b[0m")
+          reconnectTimeout = setTimeout(connectSocket, 3000)
+        }
       }
 
-      // Flush pending commands
-      const { pendingCommands, clearPendingCommands } = useTerminalStore.getState()
-      if (pendingCommands.length > 0) {
-        pendingCommands.forEach((cmd) => {
-          sendCmdFn(cmd)
-        })
-        clearPendingCommands()
+      ws.onerror = () => {
+        term.writeln("\r\n\x1b[1;31m❌ Connection error.\x1b[0m")
       }
     }
 
-    ws.onmessage = (e) => {
-      if (e.data instanceof ArrayBuffer) {
-        term.write(new Uint8Array(e.data))
-      }
-    }
-
-    ws.onclose = () => term.writeln("\r\n\x1b[31mDisconnected.\x1b[0m")
-    ws.onerror = () => term.writeln("\r\n\x1b[31mConnection error.\x1b[0m")
+    connectSocket()
 
     // Keystrokes → WebSocket (binary)
     term.onData((data) => {
-      if (ws.readyState === WebSocket.OPEN) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(new TextEncoder().encode(data))
       }
     })
@@ -126,7 +159,7 @@ export default function Terminal({ terminalId }) {
     const resizeObserver = new ResizeObserver(() => {
       try {
         fitAddon.fit()
-        if (ws.readyState === WebSocket.OPEN && term.cols && term.rows) {
+        if (ws && ws.readyState === WebSocket.OPEN && term.cols && term.rows) {
           ws.send(JSON.stringify({
             type: "resize",
             cols: term.cols,
@@ -140,9 +173,12 @@ export default function Terminal({ terminalId }) {
     resizeObserver.observe(termRef.current)
 
     return () => {
+      isDisposed = true
+      if (pingInterval) clearInterval(pingInterval)
+      if (reconnectTimeout) clearTimeout(reconnectTimeout)
       resizeObserver.disconnect()
       term.dispose()
-      ws.close()
+      if (ws) ws.close()
       unregisterTerminalInstance(terminalId)
       // If we are unmounting, clear sendCommand
       useTerminalStore.setState({ sendCommand: null })

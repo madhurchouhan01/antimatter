@@ -1,11 +1,13 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import {
   X, Settings, Key, ChevronDown, Eye, EyeOff, CheckCircle2,
   AlertCircle, Loader2, ExternalLink, Cpu, Sparkles, Shield,
-  Zap, Shuffle
+  Zap, Shuffle, Brain, Trash2, Copy, Check, Server, RefreshCw,
+  AlertTriangle, WifiOff
 } from "lucide-react"
 import { useSettingsStore } from "../stores/settingsStore"
-import api from "../lib/api"
+import { useProjectStore } from "../stores/projectStore"
+import api, { memoriesApi } from "../lib/api"
 
 // Custom SVG component for GitHub
 const GitHubIcon = ({ size = 16, className = "", style = {} }) => (
@@ -109,6 +111,19 @@ const PROVIDERS = {
     keyPlaceholder: "AIza...",
     defaultModel: "gemini-2.5-flash",
   },
+  ollama: {
+    label: "Ollama",
+    icon: Server,
+    color: "#22d3ee",
+    gradient: "from-cyan-500/20 to-teal-500/10",
+    border: "border-cyan-500/30",
+    description: "Local open-source models on your hardware",
+    docsUrl: "https://ollama.com/library",
+    docsLabel: "Browse Ollama Models →",
+    keyPlaceholder: "",
+    defaultModel: "qwen2.5-coder:7b",
+    isLocal: true,
+  },
 }
 
 export default function SettingsModal({ onClose }) {
@@ -122,6 +137,11 @@ export default function SettingsModal({ onClose }) {
     saveSettings,
   } = useSettingsStore()
 
+  const activeProject = useProjectStore((s) => s.activeProject)
+
+  const [activeTab, setActiveTab] = useState("provider")  // "provider" | "memories"
+
+  // Provider settings state
   const [provider, setProvider]       = useState(savedProvider)
   const [model,    setModel]          = useState(savedModel)
   const [apiKey,   setApiKey]         = useState("")
@@ -132,12 +152,112 @@ export default function SettingsModal({ onClose }) {
   const [useCustom, setUseCustom]     = useState(false)
   const [saveOk,   setSaveOk]         = useState(false)
 
+  // Ollama-specific state
+  const [ollamaBaseUrl,    setOllamaBaseUrl]    = useState("http://localhost:11434/v1")
+  const [ollamaInstalled,  setOllamaInstalled]  = useState([])   // models actually pulled
+  const [ollamaRecommended,setOllamaRecommended]= useState([])   // curated but not installed
+  const [ollamaFetching,   setOllamaFetching]   = useState(false)
+  const [ollamaReachable,  setOllamaReachable]  = useState(null) // null | true | false
+  const [ollamaError,      setOllamaError]      = useState(null) // error message string
+
+  // Memories state
+  const DUMMY_MEMORIES = [
+    {
+      id: "__demo_1",
+      task_description: "Set up Python virtual environment and install dependencies",
+      generalizable_lesson: "Always check if a venv is active before running pip. Use `python -m venv .venv && source .venv/bin/activate` to isolate dependencies.",
+      what_worked: "Creating a fresh `.venv` inside the project root and adding it to `.gitignore`",
+      what_failed_first: "Installing packages globally caused version conflicts with system Python",
+      retrieval_count: 7,
+      created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+      __isDummy: true,
+    },
+    {
+      id: "__demo_2",
+      task_description: "Fix CORS errors when calling FastAPI backend from the React frontend",
+      generalizable_lesson: "FastAPI requires explicit CORS middleware. Add `CORSMiddleware` with `allow_origins=[\"*\"]` (or specific origins) during development, then restrict in production.",
+      what_worked: "Adding `app.add_middleware(CORSMiddleware, ...)` before any route definitions",
+      what_failed_first: "Setting headers in the Axios interceptor alone did not bypass the browser CORS check",
+      retrieval_count: 12,
+      created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+      __isDummy: true,
+    },
+    {
+      id: "__demo_3",
+      task_description: "Implement WebSocket heartbeat to prevent idle terminal disconnects",
+      generalizable_lesson: "Browsers and proxies kill idle WebSocket connections after ~60 s. Send a lightweight JSON ping every 20–30 s from the client side to keep the connection alive.",
+      what_worked: "A `setInterval` sending `{type: 'ping'}` every 20 s; the backend ignores it gracefully",
+      what_failed_first: "Relying on the OS TCP keep-alive was insufficient inside the browser sandbox",
+      retrieval_count: 4,
+      created_at: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
+      __isDummy: true,
+    },
+  ]
+
+  const [memories, setMemories]       = useState([])
+  const [memLoading, setMemLoading]   = useState(false)
+  const [deletingId, setDeletingId]   = useState(null)
+  const [copiedPrompt, setCopiedPrompt] = useState(false)
+
   const meta = PROVIDERS[provider] || PROVIDERS.groq
 
   // Load provider→model catalogue from backend
   useEffect(() => {
     api.get("/api/settings/models").then(res => setProviderModels(res.data)).catch(() => {})
   }, [])
+
+  // Auto-fetch Ollama models when switching to Ollama provider
+  const fetchOllamaModels = useCallback(async (url) => {
+    setOllamaFetching(true)
+    setOllamaReachable(null)
+    setOllamaError(null)
+    try {
+      const params = url ? `?base_url=${encodeURIComponent(url)}` : ""
+      const res = await api.get(`/api/settings/ollama/models${params}`)
+      const data = res.data
+      setOllamaReachable(data.reachable)
+      setOllamaInstalled(data.installed || [])
+      setOllamaRecommended(data.recommended || [])
+      setOllamaError(data.error || null)
+      // Auto-select first installed model if current model not in installed list
+      if (data.reachable && data.installed?.length > 0 && !data.installed.includes(model)) {
+        setModel(data.installed[0])
+      }
+    } catch (err) {
+      setOllamaReachable(false)
+      setOllamaInstalled([])
+      setOllamaRecommended([])
+      setOllamaError("Failed to reach the backend. Is AntiMatter running?")
+    } finally {
+      setOllamaFetching(false)
+    }
+  }, [model])
+
+  useEffect(() => {
+    if (provider === "ollama") {
+      fetchOllamaModels(ollamaBaseUrl)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [provider])
+
+  // Fetch memories when Memories tab is opened
+  useEffect(() => {
+    if (activeTab === "memories") {
+      if (activeProject?.id) {
+        setMemLoading(true)
+        memoriesApi.list(activeProject.id)
+          .then(res => {
+            const real = res.data.items || []
+            setMemories(real.length > 0 ? real : DUMMY_MEMORIES)
+          })
+          .catch(() => setMemories(DUMMY_MEMORIES))
+          .finally(() => setMemLoading(false))
+      } else {
+        setMemories(DUMMY_MEMORIES)
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, activeProject?.id])
 
   // When provider changes, switch model to provider's default
   const handleProviderChange = (p) => {
@@ -148,6 +268,41 @@ export default function SettingsModal({ onClose }) {
     setCustomModel("")
     setApiKey("")
     setClearKey(false)
+    // Reset Ollama state
+    setOllamaReachable(null)
+    setOllamaError(null)
+    setOllamaInstalled([])
+    setOllamaRecommended([])
+  }
+
+  const handleDeleteMemory = async (memoryId) => {
+    if (!activeProject?.id) return
+    setDeletingId(memoryId)
+    try {
+      await memoriesApi.delete(activeProject.id, memoryId)
+      setMemories(prev => prev.filter(m => m.id !== memoryId))
+    } catch {}
+    setDeletingId(null)
+  }
+
+  const handleCopyAsSystemPrompt = async () => {
+    if (memories.length === 0) return
+    const prompt = [
+      "## AntiMatter Episodic Memory Context",
+      "",
+      "The following are lessons learned from past agent sessions in this project:",
+      "",
+      ...memories.map((m, i) =>
+        [`### Lesson ${i + 1}: ${m.task_description.slice(0, 80)}${m.task_description.length > 80 ? "..." : ""}`,
+         `**Lesson:** ${m.generalizable_lesson}`,
+         m.what_worked ? `**What worked:** ${m.what_worked}` : "",
+         m.what_failed_first ? `**What failed first:** ${m.what_failed_first}` : "",
+        ].filter(Boolean).join("\n")
+      ),
+    ].join("\n")
+    await navigator.clipboard.writeText(prompt)
+    setCopiedPrompt(true)
+    setTimeout(() => setCopiedPrompt(false), 2000)
   }
 
   const handleSave = async () => {
@@ -155,6 +310,13 @@ export default function SettingsModal({ onClose }) {
     if (!finalModel) return
 
     let keyPayload = undefined
+    if (provider === "ollama") {
+      // Ollama has no API key — just save URL and model
+      const ok = await saveSettings(provider, finalModel, undefined, ollamaBaseUrl)
+      if (ok) { setSaveOk(true); setTimeout(() => setSaveOk(false), 2000) }
+      return
+    }
+
     if (clearKey) {
       keyPayload = ""   // explicit empty = clear
     } else if (apiKey.trim()) {
@@ -174,216 +336,585 @@ export default function SettingsModal({ onClose }) {
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
+        className="fixed inset-0 z-50 bg-black/75 backdrop-blur-md transition-opacity duration-300"
         onClick={onClose}
       />
 
       {/* Modal */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <div
-          className="w-full max-w-xl pointer-events-auto rounded-2xl border border-editor-border/60 shadow-[0_0_80px_rgba(0,0,0,0.6)] overflow-hidden"
+          className="w-full max-w-xl max-h-[85vh] flex flex-col pointer-events-auto rounded-3xl border border-white/[0.08] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.8)] overflow-hidden transition-all duration-300"
           style={{
-            background: "linear-gradient(160deg, rgba(22,24,37,0.98) 0%, rgba(17,18,27,0.99) 100%)",
+            background: "linear-gradient(150deg, rgba(22, 24, 38, 0.99) 0%, rgba(12, 13, 20, 0.99) 100%)",
             backdropFilter: "blur(24px)",
           }}
           onClick={e => e.stopPropagation()}
         >
           {/* ── Header ── */}
-          <div className="flex items-center gap-3 px-6 py-4 border-b border-editor-border/40 bg-white/[0.02]">
-            <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-editor-accent/10 border border-editor-accent/20">
-              <Settings size={15} className="text-editor-accent" />
+          <div className="flex items-center gap-3.5 px-6 py-5 border-b border-white/[0.06] bg-white/[0.02]">
+            <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-editor-accent/10 border border-editor-accent/25">
+              <Settings size={16} className="text-editor-accent" />
             </div>
             <div>
-              <h2 className="text-[14px] font-bold text-white tracking-wide">AI Provider Settings</h2>
-              <p className="text-[11px] text-editor-muted">Configure model, provider and API key</p>
+              <h2 className="text-[15px] font-bold text-white tracking-wide">Settings</h2>
+              <p className="text-[11px] text-white/50 mt-0.5">Configure model, provider, and manage memories</p>
             </div>
             <button
               onClick={onClose}
-              className="ml-auto p-1.5 rounded-lg text-editor-muted hover:text-white hover:bg-editor-highlight transition-colors"
+              className="ml-auto p-1.5 rounded-lg text-white/40 hover:text-white hover:bg-white/[0.05] transition-all duration-200"
             >
-              <X size={15} />
+              <X size={16} />
             </button>
           </div>
 
-          <div className="p-6 flex flex-col gap-6 max-h-[75vh] overflow-y-auto scrollbar-thin">
+          {/* ── Tab Switcher ── */}
+          <div className="flex border-b border-white/[0.06] bg-white/[0.01]">
+            <button
+              onClick={() => setActiveTab("provider")}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-[12px] font-semibold tracking-wide transition-all duration-250 ${
+                activeTab === "provider"
+                  ? "text-editor-accent border-b-2 border-editor-accent bg-editor-accent/[0.02]"
+                  : "text-white/40 hover:text-white border-b-2 border-transparent"
+              }`}
+            >
+              <Cpu size={13} /> Provider Settings
+            </button>
+            <button
+              onClick={() => setActiveTab("memories")}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-[12px] font-semibold tracking-wide transition-all duration-250 ${
+                activeTab === "memories"
+                  ? "text-editor-accent border-b-2 border-editor-accent bg-editor-accent/[0.02]"
+                  : "text-white/40 hover:text-white border-b-2 border-transparent"
+              }`}
+            >
+              <Brain size={13} /> Episodic Memory
+            </button>
+          </div>
 
-            {/* ── Provider Selection ── */}
-            <div>
-              <label className="flex items-center gap-1.5 text-[11px] font-semibold text-editor-muted uppercase tracking-widest mb-3">
-                <Cpu size={11} /> Provider
-              </label>
-              <div className="grid grid-cols-3 gap-2">
-                {Object.entries(PROVIDERS).map(([key, p]) => (
-                  <button
-                    key={key}
-                    onClick={() => handleProviderChange(key)}
-                    className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-all text-center
-                      ${provider === key
-                        ? `bg-gradient-to-br ${p.gradient} ${p.border} shadow-sm`
-                        : "border-editor-border/40 hover:border-editor-border hover:bg-editor-highlight/30"
-                      }`}
-                  >
-                    <span className="flex items-center justify-center p-0.5">
-                      <p.icon size={16} style={{ color: p.color }} />
-                    </span>
-                    <span className={`text-[10px] font-semibold ${provider === key ? "text-white" : "text-editor-muted"}`}>
-                      {p.label}
-                    </span>
-                  </button>
-                ))}
-              </div>
+          {/* ── Tab Panels ── */}
+          <div className="flex-1 min-h-0 flex flex-col overflow-hidden" style={{ minHeight: 0 }}>
+          {activeTab === "provider" ? (
+            <div className="flex-1 p-6 flex flex-col gap-6 overflow-y-auto" style={{ minHeight: 0 }}>
 
-              {/* Provider description */}
-              <div className={`mt-3 px-3 py-2.5 rounded-lg border text-[11px] text-editor-muted bg-gradient-to-r ${meta.gradient} ${meta.border}`}>
-                <span className="inline-flex items-center gap-1 font-semibold" style={{ color: meta.color }}>
-                  <meta.icon size={12} className="mr-0.5" />
-                  {meta.label}
-                </span>
-                {" — "}{meta.description}
-              </div>
-            </div>
+              {/* ── Provider Selection ── */}
+              <div className="flex flex-col gap-4">
+                <label className="flex items-center gap-1.5 text-[11px] font-semibold text-white/50 uppercase tracking-widest mb-1">
+                  <Cpu size={11} /> Provider Selection
+                </label>
 
-            {/* ── Model Selection ── */}
-            <div>
-              <label className="flex items-center gap-1.5 text-[11px] font-semibold text-editor-muted uppercase tracking-widest mb-3">
-                <Sparkles size={11} /> Model
-              </label>
-              {!useCustom ? (
-                <div className="relative">
-                  <select
-                    value={model}
-                    onChange={e => setModel(e.target.value)}
-                    className="w-full appearance-none bg-editor-bg border border-editor-border text-white text-[13px] rounded-xl px-4 py-2.5 pr-8 outline-none focus:border-editor-accent/70 transition-colors cursor-pointer"
-                  >
-                    {models.map(m => (
-                      <option key={m} value={m}>{m}</option>
-                    ))}
-                    {model && !models.includes(model) && (
-                      <option value={model}>{model}</option>
-                    )}
-                  </select>
-                  <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-editor-muted pointer-events-none" />
+                {/* ── Group 1: Core Cloud LLMs ── */}
+                <div className="flex flex-col gap-2.5">
+                  <p className="text-[9px] font-bold text-white/30 uppercase tracking-widest flex items-center gap-1.5">
+                    ⚡ Core Cloud API
+                  </p>
+                  <div className="grid grid-cols-3 gap-2.5">
+                    {["openai", "anthropic", "gemini"].map((key) => {
+                      const p = PROVIDERS[key]
+                      if (!p) return null
+                      const isActive = provider === key
+                      return (
+                        <button
+                          key={key}
+                          onClick={() => handleProviderChange(key)}
+                          className={`flex flex-col items-center gap-2 p-4 rounded-2xl border transition-all duration-300 ease-out text-center cursor-pointer
+                            ${isActive
+                              ? `bg-gradient-to-br ${p.gradient} ${p.border} shadow-[0_8px_20px_-4px_${p.color}25] scale-[1.03] -translate-y-0.5`
+                              : "border-white/[0.05] bg-white/[0.01] hover:bg-white/[0.03] hover:border-white/[0.15] hover:scale-[1.03] hover:-translate-y-0.5 active:scale-[0.97]"
+                            }`}
+                        >
+                          <span className="flex items-center justify-center p-0.5">
+                            <p.icon size={16} style={{ color: p.color }} />
+                          </span>
+                          <span className={`text-[10px] font-semibold transition-colors ${isActive ? "text-white font-bold" : "text-white/60"}`}>
+                            {p.label}
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
                 </div>
-              ) : (
-                <input
-                  type="text"
-                  value={customModel}
-                  onChange={e => setCustomModel(e.target.value)}
-                  placeholder="e.g. openai/gpt-4.1-nano"
-                  className="w-full bg-editor-bg border border-editor-border focus:border-editor-accent/70 text-white text-[13px] rounded-xl px-4 py-2.5 outline-none transition-colors"
-                />
-              )}
-              <button
-                onClick={() => { setUseCustom(p => !p); setCustomModel("") }}
-                className="mt-2 text-[10px] text-editor-muted hover:text-editor-accent transition-colors"
-              >
-                {useCustom ? "← Back to model list" : "Enter custom model name →"}
-              </button>
-            </div>
 
-            {/* ── API Key ── */}
-            <div>
-              <label className="flex items-center gap-1.5 text-[11px] font-semibold text-editor-muted uppercase tracking-widest mb-3">
-                <Key size={11} /> API Key
-                {hasApiKey && !clearKey && (
-                  <span className="ml-auto flex items-center gap-1 text-emerald-400 normal-case font-medium tracking-normal">
-                    <CheckCircle2 size={11} /> Key saved
-                  </span>
-                )}
-              </label>
+                {/* Divider */}
+                <div className="border-t border-white/[0.05] my-1" />
 
-              <div className="relative flex items-center gap-2">
-                <div className="relative flex-1">
+                {/* ── Group 2: Specialty & Aggregators ── */}
+                <div className="flex flex-col gap-2.5">
+                  <p className="text-[9px] font-bold text-white/30 uppercase tracking-widest flex items-center gap-1.5">
+                    🌐 Aggregators & Specialized Cloud
+                  </p>
+                  <div className="grid grid-cols-3 gap-2.5">
+                    {["github", "openrouter", "groq"].map((key) => {
+                      const p = PROVIDERS[key]
+                      if (!p) return null
+                      const isActive = provider === key
+                      return (
+                        <button
+                          key={key}
+                          onClick={() => handleProviderChange(key)}
+                          className={`flex flex-col items-center gap-2 p-4 rounded-2xl border transition-all duration-300 ease-out text-center cursor-pointer
+                            ${isActive
+                              ? `bg-gradient-to-br ${p.gradient} ${p.border} shadow-[0_8px_20px_-4px_${p.color}25] scale-[1.03] -translate-y-0.5`
+                              : "border-white/[0.05] bg-white/[0.01] hover:bg-white/[0.03] hover:border-white/[0.15] hover:scale-[1.03] hover:-translate-y-0.5 active:scale-[0.97]"
+                            }`}
+                        >
+                          <span className="flex items-center justify-center p-0.5">
+                            <p.icon size={16} style={{ color: p.color }} />
+                          </span>
+                          <span className={`text-[10px] font-semibold transition-colors ${isActive ? "text-white font-bold" : "text-white/60"}`}>
+                            {p.label}
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* Divider */}
+                <div className="border-t border-white/[0.05] my-1" />
+
+                {/* ── Group 3: Local ── */}
+                <div className="flex flex-col gap-2.5">
+                  <p className="text-[9px] font-bold text-white/30 uppercase tracking-widest flex items-center gap-1.5">
+                    🖥️ Local / Self-Hosted
+                  </p>
+                  {(() => {
+                    const p = PROVIDERS.ollama
+                    const isActive = provider === "ollama"
+                    return (
+                      <button
+                        onClick={() => handleProviderChange("ollama")}
+                        className={`w-full flex items-center gap-3 px-5 py-3 rounded-2xl border transition-all duration-300 ease-out text-left cursor-pointer
+                          ${isActive
+                            ? `bg-gradient-to-br ${p.gradient} ${p.border} shadow-[0_8px_20px_-4px_${p.color}25] scale-[1.01]`
+                            : "border-white/[0.05] bg-white/[0.01] hover:bg-white/[0.03] hover:border-white/[0.15] hover:scale-[1.01]"
+                          }`}
+                      >
+                        <span className="flex items-center justify-center w-8 h-8 rounded-xl shrink-0"
+                          style={{ background: `${p.color}15`, border: `1px solid ${p.color}25` }}>
+                          <p.icon size={16} style={{ color: p.color }} />
+                        </span>
+                        <span className="flex-1 min-w-0">
+                          <span className={`block text-[12px] font-semibold transition-colors ${isActive ? "text-white font-bold" : "text-white/60"}`}>
+                            {p.label}
+                          </span>
+                          <span className="block text-[10px] text-white/40 mt-0.5">
+                            {p.description}
+                          </span>
+                        </span>
+                        <span className="shrink-0 text-[9px] font-semibold px-2 py-0.5 rounded-full"
+                          style={{ background: `${p.color}15`, color: p.color, border: `1px solid ${p.color}25` }}>
+                          No API Key
+                        </span>
+                      </button>
+                    )
+                  })()}
+                </div>
+
+                {/* Selected Provider Description Card */}
+                <div className="border-t border-white/[0.05] pt-4 mt-5">
+                  <p className="text-[9px] font-bold text-white/30 uppercase tracking-widest mb-2.5 flex items-center gap-1.5">
+                    ℹ️ Provider Description
+                  </p>
+                  <div className={`px-4 py-3 rounded-2xl border text-[11px] leading-relaxed text-white/70 bg-white/[0.01] border-white/[0.05] shadow-inner`}>
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <meta.icon size={15} style={{ color: meta.color }} />
+                      <span className="font-bold text-white text-[12px]">{meta.label}</span>
+                    </div>
+                    <p className="text-[10px] text-white/50 leading-normal">{meta.description}</p>
+                  </div>
+                </div>
+              </div>
+
+
+
+              {/* ── Model Selection ── */}
+              <div>
+                <label className="flex items-center gap-1.5 text-[11px] font-semibold text-white/50 uppercase tracking-widest mb-3">
+                  <Sparkles size={11} /> Model
+                </label>
+
+                {/* ── Ollama: special model picker ── */}
+                {provider === "ollama" ? (
+                  <div className="flex flex-col gap-3">
+
+                    {/* ── Status header ── */}
+                    {ollamaReachable === true && (
+                      <div className="flex items-center gap-1.5 text-[11px] text-emerald-400 font-medium">
+                        <CheckCircle2 size={11} /> Ollama connected
+                        {ollamaInstalled.length > 0
+                          ? ` — ${ollamaInstalled.length} model${ollamaInstalled.length !== 1 ? "s" : ""} installed`
+                          : " — no models pulled yet"}
+                      </div>
+                    )}
+                    {ollamaReachable === false && (
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-1.5 text-[11px] text-red-400 font-medium">
+                          <WifiOff size={11} /> Ollama not reachable
+                        </div>
+                        {ollamaError && (
+                          <p className="text-[10px] text-red-300/70 leading-relaxed">{ollamaError}</p>
+                        )}
+                        <p className="text-[10px] text-white/40">
+                          Run <code className="font-mono bg-white/[0.05] px-1 rounded text-white/80">ollama serve</code> then click Fetch again.
+                          {" "}<a href="https://ollama.com" target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:underline">Install Ollama →</a>
+                        </p>
+                      </div>
+                    )}
+
+                    {/* ── Installed models — selectable dropdown ── */}
+                    {ollamaInstalled.length > 0 && (
+                      <div>
+                        <p className="text-[10px] text-emerald-400 font-semibold uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                          <CheckCircle2 size={9} /> Installed — select to use
+                        </p>
+                        <div className="relative">
+                          <select
+                            value={model}
+                            onChange={e => setModel(e.target.value)}
+                            className="w-full appearance-none bg-white/[0.02] border border-emerald-500/20 text-white text-[13px] rounded-xl px-4 py-2.5 pr-8 outline-none focus:border-emerald-500/50 transition-colors cursor-pointer"
+                          >
+                            {ollamaInstalled.map(m => (
+                              <option key={m} value={m}>{m}</option>
+                            ))}
+                          </select>
+                          <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── Not yet pulled but no installed models ── type manually ── */}
+                    {ollamaReachable === true && ollamaInstalled.length === 0 && (
+                      <div>
+                        <p className="text-[10px] text-amber-400 font-semibold uppercase tracking-wider mb-1.5">
+                          No models pulled — type a model name manually
+                        </p>
+                        <input
+                          type="text"
+                          value={model}
+                          onChange={e => setModel(e.target.value)}
+                          placeholder="e.g. qwen2.5-coder:7b"
+                          className="w-full bg-white/[0.02] border border-white/[0.06] focus:border-cyan-500/50 text-white text-[13px] rounded-xl px-4 py-2.5 outline-none transition-colors"
+                        />
+                      </div>
+                    )}
+
+                    {/* ── Ollama offline — manual entry ── */}
+                    {ollamaReachable === false && (
+                      <div>
+                        <p className="text-[10px] text-white/40 font-semibold uppercase tracking-wider mb-1.5">
+                          Or type a model name manually
+                        </p>
+                        <input
+                          type="text"
+                          value={model}
+                          onChange={e => setModel(e.target.value)}
+                          placeholder="e.g. qwen2.5-coder:7b"
+                          className="w-full bg-white/[0.02] border border-white/[0.06] focus:border-cyan-500/50 text-white text-[13px] rounded-xl px-4 py-2.5 outline-none transition-colors"
+                        />
+                      </div>
+                    )}
+
+                    {/* ── Recommended (not installed) ── */}
+                    {ollamaRecommended.length > 0 && (
+                      <div>
+                        <p className="text-[10px] text-white/40 font-semibold uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                          <AlertTriangle size={9} className="text-amber-400" /> Not installed — pull to use
+                        </p>
+                        <div className="flex flex-col gap-1 max-h-36 overflow-y-auto pr-1 scrollbar-thin">
+                          {ollamaRecommended.map(r => (
+                            <div
+                              key={r.name}
+                              className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-white/[0.01] border border-white/[0.05] group"
+                            >
+                              <div className="flex-1 min-w-0">
+                                <span className="font-mono text-[11px] text-white/60">{r.name}</span>
+                                <span className="ml-2 text-[10px] text-white/30">{r.note}</span>
+                              </div>
+                              <button
+                                onClick={() => {
+                                  navigator.clipboard.writeText(`ollama pull ${r.name}`)
+                                }}
+                                className="shrink-0 ml-2 opacity-0 group-hover:opacity-100 text-[9px] text-cyan-400 hover:text-cyan-300 font-mono transition-all px-1.5 py-0.5 rounded border border-cyan-500/30 hover:border-cyan-400/50"
+                                title="Copy pull command"
+                              >
+                                copy pull cmd
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── No fetch attempted yet ── */}
+                    {ollamaReachable === null && !ollamaFetching && (
+                      <p className="text-[11px] text-white/40">
+                        Click <strong className="text-white/60">Fetch</strong> to detect your installed models.
+                      </p>
+                    )}
+                  </div>
+                ) : !useCustom ? (
+                  <div className="relative">
+                    <select
+                      value={model}
+                      onChange={e => setModel(e.target.value)}
+                      className="w-full appearance-none bg-white/[0.02] border border-white/[0.06] hover:border-white/[0.12] focus:border-editor-accent/40 text-white text-[13px] rounded-xl px-4 py-2.5 pr-8 outline-none transition-colors cursor-pointer"
+                    >
+                      {models.map(m => (
+                        <option key={m} value={m}>{m}</option>
+                      ))}
+                      {model && !models.includes(model) && (
+                        <option value={model}>{model}</option>
+                      )}
+                    </select>
+                    <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
+                  </div>
+                ) : (
                   <input
-                    type={showKey ? "text" : "password"}
-                    value={apiKey}
-                    onChange={e => { setApiKey(e.target.value); setClearKey(false) }}
-                    placeholder={
-                      hasApiKey && !clearKey
-                        ? "••••••••••••  (saved — leave blank to keep)"
-                        : meta.keyPlaceholder
-                    }
-                    className="w-full bg-editor-bg border border-editor-border focus:border-editor-accent/70 text-white text-[13px] rounded-xl px-4 py-2.5 pr-10 outline-none transition-colors font-mono placeholder:font-sans placeholder:text-editor-muted/60"
+                    type="text"
+                    value={customModel}
+                    onChange={e => setCustomModel(e.target.value)}
+                    placeholder="e.g. openai/gpt-4.1-nano"
+                    className="w-full bg-white/[0.02] border border-white/[0.06] focus:border-editor-accent/40 text-white text-[13px] rounded-xl px-4 py-2.5 outline-none transition-colors"
+                  />
+                )}
+                {provider !== "ollama" && (
+                  <button
+                    onClick={() => { setUseCustom(p => !p); setCustomModel("") }}
+                    className="mt-2 text-[10px] text-white/40 hover:text-editor-accent transition-colors cursor-pointer"
+                  >
+                    {useCustom ? "← Back to model list" : "Enter custom model name →"}
+                  </button>
+                )}
+              </div>
+
+              {/* ── API Key —— hidden for Ollama ── */}
+              {provider !== "ollama" ? (
+              <div>
+                <label className="flex items-center gap-1.5 text-[11px] font-semibold text-white/50 uppercase tracking-widest mb-3">
+                  <Key size={11} /> API Key
+                  {hasApiKey && !clearKey && (
+                    <span className="ml-auto flex items-center gap-1 text-emerald-400 normal-case font-medium tracking-normal">
+                      <CheckCircle2 size={11} /> Key saved
+                    </span>
+                  )}
+                </label>
+
+                <div className="relative flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      type={showKey ? "text" : "password"}
+                      value={apiKey}
+                      onChange={e => { setApiKey(e.target.value); setClearKey(false) }}
+                      placeholder={
+                        hasApiKey && !clearKey
+                          ? "••••••••••••  (saved — leave blank to keep)"
+                          : meta.keyPlaceholder
+                      }
+                      className="w-full bg-white/[0.02] border border-white/[0.06] hover:border-white/[0.12] focus:border-editor-accent/40 text-white text-[13px] rounded-xl px-4 py-2.5 pr-10 outline-none transition-colors font-mono placeholder:font-sans placeholder:text-white/20"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowKey(p => !p)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white transition-colors"
+                    >
+                      {showKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
+                  </div>
+                  {hasApiKey && !clearKey && (
+                    <button
+                      onClick={() => { setClearKey(true); setApiKey("") }}
+                      className="shrink-0 px-3.5 py-2.5 rounded-xl border border-red-500/20 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-[11px] font-semibold transition-colors cursor-pointer"
+                      title="Clear saved key"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+
+                {clearKey && (
+                  <p className="mt-2 text-[11px] text-red-400 flex items-center gap-1.5">
+                    <AlertCircle size={11} /> Key will be cleared on save. Backend fallback will be used.
+                  </p>
+                )}
+
+                <a
+                  href={meta.docsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-2.5 inline-flex items-center gap-1 text-[11px] transition-colors hover:underline"
+                  style={{ color: meta.color }}
+                >
+                  {meta.docsLabel} <ExternalLink size={10} />
+                </a>
+
+                {/* Security note */}
+                <div className="mt-3 flex items-start gap-2 px-3 py-2.5 rounded-xl bg-white/[0.01] border border-white/[0.05]">
+                  <Shield size={13} className="text-white/30 shrink-0 mt-0.5" />
+                  <p className="text-[10px] text-white/40 leading-relaxed">
+                    Your API key is stored securely server-side and tied to your account. It is never returned to the browser after saving. Your key overrides AntiMatter's backend fallback key for this provider.
+                  </p>
+                </div>
+              </div>
+              ) : (
+              /* ── Ollama: Base URL + Fetch button instead of API key ── */
+              <div>
+                <label className="flex items-center gap-1.5 text-[11px] font-semibold text-white/50 uppercase tracking-widest mb-3">
+                  <Server size={11} /> Ollama Endpoint
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={ollamaBaseUrl}
+                    onChange={e => { setOllamaBaseUrl(e.target.value); setOllamaReachable(null); setOllamaError(null) }}
+                    placeholder="http://localhost:11434/v1"
+                    className="flex-1 bg-white/[0.02] border border-white/[0.06] hover:border-white/[0.12] focus:border-cyan-500/40 text-white text-[13px] rounded-xl px-4 py-2.5 outline-none transition-colors font-mono placeholder:font-sans placeholder:text-white/20"
                   />
                   <button
-                    type="button"
-                    onClick={() => setShowKey(p => !p)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-editor-muted hover:text-white transition-colors"
+                    onClick={() => fetchOllamaModels(ollamaBaseUrl)}
+                    disabled={ollamaFetching}
+                    className="shrink-0 flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-cyan-500/20 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 text-[12px] font-semibold transition-all disabled:opacity-50 cursor-pointer"
+                    title="Fetch installed models from Ollama"
                   >
-                    {showKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                    {ollamaFetching
+                      ? <Loader2 size={13} className="animate-spin" />
+                      : <RefreshCw size={13} />}
+                    {ollamaFetching ? "Fetching…" : "Fetch"}
                   </button>
                 </div>
-                {hasApiKey && !clearKey && (
-                  <button
-                    onClick={() => { setClearKey(true); setApiKey("") }}
-                    className="shrink-0 px-3 py-2.5 rounded-xl border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-[11px] font-medium transition-colors"
-                    title="Clear saved key"
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
-
-              {clearKey && (
-                <p className="mt-2 text-[11px] text-red-400 flex items-center gap-1.5">
-                  <AlertCircle size={11} /> Key will be cleared on save. Backend fallback will be used.
+                <p className="mt-2 text-[10px] text-white/40">
+                  No API key needed. Ollama runs entirely on your machine.
+                  {" "}<a href="https://ollama.com" target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:underline">Install Ollama →</a>
                 </p>
+              </div>
               )}
 
-              <a
-                href={meta.docsUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-2.5 inline-flex items-center gap-1 text-[11px] transition-colors hover:underline"
-                style={{ color: meta.color }}
-              >
-                {meta.docsLabel} <ExternalLink size={10} />
-              </a>
-
-              {/* Security note */}
-              <div className="mt-3 flex items-start gap-2 px-3 py-2 rounded-lg bg-editor-highlight/20 border border-editor-border/30">
-                <Shield size={12} className="text-editor-muted shrink-0 mt-0.5" />
-                <p className="text-[10px] text-editor-muted leading-relaxed">
-                  Your API key is stored securely server-side and tied to your account. It is never returned to the browser after saving. Your key overrides AntiMatter's backend fallback key for this provider.
-                </p>
-              </div>
+              {/* ── Error banner ── */}
+              {error && (
+                <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-red-950/20 border border-red-500/20 text-red-300 text-[12px]">
+                  <AlertCircle size={13} className="shrink-0 text-red-400" />
+                  {error}
+                </div>
+              )}
             </div>
-
-            {/* ── Error banner ── */}
-            {error && (
-              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-900/20 border border-red-500/30 text-red-300 text-[12px]">
-                <AlertCircle size={13} className="shrink-0 text-red-400" />
-                {error}
+          ) : (
+            /* ── Memories Tab ── */
+            <div className="flex-1 p-6 flex flex-col gap-4 overflow-y-auto" style={{ minHeight: 0 }}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[13px] font-semibold text-white">Episodic Memories</p>
+                  <p className="text-[11px] text-white/50 mt-0.5">Lessons learned from past agent sessions in this project.</p>
+                </div>
+                <button
+                  onClick={handleCopyAsSystemPrompt}
+                  disabled={memories.length === 0 || copiedPrompt}
+                  className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-indigo-500/20 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 text-[12px] font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                  title="Copy all memories as a system prompt to clipboard"
+                >
+                  {copiedPrompt ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
+                  {copiedPrompt ? "Copied!" : "Copy as Prompt"}
+                </button>
               </div>
-            )}
-          </div>
+
+              {memLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 size={20} className="animate-spin text-white/30" />
+                </div>
+              ) : memories.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-white/30 text-center">
+                  <Brain size={32} className="mb-3 opacity-20" />
+                  <p className="text-[13px] font-semibold">No memories yet</p>
+                  <p className="text-[11px] mt-1 opacity-60">Memories are created automatically after agent tasks.</p>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  {/* Demo badge when showing placeholder memories */}
+                  {/* {memories.some(m => m.__isDummy) && (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-indigo-500/5 border border-indigo-500/20 text-indigo-300/70 text-[11px]">
+                      <Brain size={11} className="shrink-0" />
+                      Sample memories shown. Real memories appear automatically after agent sessions.
+                    </div>
+                  )} */}
+                  {memories.map((mem) => (
+                    <div
+                      key={mem.id}
+                      className="p-4 rounded-2xl border border-white/[0.05] bg-white/[0.01] hover:border-white/[0.1] transition-colors duration-200 group"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[12px] font-bold text-white truncate">{mem.task_description}</p>
+                          <p className="text-[11px] text-indigo-300/80 mt-1.5 leading-relaxed">{mem.generalizable_lesson}</p>
+                          {mem.what_worked && (
+                            <p className="text-[10px] text-emerald-400/80 mt-1">✓ {mem.what_worked}</p>
+                          )}
+                          {mem.what_failed_first && (
+                            <p className="text-[10px] text-red-400/80 mt-0.5">✗ {mem.what_failed_first}</p>
+                          )}
+                          <div className="flex items-center gap-3 mt-2">
+                            <span className="text-[9px] text-white/30 font-mono">{new Date(mem.created_at).toLocaleDateString()}</span>
+                            <span className="text-[9px] text-white/30">Retrieved {mem.retrieval_count}×</span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => !mem.__isDummy && handleDeleteMemory(mem.id)}
+                          disabled={deletingId === mem.id || mem.__isDummy}
+                          className={`shrink-0 p-1.5 rounded-lg transition-colors opacity-0 group-hover:opacity-100 cursor-pointer ${
+                            mem.__isDummy
+                              ? "text-white/10 cursor-default"
+                              : "text-white/30 hover:text-red-400 hover:bg-red-500/10"
+                          }`}
+                          title={mem.__isDummy ? "Sample memory" : "Delete memory"}
+                        >
+                          {deletingId === mem.id
+                            ? <Loader2 size={13} className="animate-spin" />
+                            : <Trash2 size={13} />}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          </div>{/* end min-h wrapper */}
 
           {/* ── Footer ── */}
-          <div className="flex items-center justify-between px-6 py-4 border-t border-editor-border/40 bg-white/[0.02]">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 rounded-xl text-[13px] text-editor-muted hover:text-white hover:bg-editor-highlight transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={isSaving}
-              className={`flex items-center gap-2 px-5 py-2 rounded-xl text-[13px] font-semibold transition-all shadow-lg
-                ${saveOk
-                  ? "bg-emerald-500/20 border border-emerald-500/40 text-emerald-400"
-                  : "bg-editor-accent hover:bg-editor-accentHover text-editor-bg disabled:bg-editor-highlight disabled:text-editor-muted"
-                }`}
-            >
-              {isSaving ? (
-                <><Loader2 size={13} className="animate-spin" /> Saving…</>
-              ) : saveOk ? (
-                <><CheckCircle2 size={13} /> Saved!</>
-              ) : (
-                "Save Settings"
-              )}
-            </button>
-          </div>
+          {activeTab === "provider" && (
+            <div className="flex items-center justify-between px-6 py-3.5 border-t border-white/[0.06] bg-white/[0.02]">
+              <button
+                onClick={onClose}
+                className="px-4 py-2 rounded-xl text-[13px] font-medium text-white/60 hover:text-white hover:bg-white/[0.05] transition-all duration-200 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={isSaving}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-bold transition-all duration-200 shadow-lg cursor-pointer
+                  ${saveOk
+                    ? "bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 shadow-emerald-500/5"
+                    : "bg-editor-accent hover:bg-editor-accent/90 hover:scale-[1.02] active:scale-[0.98] text-editor-bg shadow-editor-accent/15 disabled:bg-white/[0.05] disabled:text-white/20 disabled:scale-100 disabled:shadow-none"
+                  }`}
+              >
+                {isSaving ? (
+                  <><Loader2 size={13} className="animate-spin" /> Saving…</>
+                ) : saveOk ? (
+                  <><CheckCircle2 size={13} /> Saved!</>
+                ) : (
+                  "Save Settings"
+                )}
+              </button>
+            </div>
+          )}
+          {activeTab === "memories" && (
+            <div className="flex items-center justify-end px-6 py-3.5 border-t border-white/[0.06] bg-white/[0.02]">
+              <button
+                onClick={onClose}
+                className="px-5 py-2 rounded-xl text-[13px] font-semibold text-white/60 hover:text-white hover:bg-white/[0.05] transition-all duration-200 cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </>

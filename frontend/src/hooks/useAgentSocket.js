@@ -56,7 +56,10 @@ export function useAgentSocket(projectId) {
 
   const connect = useCallback(() => {
     if (!projectId) return                                        // no project yet
-    if (globalWs?.readyState === WebSocket.OPEN) return
+    if (globalWs?.readyState === WebSocket.OPEN) {
+      setConnected(true)
+      return
+    }
     if (globalWs?.readyState === WebSocket.CONNECTING) return
 
     const url = `ws://127.0.0.1:1842/api/agent/ws/${projectId}?token=${token}`
@@ -92,7 +95,19 @@ export function useAgentSocket(projectId) {
           
           return
       }
+      if (msg.type === "route") {
+          useChatStore.getState().setCurrentRoute(msg.route)
+          // Resolve the classify lifecycle step and push a context-building step
+          useAgentTraceStore.getState().resolveLifecycle("classify", { route: msg.route })
+          useAgentTraceStore.getState().pushLifecycle("context", "Building context & RAG retrieval")
+          return
+      }
       if (msg.type === "token") {
+        // First token: resolve context step, start llm_call step
+        if (!useChatStore.getState().isStreaming) {
+          useAgentTraceStore.getState().resolveLifecycle("context")
+          useAgentTraceStore.getState().pushLifecycle("llm_call", "Streaming response from LLM")
+        }
         setStreaming(true)
         appendToken(msg.content)
       } else if (msg.type === "tool_start") {
@@ -102,6 +117,13 @@ export function useAgentSocket(projectId) {
         // Feed trace store
         useAgentTraceStore.getState().pushToolEnd(msg.tool, msg.output)
       } else if (msg.type === "done") {
+        // Resolve llm_call with token usage — tokens go HERE only (not on finalize, to avoid double-counting)
+        const tu = msg.token_usage || null
+        useAgentTraceStore.getState().resolveLifecycle("llm_call", tu ? { tokens: tu } : null)
+        // Finalize step gets NO token meta so the header total stays accurate
+        useAgentTraceStore.getState().pushLifecycle("finalize", "Finalizing response", null)
+        useAgentTraceStore.getState().resolveLifecycle("finalize")
+
         const finalEntries = useAgentTraceStore.getState().entries
         if (finalEntries.length > 0) {
           addMessage({
@@ -110,7 +132,7 @@ export function useAgentSocket(projectId) {
             entries: finalEntries,
           })
         }
-        flushBuffer(msg.final_text)
+        flushBuffer(msg.final_text, msg.token_usage || null)
         setConversationId(msg.conversation_id)
         
         // Refresh conversations list to update sidebar titles
@@ -164,8 +186,12 @@ export function useAgentSocket(projectId) {
       }
       // Start a fresh trace run for this message
       useAgentTraceStore.getState().startRun()
+      // Push first two lifecycle steps immediately
+      useAgentTraceStore.getState().pushLifecycle("classify", "Understanding query & classifying intent")
       // Reset any previous done-state so the banner hides while agent works
       useDiffStore.getState().resetAgentDone()
+      // Reset current route for the new stream
+      useChatStore.getState().setCurrentRoute(null)
 
       // Read the active provider from settingsStore at send-time
       const provider = useSettingsStore.getState().provider || "groq"

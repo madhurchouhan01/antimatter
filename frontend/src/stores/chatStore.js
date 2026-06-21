@@ -65,6 +65,7 @@ function reconstructMessages(dbMessages) {
         id: msg.id,
         role: "assistant",
         content: msg.content,
+        token_usage: msg.token_usage || null,
       })
     } else {
       reconstructed.push({
@@ -97,9 +98,11 @@ export const useChatStore = create(
       isConnected:    false,
       input:          "",
       inputPulse:     false,
+      currentRoute:   null,
 
       setInput: (val) => set({ input: val }),
       setInputPulse: (val) => set({ inputPulse: val }),
+      setCurrentRoute: (route) => set({ currentRoute: route }),
 
       addMessage: (msg) =>
         set((state) => ({ messages: [...state.messages, msg] })),
@@ -110,24 +113,26 @@ export const useChatStore = create(
       appendToken: (token) =>
         set((state) => ({ streamBuffer: state.streamBuffer + token })),
 
-      flushBuffer: (finalText) =>
+      flushBuffer: (finalText, tokenUsage) =>
         set((state) => {
           const content = (finalText !== undefined && finalText !== null) ? finalText : state.streamBuffer;
-          if (!content) return { isStreaming: false }
+          if (!content) return { isStreaming: false, currentRoute: null }
           const msg = {
-            id:      crypto.randomUUID(),
-            role:    "assistant",
-            content: content,
+            id:          crypto.randomUUID(),
+            role:        "assistant",
+            content:     content,
+            token_usage: tokenUsage || null,
           }
           return {
             messages:    [...state.messages, msg],
             streamBuffer: "",
             isStreaming:  false,
+            currentRoute:  null,
           }
         }),
 
       setConversationId: (id) => set({ conversationId: id }),
-      clearChat: () => set({ messages: [], conversationId: null, streamBuffer: "", isConnected: false, input: "" }),
+      clearChat: () => set({ messages: [], conversationId: null, streamBuffer: "", input: "", currentRoute: null }),
 
       fetchConversations: async (projectId) => {
         if (!projectId) return

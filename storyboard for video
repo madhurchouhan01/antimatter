@@ -1,126 +1,129 @@
-Viewed README.md:85-102
+# AntiMatter — LinkedIn Video Storyboard & Demo Guide
 
-Here is the full storyboard and feature breakdown for your **AntiMatter** LinkedIn video. 
-
-This storyboard is designed to be **mute-friendly, high-energy, and professional**, focusing on the most visually impressive parts of the IDE that will hook developers and technical leaders.
+This storyboard is updated to include all the latest high-fidelity UI Blitz features. It is designed to be **mute-friendly, high-energy, and developer-focused** for social media and recruiter demos.
 
 ---
 
-### The "Hero" Features to Highlight (Visual Eye-Candy)
+## ⚡ The Hero Features Highlighted
 
-1.  **Direct Log Redirection + Self-Healing (The Hook):** This is your main hook. Demonstrating an error traceback in the terminal, clicking a button to suck those logs into the AI, and watching the AI write a patch to resolve it.
-2.  **Surgical Git-Style Diffs (The Differentiator):** Showing that the AI doesn't write directly to disk or rewrite the whole file; instead, it presents a surgical, line-by-line diff that the developer approves.
-3.  **Inline Chat (Ctrl+K):** Selecting a function inside the Monaco Editor, popping up a floating chat box, and watching the code change inline.
-4.  **Multi-Agent Observability:** Showing the agent executing tools in real-time (e.g., reading files, running pytest in a Docker sandbox) rather than showing a static loading spinner.
+1. **Log Redirection & Flying Capsule Animation:** Clicking "Send Logs to AI" initiates a smooth flying animation (curved bezier path) that redirects traceback logs into the AI Chat Input.
+2. **Offline Mode & Low-Token Settings:** Navigating settings to select local Ollama models and showing the query classifier running in a low-token layout.
+3. **Episodic memory:** Viewing previous session insights in the "Memories" settings tab, allowing the agent to remember learnings across chat context resets.
+4. **Command Palette (Ctrl+P):** Keyboard-driven VS Code style command bar for searching project files and execution shortcuts.
+5. **Glassmorphic Observability Timeline:** Agent activity displaying running pulse pings, millisecond timestamp deltas between steps, and expand-on-click tool arguments/output code blocks.
+6. **Token Budget & Odometer Ticker:** Top header displaying context window consumption percentage (green ➡️ yellow ➡️ red) and live odometer rolling token cost badge.
+7. **Git Integration & Surgical Diffs:** Inline editor diffs, floating accept/reject controls positioned bottom-center (adjustable with terminal size), and the git panel tracking unstaged modifications.
+8. **Interactive Mermaid Diagrams:** AI rendering live Mermaid.js flowcharts and state diagrams in message bubbles.
+9. **Workspace Health Dashboard (Ctrl+Shift+D):** Floating live diagnostic dashboard with WebSocket indicators, syncing progress, model latencies, and session uptime.
 
 ---
 
-### The Complete 45-Second Storyboard
+## 🎬 The Complete 45-Second Storyboard
 
-#### **Scene 1: The Hook — Direct Log Redirection**
+### **Scene 1: The Hook — Log Redirection & Fly Animation**
 *   **Time:** 0:00 – 0:08 (8 seconds)
-*   **Visual:** 
-    *   Start with a split-screen layout. On the left is the code editor ([CodeEditor.jsx](file:///d:/AntiMatter/frontend/src/components/CodeEditor.jsx)), on the right is the integrated terminal ([Terminal.jsx](file:///d:/AntiMatter/frontend/src/components/Terminal.jsx)).
-    *   The terminal runs `pytest` or launches a server, throwing a large, ugly traceback error in red text.
-    *   The cursor moves to a floating action button on the terminal window: **"Send Logs to AI."**
-    *   Click! The logs vanish from the terminal with a smooth sliding animation and populate directly into the chat prompt input ([ChatPanel.jsx](file:///d:/AntiMatter/frontend/src/components/ChatPanel.jsx)) along with the text: *"Fix this traceback."*
-*   **Text on Screen (Bold, bottom-center):** Traceback in terminal? Stop copy-pasting.
-*   **Voiceover (Optional):** *"When your sandbox container throws an error..."*
-*   **SFX:** High-frequency digital hum, rapid mechanical keyboard clicks, and a clean "whoosh" sound when the logs animate into the chat panel.
-
----
-
-#### **Scene 2: Agent Node Transitions & Docker Execution**
-*   **Time:** 0:08 – 0:18 (10 seconds)
 *   **Visual:**
-    *   Zoom in on the tool execution panel in the chat bar.
-    *   The agent begins running its loop ([graph.py](file:///d:/AntiMatter/backend/agent/graph.py)). We see real-time tool state updates:
-        *   `[Tool Call] read_file(path="backend/main.py")` 🟢
-        *   `[Tool Call] run_command(command="pytest")` 🟢
-    *   Show a split view of the terminal pane ([Terminal.jsx](file:///d:/AntiMatter/frontend/src/components/Terminal.jsx)) showing the agent executing commands silently inside its isolated Docker container.
-*   **Text on Screen:** LangGraph loop: The agent reads context & runs tests in a sandbox.
-*   **Voiceover (Optional):** *"...the agent spins up an isolated Docker sandbox, reads files, and runs tests to diagnose the issue autonomously."*
-*   **SFX:** Fast electronic processing sound (like data blocks passing through a server), quiet server whirring sound.
+    *   Split-screen: Monaco Editor showing `test_date_helper.py` on the left, Terminal on the right.
+    *   Run `pytest test_date_helper.py` in the terminal ➡️ crashes with a red `ValueError` traceback.
+    *   Cursor hovers over terminal header and clicks **"Send Logs to AI"**.
+    *   **The Effect:** Logs wrap into a glowing floating capsule and fly along a curved bezier arc directly into the Chat Panel input box.
+*   **Text on Screen:** Terminal Crash? Stop Copy-Pasting. One-Click Log Ingestion.
+*   **Voiceover / SFX:** Mechanical keyboard clacks, sudden error buzzer, digital "whoosh" sound as the logs fly.
 
 ---
 
-#### **Scene 3: Surgical Diff & Human Approval**
-*   **Time:** 0:18 – 0:28 (10 seconds)
+### **Scene 2: Local AI Settings & Episodic Memory**
+*   **Time:** 0:08 – 0:14 (6 seconds)
 *   **Visual:**
-    *   Zoom in close on the diff viewer ([DiffViewer.jsx](file:///d:/AntiMatter/frontend/src/components/DiffViewer.jsx)).
-    *   A clean, side-by-side Git diff appears. Left side is red (old code with the bug), right side is green (surgically patched code).
-    *   Highlight the **"Accept"** button. The mouse clicks it.
-    *   The editor window flashes green briefly as the patch is written bottom-up by the patch localization engine ([tools.py](file:///d:/AntiMatter/backend/agent/tools.py)).
-*   **Text on Screen:** Nothing touches disk without your approval.
-*   **Voiceover (Optional):** *"No full-file overwrites. Review surgical diffs line-by-line and accept them when you're ready."*
-*   **SFX:** A heavy "click" sound, followed by a bright, satisfying "success chime" when the diff is accepted.
+    *   Click settings icon. Settings Modal opens with frosted glass backdrop-blur.
+    *   In the **Provider** tab, switch the active LLM to **Ollama (Local)** to show offline capability.
+    *   Switch to the **Memories** tab. Scroll through the episodic memories logged from previous tasks (e.g. *"Remember to parse T separators in ISO dates"*). Hover over copy memory icon.
+*   **Text on Screen:** 100% Offline with Ollama. Persistent Episodic Memory.
+*   **Voiceover / SFX:** Soft hover ticks, slick pop-up sound when modal appears.
 
 ---
 
-#### **Scene 4: Inline Chat (Ctrl+K)**
-*   **Time:** 0:28 – 0:38 (10 seconds)
+### **Scene 3: Command Palette Navigation**
+*   **Time:** 0:14 – 0:18 (4 seconds)
 *   **Visual:**
-    *   Close-up on Monaco Editor ([CodeEditor.jsx](file:///d:/AntiMatter/frontend/src/components/CodeEditor.jsx)). 
-    *   The mouse highlights a block of code. Pressing `Ctrl+K` brings up a dark, glassmorphic floating input widget ([InlineChatWidget.jsx](file:///d:/AntiMatter/frontend/src/components/InlineChatWidget.jsx)).
-    *   Type: *"Refactor to use async."*
-    *   The highlighted lines transform directly in place, showing inline additions.
-*   **Text on Screen:** Highlight. Ask. Patch. (Inline Chat)
-*   **Voiceover (Optional):** *"Need a quick fix? Edit any code block inline directly inside your editor window."*
-*   **SFX:** Faster keystrokes, a swoosh when the widget appears.
+    *   Close modal, hit `Ctrl+P`. The Spotlight search overlay appears in the center.
+    *   Type `date` ➡️ fuzzy finds `date_helper.py` in milliseconds. 
+    *   Arrow keys down to select it, press Enter to open it.
+*   **Text on Screen:** Command Palette (Ctrl+P). Speed-run your workspace.
+*   **Voiceover / SFX:** Quick keystrokes, light selection clicks.
 
 ---
 
-#### **Scene 5: Outro & Call to Action**
-*   **Time:** 0:38 – 0:45 (7 seconds)
+### **Scene 4: Live Agent Timeline & Token Metrics**
+*   **Time:** 0:18 – 0:26 (8 seconds)
 *   **Visual:**
-    *   Screen fades to a dark, sleek gradient.
-    *   The **⚡ AntiMatter** logo slides into the center.
-    *   Below it, the text: 
-        ```bash
-        git clone github.com/madhurchouhan01/antimatter
-        docker compose up
-        ```
-*   **Text on Screen:** 
-    *   AntiMatter — The Agentic Code Editor
-    *   100% Open Source. Run it locally.
-*   **Voiceover (Optional):** *"Own your context. Clone AntiMatter today on GitHub."*
-*   **SFX:** Deep bass drop, fading out into a digital hum.
+    *   In Chat Panel, type: *"Fix the bug in date_helper.py"* and hit Enter.
+    *   The live **"Agent Executing..."** timeline shows up.
+    *   Show the step-to-step deltas (`+125ms`, `+1.2s`) and the active pulsing wave around the running tool icon.
+    *   Click on the `write_file` step ➡️ expands to reveal JSON Arguments and terminal Output.
+    *   Zoom up to Chat header: watch the Odometer Token Ticker rolling up in real-time and the Token Budget Bar filling green.
+*   **Text on Screen:** Complete Observability. Lerp Odometer & Budget Meter.
+*   **Voiceover / SFX:** Fast database ticking sounds, humming processor fan swell.
 
 ---
 
-### Tips for Recording this flow:
-1.  **Prepare a Scripted Bug:** Before recording, write a Python file with a simple syntax error or import error that triggers a failing test. This makes the "Direct Log Redirection" scene 100% repeatable and visually clean.
-2.  **Use a High-DPI Zoom:** Zoom your browser window to **150%** before recording. This makes text larger and much more legible on LinkedIn's compressed video feed.
-3.  **Use Screenflow/Camtasia Effects:** Add a yellow highlight ring around the mouse click when hitting the **"Send Logs to AI"** and **"Accept Diff"** buttons to guide the viewer's eyes.
-
-Let me know if you want to write the backend test code or scripts to mock this demo setup!
-
-
-
----
----
----
-
-Edited storyboard%20for%20video
-Viewed storyboard%20for%20video:79-96
-
-I'll list the contents of the `d:\AntiMatter\backend` directory to find where the test suite is located and where we can put our demo test file.
-
-Listed directory backend
-
-I'll list the files in `d:\AntiMatter\backend\tests` to see the structure of existing tests.
-
-Listed directory tests
-
-Here is your complete guide, including the **demo test code**, **step-by-step recording instructions**, and **post-production editing tips** to create a stunning LinkedIn promo video.
+### **Scene 5: Surgical Monaco Diffs & Version Control**
+*   **Time:** 0:26 – 0:34 (8 seconds)
+*   **Visual:**
+    *   The agent finishes. Editor shifts to show inline red/green Git diff.
+    *   Zoom in on the floating **Accept / Reject** panel positioned bottom-center of the editor container.
+    *   Click **Accept**. Switch to the sidebar's **Git tab** ➡️ shows `date_helper.py` as modified.
+    *   Type commit message: `fix: handle T separator in date parsing`, and hit commit.
+*   **Text on Screen:** Interactive Diffs. Integrated Git version control.
+*   **Voiceover / SFX:** Heavy mechanical click, slide transition, soft chime on git commit.
 
 ---
 
-### Part 1: The Demo Test Code (The "Setup")
+### **Scene 6: Interactive Mermaid & Chat History**
+*   **Time:** 0:34 – 0:40 (6 seconds)
+*   **Visual:**
+    *   Ask AI: *"Explain the flow of our date parser using a diagram."*
+    *   AI responds, showing a collapsible "Thought Process" block.
+    *   Below it, a Mermaid flowchart renders live inside the chat bubble showing a visual flow diagram of the parser logic.
+    *   Show chat history panel on the left, switching between previous diagnostic threads.
+*   **Text on Screen:** Renders Mermaid Diagrams. Deep Chat Histories.
+*   **Voiceover / SFX:** Digital draw sound, chime.
 
-Create these two files inside your project directory in the AntiMatter interface. This creates a realistic ISO date parsing bug that fails on time formats.
+---
 
-#### 1. [date_helper.py](file:///d:/AntiMatter/backend/date_helper.py) (The file with the bug)
+### **Scene 7: Workspace Health & Outro**
+*   **Time:** 0:40 – 0:45 (5 seconds)
+*   **Visual:**
+    *   Hit `Ctrl+Shift+D` ➡️ Workspace Health Dashboard drops down showing live stats: green WebSocket, uptime, model token limits, file indexing.
+    *   Screen transitions to sleek dark Tokyo Night background.
+    *   The **⚡ AntiMatter** logo drops down.
+    *   `git clone github.com/madhurchouhan01/antimatter` typed on screen.
+*   **Text on Screen:** AntiMatter — The Observability-First Agentic IDE. Open Source.
+*   **Voiceover / SFX:** Synthesizer sub-bass drop, digital fade out.
+
+---
+
+## 📊 Post-Production Editing Guide
+
+| Timestamp | Video Visual Actions | Zoom / Focus Level | Audio / SFX | Text Overlay |
+| :--- | :--- | :--- | :--- | :--- |
+| **0:00 – 0:05** | Running `pytest` and seeing the traceback error crash in the terminal. | Zoom in tight on the terminal screen. | Mechanical keyboard sound + alarm/buzzer. | **Traceback error in terminal?** |
+| **0:05 – 0:08** | Click "Send Logs to AI". Logs wrap in flying capsule and travel to Chat. | Pan from terminal to Chat panel on curved path. | Mouse click + digital "whoosh". | **One-click log redirection.** |
+| **0:08 – 0:11** | Open settings, change to Ollama, inspect Memories tab. | Center modal zoom. | Modal popup whoosh + soft clicks. | **Offline Ollama + Episodic Memory.** |
+| **0:11 – 0:14** | Click `Ctrl+P`, search file, open it. | Focus top-center overlays. | Keyboard fast clicks. | **Global Command Palette.** |
+| **0:14 – 0:22** | Click send. Show active timeline with pulse dot, time deltas. Odometer rolling. | Zoom in on timeline entries + header badges. | Fast processing sound + ticker spin. | **Live Glassmorphic Timelines.** |
+| **0:22 – 0:28** | Diff view appears in editor, click bottom-center Accept button. | Split screen editor. | Click sound + success bell. | **Surgical Monaco Diffs.** |
+| **0:28 – 0:34** | Show Git panel, typing commit message, click commit. | Sidebar focus. | Key clacks + commit swoosh. | **Git Version Control.** |
+| **0:34 – 0:40** | Mermaid flowchart rendering in chat. Show Chat History. | Chat panel center focus. | Drawing sound. | **Mermaid diagrams & History.** |
+| **0:40 – 0:45** | `Ctrl+Shift+D` opens health board. Zoom out to AntiMatter landing logo. | Dashboard top-right focus ➡️ Center. | Bass drop + ambient synth swell. | **AntiMatter: Open Source on GitHub.** |
+
+---
+
+## 🛠️ Sandbox Demo Test Setup Code
+
+Create these files inside your project workspace using the AntiMatter interface:
+
+### 1. [date_helper.py](file:///d:/AntiMatter/backend/date_helper.py)
 ```python
 from datetime import datetime
 
@@ -133,7 +136,7 @@ def parse_iso_date(date_str: str) -> datetime:
     return datetime.strptime(date_str, "%Y-%m-%d")
 ```
 
-#### 2. [test_date_helper.py](file:///d:/AntiMatter/backend/test_date_helper.py) (The test script that triggers the traceback)
+### 2. [test_date_helper.py](file:///d:/AntiMatter/backend/test_date_helper.py)
 ```python
 import pytest
 from date_helper import parse_iso_date
@@ -149,48 +152,8 @@ def test_parse_datetime_with_t():
 
 ---
 
-### Part 2: Step-by-Step Recording Guide
+## 💡 Pro Tips for a Visual Demo
 
-#### **1. Environment Setup (Before hitting record)**
-*   **Zoom Level:** Set your Chrome or Edge zoom level to **150%**. This is crucial for making the code legible on mobile devices.
-*   **Layout:** Split your screen to show [CodeEditor.jsx](file:///d:/AntiMatter/frontend/src/components/CodeEditor.jsx) on the left (showing [test_date_helper.py](file:///d:/AntiMatter/backend/test_date_helper.py)) and the [Terminal.jsx](file:///d:/AntiMatter/frontend/src/components/Terminal.jsx) on the right. Keep the [ChatPanel.jsx](file:///d:/AntiMatter/frontend/src/components/ChatPanel.jsx) collapsed or empty.
-*   **Recording Tool:** Use **OBS Studio** (Free, open-source) or **Loom** (set to 4K or 1080p, 60fps). Record only the active window (hide your browser tabs and bookmark bar).
-
-#### **2. The Action Sequence (What to record)**
-1.  **Start Recording:** Have the cursor focus on the [Terminal.jsx](file:///d:/AntiMatter/frontend/src/components/Terminal.jsx) panel.
-2.  **Trigger the Error:** Type `pytest test_date_helper.py` and press Enter. Let the red `ValueError` traceback fill the terminal.
-3.  **The Log Redirect:** Hover your mouse over the terminal header and click the **"Send Logs to AI"** button (added in [README.md:L93](file:///d:/AntiMatter/README.md#L93)). 
-4.  **Observe the Chat Input:** Watch the logs get pasted into the [ChatPanel.jsx](file:///d:/AntiMatter/frontend/src/components/ChatPanel.jsx) input bar. Click the send button.
-5.  **Let the Agent Work:** Keep the recording running as the agent calls tools in `tools.py` (e.g., reading `date_helper.py`, running tests).
-6.  **The Diff:** When the git-style [DiffViewer.jsx](file:///d:/AntiMatter/frontend/src/components/DiffViewer.jsx) pops up, scroll down it slowly to show the green replacement code (where the agent edits `strptime` to support both formats).
-7.  **Apply and Verify:** Click **"Accept"** in the diff viewer. Switch back to the [Terminal.jsx](file:///d:/AntiMatter/frontend/src/components/Terminal.jsx) and run `pytest test_date_helper.py` again. Watch the tests pass with green text.
-8.  **Stop Recording.**
-
----
-
-### Part 3: Video Editing Guide (The "Where" & "How")
-
-#### **1. Editing Software**
-*   **Free & Easy:** **CapCut** (available for Windows/Mac). It has built-in auto-captions, zoom keyframes, and transitions.
-*   **Professional:** **DaVinci Resolve** (Free version is extremely powerful) or **Adobe Premiere Pro**.
-
-#### **2. Step-by-Step Editing Instructions**
-
-| Timestamp | Video Visual Actions | Zoom / Focus Level | Audio / SFX | Text Overlay |
-| :--- | :--- | :--- | :--- | :--- |
-| **0:00 – 0:05** | Running `pytest` and seeing the red traceback crash in the terminal. | Zoomed in tight on the terminal screen. | Mechanical keyboard typing sounds + low buzzer. | **Traceback in terminal?** |
-| **0:05 – 0:08** | Mouse moves up and clicks "Send Logs to AI". Logs copy to Chat Panel. | Pan smoothly from terminal to chat panel. | Crisp mouse "click" + digital "whoosh" sound. | **Stop copy-pasting.** |
-| **0:08 – 0:15** | The agent’s tool call list updates live. | Zoom in on the active status cards in [ChatPanel.jsx](file:///d:/AntiMatter/frontend/src/components/ChatPanel.jsx). | Fast electronic "ticking" or processing sound. | **Agent analyzes logs & executes fixes.** |
-| **0:15 – 0:22** | Code editor scrolls and the [DiffViewer.jsx](file:///d:/AntiMatter/frontend/src/components/DiffViewer.jsx) shows the green patches. | Split focus on Monaco Editor and Diff Viewer. | Digital "swoosh". | **Surgical diff proposals.** |
-| **0:22 – 0:28** | Mouse clicks "Accept". Terminal runs tests again. Show `2 passed in 0.05s`. | Zoomed in on the green test completion message in the terminal. | Click sound + rising success bell. | **Self-healed in 1 click. ✅** |
-| **0:28 – 0:30** | Outro: **⚡ AntiMatter** logo slides onto a dark background with Git clone URLs. | Center focus. | Bass drop or ambient synth swell. | **AntiMatter: Open Source on GitHub.** |
-
----
-
-### Part 4: Visual Polish Tips for LinkedIn
-
-*   **Dynamic Zoom (Ken Burns Effect):** When the focus transitions from the terminal to the chat, don't just cut—use a smooth camera pan/zoom in your editing software to make the transition look professional.
-*   **CapCut Kinetic Subtitles:** Use CapCut's automated text effects. Style the subtitles in a high-contrast style (e.g., yellow and white text on a black outline/glow) using a modern font like **DM Sans** or **Inter**.
-*   **Pacing (Speeding Up):** Real agent runs take time to stream tokens. Speed up the middle section of the video (where the agent is writing the code) by **3x to 5x** so the viewer doesn't lose interest. The entire video should feel snappy and move fast.
-
-Let me know once you have created the files and are ready to run the demo! I can help you debug any issues with the test setup.
+*   **Speed Up Loading States:** Agent LLM execution might take 10-20 seconds. Speed up the timeline loading footage by **3x to 5x** during video editing so that the pacing stays rapid and punchy.
+*   **Show Off Hover States:** The new glassmorphic timeline cards and dashboard toggles look premium because of their micro-hover highlights. Make sure your recording mouse cursor stays visible and hovers briefly over options.
+*   **Use High DPI Resolution:** Set Chrome/Edge zoom to **125% - 150%** before starting screen recording. This makes the Tokyo Night code layout look crisp and highly readable on mobile social feeds.

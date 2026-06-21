@@ -2,7 +2,7 @@ import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { projectsApi } from "../lib/api"
 import { useProjectStore } from "../stores/projectStore"
-import { FolderOpen, Plus, Trash2, Code2, ArrowRight } from "lucide-react"
+import { FolderOpen, Plus, Trash2, Code2, ArrowRight, Edit3 } from "lucide-react"
 
 export default function ProjectPicker() {
   const [projects, setProjects] = useState([])
@@ -10,6 +10,24 @@ export default function ProjectPicker() {
   const [isExiting, setIsExiting] = useState(false)
   const setActiveProject = useProjectStore((s) => s.setActiveProject)
   const navigate = useNavigate()
+
+  const [editingProject, setEditingProject] = useState(null)
+  const [editName, setEditName] = useState("")
+  const [editDesc, setEditDesc] = useState("")
+
+  const startEdit = (e, p) => {
+    e.stopPropagation()
+    setEditingProject(p)
+    setEditName(p.name)
+    setEditDesc(p.description || "")
+  }
+
+  const saveEdit = async () => {
+    if (!editingProject || !editName.trim()) return
+    await projectsApi.update(editingProject.id, editName.trim(), editDesc.trim())
+    setEditingProject(null)
+    load()
+  }
 
   const load = () => projectsApi.list().then((r) => setProjects(r.data))
   useEffect(() => { load() }, [])
@@ -94,13 +112,22 @@ export default function ProjectPicker() {
                   <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-blue-500/10 text-blue-400 mb-4 group-hover:scale-110 transition-transform">
                     <FolderOpen size={20} />
                   </div>
-                  <button
-                    onClick={(e) => remove(e, p.id)}
-                    className="text-editor-muted/50 hover:text-red-400 p-2 rounded-lg hover:bg-red-400/10 transition-all opacity-0 group-hover:opacity-100"
-                    title="Delete project"
-                  >
-                    <Trash2 size={16} />
-                  </button>
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-300">
+                    <button
+                      onClick={(e) => startEdit(e, p)}
+                      className="text-editor-muted/50 hover:text-blue-400 p-2 rounded-lg hover:bg-blue-400/10 transition-all animate-in fade-in zoom-in duration-200"
+                      title="Edit project"
+                    >
+                      <Edit3 size={16} />
+                    </button>
+                    <button
+                      onClick={(e) => remove(e, p.id)}
+                      className="text-editor-muted/50 hover:text-red-400 p-2 rounded-lg hover:bg-red-400/10 transition-all"
+                      title="Delete project"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
                 </div>
 
                 <div className="relative z-10">
@@ -123,6 +150,51 @@ export default function ProjectPicker() {
           </div>
         )}
       </div>
+
+      {/* Edit Project Modal */}
+      {editingProject && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-editor-sidebar border border-editor-border rounded-2xl w-full max-w-md p-6 shadow-2xl relative animate-in zoom-in-95 duration-200">
+            <h3 className="text-xl font-bold text-white mb-4">Edit Workspace</h3>
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="block text-xs font-semibold text-editor-muted uppercase tracking-wider mb-2">Workspace Name</label>
+                <input
+                  className="w-full bg-editor-bg border border-editor-border/50 rounded-xl px-4 py-2.5 text-sm text-editor-text focus:border-blue-500 outline-none transition-colors"
+                  placeholder="Project Name"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && editName.trim() && saveEdit()}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-editor-muted uppercase tracking-wider mb-2">Description</label>
+                <textarea
+                  className="w-full bg-editor-bg border border-editor-border/50 rounded-xl px-4 py-2.5 text-sm text-editor-text focus:border-blue-500 outline-none transition-colors h-24 resize-none"
+                  placeholder="Optional description..."
+                  value={editDesc}
+                  onChange={(e) => setEditDesc(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setEditingProject(null)}
+                className="px-4 py-2 text-sm font-semibold text-editor-muted hover:text-white transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveEdit}
+                disabled={!editName.trim()}
+                className="px-5 py-2 rounded-xl text-sm font-semibold text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

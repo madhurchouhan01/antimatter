@@ -28,6 +28,55 @@ def merge_diagram_into_message(content: str, diagram_markdown: str) -> str:
     return f"{content.strip()}\n\n### Diagram Visualization\n```mermaid\n{diagram_markdown}\n```"
 
 
+def extract_token_usage(resp) -> dict | None:
+    if not resp:
+        return None
+    
+    # 1. Standard LangChain usage_metadata attribute
+    usage = getattr(resp, "usage_metadata", None)
+    if usage and isinstance(usage, dict):
+        input_tokens = usage.get("input_tokens") or usage.get("prompt_tokens") or 0
+        output_tokens = usage.get("output_tokens") or usage.get("completion_tokens") or 0
+        total_tokens = usage.get("total_tokens") or (input_tokens + output_tokens)
+        if total_tokens > 0:
+            return {
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "total_tokens": total_tokens
+            }
+
+    # 2. Check response_metadata dict
+    resp_metadata = getattr(resp, "response_metadata", None) or {}
+    
+    # 2a. Check token_usage inside response_metadata
+    token_usage = resp_metadata.get("token_usage")
+    if token_usage and isinstance(token_usage, dict):
+        input_tokens = token_usage.get("prompt_tokens") or token_usage.get("input_tokens") or 0
+        output_tokens = token_usage.get("completion_tokens") or token_usage.get("output_tokens") or 0
+        total_tokens = token_usage.get("total_tokens") or (input_tokens + output_tokens)
+        if total_tokens > 0:
+            return {
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "total_tokens": total_tokens
+            }
+
+    # 2b. Check usage inside response_metadata
+    usage = resp_metadata.get("usage")
+    if usage and isinstance(usage, dict):
+        input_tokens = usage.get("input_tokens") or usage.get("prompt_tokens") or 0
+        output_tokens = usage.get("output_tokens") or usage.get("completion_tokens") or 0
+        total_tokens = usage.get("total_tokens") or (input_tokens + output_tokens)
+        if total_tokens > 0:
+            return {
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "total_tokens": total_tokens
+            }
+
+    return None
+
+
 async def _write_memory_bg(
     project_id: str,
     user_id: str,
@@ -111,8 +160,10 @@ async def run_agent_streaming(
     model_name: str = "llama-3.3-70b-versatile",
     provider: str = "groq",
     api_key: str | None = None,
+    ollama_base_url: str | None = None,
 ):
     final_text = None
+    accumulated_token_usage = {}  # {input_tokens, output_tokens, total_tokens, model}
     conv = await get_or_create_conversation(db, project.id, conversation_id)
     history = await load_history(db, conv.id)
 
@@ -157,6 +208,7 @@ async def run_agent_streaming(
             model_name=model_name,
             provider=provider,
             api_key=api_key,
+            ollama_base_url=ollama_base_url,
         )
 
         # Retrieve relevant past memories and inject into initial state
@@ -206,9 +258,9 @@ async def run_agent_streaming(
 
             if kind == "on_chat_model_stream":
                 node = event.get("metadata", {}).get("langgraph_node")
-                # Only stream tokens if they belong to the main coding agent
-                if node == "agent":
-                    chunk = event["data"]["chunk"]
+                chunk = event["data"]["chunk"]
+                # Only stream tokens if they belong to the main coding agent or general chat
+                if node in ("agent", "general_chat"):
                     token = chunk.content
                     if token:
                         await send_json({"type": "token", "content": token})
@@ -238,8 +290,28 @@ async def run_agent_streaming(
                     "output": str(event["data"].get("output", "")),
                 })
                 
+            elif kind == "on_chat_model_end":
+                # Capture token usage from any agent/classifier/generator LLM call
+                resp = event["data"].get("output")
+                usage = extract_token_usage(resp)
+                if usage:
+                    accumulated_token_usage = {
+                        "input_tokens":  accumulated_token_usage.get("input_tokens", 0) + usage.get("input_tokens", 0),
+                        "output_tokens": accumulated_token_usage.get("output_tokens", 0) + usage.get("output_tokens", 0),
+                        "total_tokens":  accumulated_token_usage.get("total_tokens", 0) + usage.get("total_tokens", 0),
+                        "model": model_name,
+                    }
+
             elif kind == "on_chain_end":
                 log.info(f"Chain ended: name={event['name']}")
+                node = event.get("metadata", {}).get("langgraph_node")
+                if node == "classifier" and event["name"] == "classifier":
+                    output = event["data"].get("output")
+                    if isinstance(output, dict):
+                        route = output.get("route")
+                        if route:
+                            await send_json({"type": "route", "route": route})
+
                 if event["name"].startswith("antimatter/"):
                     log.debug("I am just before write memory bg:end")
                     # The top-level graph finished. We can grab the final state to save everything accurately!
@@ -263,6 +335,13 @@ async def run_agent_streaming(
                             break
                     
                     base_time = datetime.datetime.now(datetime.timezone.utc)
+                    # Find the index of the last AI message to attach token_usage to it
+                    last_ai_idx = None
+                    for rev_i, rev_m in enumerate(reversed(new_messages)):
+                        if isinstance(rev_m, AIMessage) and not (getattr(rev_m, 'tool_calls', None)):
+                            last_ai_idx = len(new_messages) - 1 - rev_i
+                            break
+
                     for i, m in enumerate(new_messages):
                         role = "assistant" if isinstance(m, AIMessage) else "tool"
                         content = m.content if isinstance(m.content, str) else str(m.content)
@@ -272,12 +351,21 @@ async def run_agent_streaming(
                             tool_calls = m.tool_calls
                         elif isinstance(m, ToolMessage):
                             tool_calls = {"id": m.tool_call_id, "name": m.name}
-                            
+                        
+                        # Attach token usage and route to the last non-tool-calling AI message
+                        msg_token_usage = None
+                        if i == last_ai_idx:
+                            msg_token_usage = {}
+                            if accumulated_token_usage:
+                                msg_token_usage.update(accumulated_token_usage)
+                            msg_token_usage["route"] = final_output.get("route", "coding")
+
                         db.add(Message(
                             conversation_id=conv.id,
                             role=role,
                             content=content,
                             tool_calls=tool_calls,
+                            token_usage=msg_token_usage,
                             created_at=base_time + datetime.timedelta(microseconds=i + 1)
                         ))
                     await db.commit()
@@ -334,4 +422,9 @@ async def run_agent_streaming(
                 "message": "An unexpected error occurred while processing your request. The execution was aborted."
             })
 
-    await send_json({"type": "done", "conversation_id": str(conv.id), "final_text": final_text})
+    await send_json({
+        "type": "done",
+        "conversation_id": str(conv.id),
+        "final_text": final_text,
+        "token_usage": accumulated_token_usage if accumulated_token_usage else None,
+    })

@@ -10,6 +10,8 @@ import IndexingNotification from "./IndexingNotification"
 import GlobalDiffPanel from "./GlobalDiffPanel"
 import ShortcutsOverlay from "./ShortcutsOverlay"
 import SettingsModal from "./SettingsModal"
+import CommandPalette from "./CommandPalette"
+import WorkspaceDashboard from "./WorkspaceDashboard"
 import { useShortcuts } from "../hooks/useShortcuts"
 import { useTerminalStore, getTerminalBufferText } from "../stores/terminalStore"
 import { useChatStore } from "../stores/chatStore"
@@ -21,7 +23,7 @@ import {
   PanelLeftClose, PanelLeftOpen,
   MessageSquare, Terminal as TermIcon,
   GitBranch, Plus, Maximize2, Minimize2, ChevronDown, LogOut, Settings,
-  ArrowRightToLine
+  ArrowRightToLine, Search, LayoutDashboard
 } from "lucide-react"
 
 export default function Layout() {
@@ -34,7 +36,9 @@ export default function Layout() {
   const [sidebarWidth, setSidebarWidth] = useState(280) // default 280px
   const [chatWidth, setChatWidth]       = useState(380) // default 380px
   const [termHeight, setTermHeight]     = useState(192) // default 192px
-  const [showShortcuts, setShowShortcuts] = useState(false)
+  const [showShortcuts,    setShowShortcuts]    = useState(false)
+  const [showCommandPalette, setShowCommandPalette] = useState(false)
+  const [showDashboard,    setShowDashboard]    = useState(false)
 
   const fetchSettings = useSettingsStore((s) => s.fetchSettings)
 
@@ -71,8 +75,14 @@ export default function Layout() {
     toggleChat: () => setChatOpen(prev => !prev),
     toggleTerminal: () => setTermOpen(!termOpen),
     setSidebarTab,
-    openShortcutsHelp: () => setShowShortcuts(true),
-    closeShortcutsHelp: () => setShowShortcuts(false),
+    openShortcutsHelp:  () => setShowShortcuts(true),
+    closeShortcutsHelp: () => {
+      setShowShortcuts(false)
+      setShowCommandPalette(false)
+      setShowDashboard(false)
+    },
+    openCommandPalette: () => setShowCommandPalette(true),
+    openDashboard:      () => setShowDashboard(d => !d),
   })
 
   const handleLogout = () => {
@@ -192,7 +202,19 @@ export default function Layout() {
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-editor-bg text-editor-text">
       {showShortcuts && <ShortcutsOverlay onClose={() => setShowShortcuts(false)} />}
-      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+      {settingsOpen  && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+      {showCommandPalette && (
+        <CommandPalette
+          onClose={() => setShowCommandPalette(false)}
+          toggleSidebar={() => setSidebarOpen(p => !p)}
+          toggleChat={() => setChatOpen(p => !p)}
+          toggleTerminal={() => setTermOpen(o => !o)}
+          setSidebarTab={setSidebarTab}
+          openShortcutsHelp={() => { setShowCommandPalette(false); setShowShortcuts(true) }}
+          openDashboard={() => { setShowCommandPalette(false); setShowDashboard(d => !d) }}
+        />
+      )}
+      {showDashboard && <WorkspaceDashboard onClose={() => setShowDashboard(false)} />}
       
       {/* Left sidebar */}
       {sidebarOpen && (
@@ -257,6 +279,13 @@ export default function Layout() {
           <EditorTabs />
           <div className="ml-auto flex items-center gap-2">
             <button
+              onClick={() => setShowCommandPalette(true)}
+              title="Command Palette (Ctrl+P)"
+              className="p-2 rounded-lg transition-all text-editor-muted hover:bg-editor-highlight hover:text-editor-text"
+            >
+              <Search size={16} />
+            </button>
+            <button
               onClick={() => setTermOpen((o) => !o)}
               title="Toggle Terminal"
               className={`p-2 rounded-lg transition-all ${termOpen ? 'bg-editor-accent/20 text-editor-accent shadow-inner' : 'text-editor-muted hover:bg-editor-highlight hover:text-editor-text'}`}
@@ -269,6 +298,14 @@ export default function Layout() {
               className={`p-2 rounded-lg transition-all ${chatOpen ? 'bg-editor-accent/20 text-editor-accent shadow-inner' : 'text-editor-muted hover:bg-editor-highlight hover:text-editor-text'}`}
             >
               <MessageSquare size={16} />
+            </button>
+
+            <button
+              onClick={() => setShowDashboard(d => !d)}
+              title="Workspace Dashboard (Ctrl+Shift+D)"
+              className={`p-2 rounded-lg transition-all ${showDashboard ? 'bg-teal-500/20 text-teal-400 shadow-inner' : 'text-editor-muted hover:bg-editor-highlight hover:text-editor-text'}`}
+            >
+              <LayoutDashboard size={16} />
             </button>
 
             <button

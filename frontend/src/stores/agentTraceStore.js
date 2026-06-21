@@ -2,39 +2,82 @@ import { create } from "zustand"
 
 /**
  * Stores live agent activity for the current run.
- * Each "run" is one user message → agent response cycle.
+ *
+ * Entry types:
+ *  - "lifecycle"  → { kind: "classify"|"context"|"llm_call"|"finalize"|"cmd_running", label, meta }
+ *  - "tool"       → tool call (tool_start / tool_end)
+ *  - "token_tick" → lightweight token usage snapshot attached to an llm_call step
  *
  * A trace entry shape:
  * {
- *   id:        string          – unique ID
- *   tool:      string          – tool name e.g. "read_file"
- *   status:    "running" | "done" | "error"
- *   input:     object          – tool input args
- *   output:    string | null   – tool output (arrives on tool_end)
- *   startedAt: number          – Date.now() when tool_start arrived
- *   durationMs: number | null  – set on tool_end
+ *   id:         string
+ *   type:       "lifecycle" | "tool"
+ *   // lifecycle only
+ *   kind:       "classify"|"context"|"llm_call"|"finalize"|"cmd_running"
+ *   label:      string
+ *   meta:       object | null     – e.g. { route, tokens, model }
+ *   status:     "running"|"done"
+ *   // tool only
+ *   tool:       string
+ *   input:      object
+ *   output:     string | null
+ *   startedAt:  number
+ *   durationMs: number | null
  * }
  */
 export const useAgentTraceStore = create((set, get) => ({
-  // All tool calls for the *current* run, in order
-  entries: [],
-
-  // Whether any run is currently active (controls the live indicator)
+  entries:  [],
   isActive: false,
-
-  // Whether the panel is open (user can collapse it)
   panelOpen: true,
 
-  // Start a new run — clear previous entries
+  // ── Lifecycle control ────────────────────────────────────────────────────────
+
   startRun: () => set({ entries: [], isActive: true }),
 
-  // Tool call started
+  pushLifecycle: (kind, label, meta = null) =>
+    set((state) => ({
+      entries: [
+        ...state.entries,
+        {
+          id:        crypto.randomUUID(),
+          type:      "lifecycle",
+          kind,
+          label,
+          meta,
+          status:    "running",
+          startedAt: Date.now(),
+          durationMs: null,
+        },
+      ],
+    })),
+
+  resolveLifecycle: (kind, meta = null) =>
+    set((state) => {
+      const entries = [...state.entries]
+      // find last running lifecycle of this kind
+      for (let i = entries.length - 1; i >= 0; i--) {
+        if (entries[i].type === "lifecycle" && entries[i].kind === kind && entries[i].status === "running") {
+          entries[i] = {
+            ...entries[i],
+            status:     "done",
+            durationMs: Date.now() - entries[i].startedAt,
+            meta:       meta ?? entries[i].meta,
+          }
+          break
+        }
+      }
+      return { entries }
+    }),
+
+  // ── Tool call tracking ────────────────────────────────────────────────────────
+
   pushToolStart: (tool, input) =>
     set((state) => ({
       entries: [
         ...state.entries,
         {
           id:         crypto.randomUUID(),
+          type:       "tool",
           tool,
           status:     "running",
           input:      input || {},
@@ -45,13 +88,11 @@ export const useAgentTraceStore = create((set, get) => ({
       ],
     })),
 
-  // Tool call finished — find the last "running" entry for this tool, mark done
   pushToolEnd: (tool, output) =>
     set((state) => {
       const entries = [...state.entries]
-      // Walk backwards to find the most recent "running" entry for this tool
       for (let i = entries.length - 1; i >= 0; i--) {
-        if (entries[i].tool === tool && entries[i].status === "running") {
+        if (entries[i].type === "tool" && entries[i].tool === tool && entries[i].status === "running") {
           entries[i] = {
             ...entries[i],
             status:     output?.startsWith?.("ERROR") ? "error" : "done",
@@ -64,12 +105,9 @@ export const useAgentTraceStore = create((set, get) => ({
       return { entries }
     }),
 
-  // Agent run finished
-  endRun: () => set({ isActive: false }),
+  // ── Session end ──────────────────────────────────────────────────────────────
 
-  // User collapses / expands the panel
+  endRun:      () => set({ isActive: false }),
   togglePanel: () => set((s) => ({ panelOpen: !s.panelOpen })),
-
-  // Clear everything (new chat)
-  clear: () => set({ entries: [], isActive: false }),
+  clear:       () => set({ entries: [], isActive: false }),
 }))

@@ -15,6 +15,7 @@ class MessageOut(BaseModel):
     role: str
     content: str
     tool_calls: list | dict | None = None
+    token_usage: dict | None = None
     created_at: datetime
     model_config = {"from_attributes": True}
 
