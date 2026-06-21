@@ -58,7 +58,7 @@ Most AI coding tools are glorified autocomplete — they suggest text in a singl
 ### 🤖 Agentic Loop
 - **LangGraph StateGraph** with `agent → tools → agent` cycle, terminating when the model stops calling tools
 - **14 built-in tools**: `read_file`, `write_file`, `list_files`, `replace_file_content`, `multi_replace_file_content`, `run_command`, `search_files`, `install_packages`, `run_tests`, `search_web`, `generate_image`, `run_background_command`, `command_status`, `send_command_input`
-- **Human-in-the-loop diff approval**: `write_file` and edit tools emit a `file.patch` event and wait — the agent never writes without your confirmation
+- **Human-in-the-loop diff approval**: `write_file` and edit tools emit a `file.patch` event and wait — the agent never writes without your confirmation. Features a persistent changed-files sidebar list and glassmorphic floating control buttons.
 
 ### 🔍 Hybrid RAG Pipeline
 - **Tree-sitter chunking** for Python, JavaScript, TypeScript, and TSX — extracts functions and classes as semantic units rather than fixed line windows
@@ -92,6 +92,7 @@ Most AI coding tools are glorified autocomplete — they suggest text in a singl
 - **Git panel** — stage, commit, view diffs, manage branches from the UI
 - **Integrated terminal** — connected directly to your project's Docker sandbox, featuring a **Direct Log Redirection** action to automatically grab and animate logs directly into the AI chat input
 - **LSP support** — real diagnostics from `pylsp` wired into Monaco.
+- **Interactive Diff Panel**: Floating Accept/Reject controls stay centered at the bottom of the editor pane, adjusting vertically as the terminal panel resizes. A persistent files list resides in the sidebar, providing check and cross hover actions to accept or undo individual file edits dynamically, remaining visible across subsequent agent messages.
 
 ### 🔐 Auth & Projects
 - **GitHub OAuth** login with JWT (HttpOnly cookies, refresh token rotation)

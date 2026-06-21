@@ -20,8 +20,8 @@ export default function GlobalDiffPanel() {
 
   const entries = Object.entries(pendingDiffs)
 
-  // Only render if there are diffs AND the agent has finished
-  if (entries.length === 0 || !agentDone) return null
+  // Only render if there are diffs
+  if (entries.length === 0) return null
 
   const handleReviewFile = (path, diff) => {
     setReviewingFile(path)
@@ -29,13 +29,18 @@ export default function GlobalDiffPanel() {
     openFile(path, diff.original)
   }
 
-  const handleAcceptAll = () => {
-    const { acceptPendingDiff } = useDiffStore.getState()
-    for (const [path] of entries) {
-      acceptPendingDiff(path)
-      markSaved(path)
+  const handleAcceptAll = async () => {
+    if (!project) return
+    try {
+      const { acceptPendingDiff } = useDiffStore.getState()
+      for (const [path, diff] of entries) {
+        await filesApi.write(project.id, path, diff.modified)
+        acceptPendingDiff(path)
+        markSaved(path)
+      }
+    } catch (err) {
+      console.error("Failed to accept all changes:", err)
     }
-    // Agent run stops here — user must send a new message to continue
   }
 
   const handleUndoAll = async () => {
@@ -47,21 +52,66 @@ export default function GlobalDiffPanel() {
         updateContent(path, diff.original)
       }
       clearAll()
-      // Agent run stops here — user must send a new message to continue
     } catch (err) {
       console.error("Failed to undo all changes:", err)
     }
   }
 
+  const handleAcceptOne = async (e, path, diff) => {
+    e.stopPropagation()
+    if (!project) return
+    try {
+      await filesApi.write(project.id, path, diff.modified)
+      updateContent(path, diff.modified)
+      markSaved(path)
+      
+      const { acceptPendingDiff } = useDiffStore.getState()
+      acceptPendingDiff(path)
+      
+      if (reviewingFile === path) {
+        setReviewingFile(null)
+      }
+    } catch (err) {
+      console.error("Failed to accept change:", err)
+    }
+  }
+
+  const handleUndoOne = async (e, path, diff) => {
+    e.stopPropagation()
+    if (!project) return
+    try {
+      await filesApi.write(project.id, path, diff.original)
+      updateContent(path, diff.original)
+      markSaved(path)
+      
+      removePendingDiff(path)
+      
+      if (reviewingFile === path) {
+        setReviewingFile(null)
+      }
+    } catch (err) {
+      console.error("Failed to undo change:", err)
+    }
+  }
+
   return (
     <div className="flex flex-col border-b border-editor-border/50">
-      {/* "Task Complete" banner — shown when agent finishes with diffs */}
-      <div className="flex items-center gap-2 px-3 py-2 bg-blue-500/10 border-b border-blue-500/20">
-        <Sparkles size={12} className="text-blue-400 shrink-0" />
-        <span className="text-[11px] text-blue-300 font-medium flex-1">
-          Task complete — review {entries.length} proposed change{entries.length > 1 ? "s" : ""}
-        </span>
-      </div>
+      {/* Proposed changes banner */}
+      {agentDone ? (
+        <div className="flex items-center gap-2 px-3 py-2 bg-blue-500/10 border-b border-blue-500/20 animate-in fade-in duration-300">
+          <Sparkles size={12} className="text-blue-400 shrink-0" />
+          <span className="text-[11px] text-blue-300 font-medium flex-1">
+            Task complete — review {entries.length} proposed change{entries.length > 1 ? "s" : ""}
+          </span>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2 px-3 py-2 bg-amber-500/10 border-b border-amber-500/20 animate-in fade-in duration-300">
+          <div className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping shrink-0" />
+          <span className="text-[11px] text-amber-300 font-medium flex-1">
+            AI is active — {entries.length} pending proposed change{entries.length > 1 ? "s" : ""}
+          </span>
+        </div>
+      )}
 
       {/* Summary statistics panel */}
       {summary && (
@@ -176,7 +226,7 @@ export default function GlobalDiffPanel() {
                           <X size={12} />
                         </button>
                         <button
-                          onClick={(e) => handleAcceptOne(e, path)}
+                          onClick={(e) => handleAcceptOne(e, path, diff)}
                           className="p-1 rounded text-editor-muted hover:text-green-400 hover:bg-green-500/10 transition-colors"
                           title="Accept and confirm this change"
                         >

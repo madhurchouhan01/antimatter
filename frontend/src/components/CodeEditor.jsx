@@ -280,16 +280,16 @@ export default function CodeEditor() {
     <div className="flex-1 flex flex-col overflow-hidden bg-editor-bg relative group">
       
       {pendingDiff && (
-        <div className="absolute top-4 right-6 z-20 flex items-center gap-2 bg-editor-sidebar border border-editor-border/50 rounded-lg p-1.5 shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 bg-editor-sidebar/85 backdrop-blur-md border border-editor-border/50 rounded-xl p-2 shadow-[0_12px_40px_rgba(0,0,0,0.5)] opacity-85 hover:opacity-100 transition-opacity duration-200">
           <button 
             onClick={handleAcceptDiff}
-            className="px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-md transition-colors"
+            className="px-4 py-2 bg-blue-500/90 hover:bg-blue-600 text-white text-xs font-semibold rounded-lg transition-colors shadow-lg shadow-blue-500/20"
           >
             Accept
           </button>
           <button 
             onClick={handleRejectDiff}
-            className="px-3 py-1.5 hover:bg-editor-highlight text-editor-text text-sm font-medium rounded-md transition-colors"
+            className="px-4 py-2 bg-editor-highlight/90 hover:bg-editor-highlight text-editor-text text-xs font-semibold rounded-lg transition-colors border border-editor-border/40"
           >
             Reject
           </button>
