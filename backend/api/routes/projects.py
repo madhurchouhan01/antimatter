@@ -16,6 +16,10 @@ class ProjectCreate(BaseModel):
     name: str
     description: str | None = None
 
+class ProjectUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
+
 class ProjectOut(BaseModel):
     id: uuid.UUID
     name: str
@@ -73,6 +77,33 @@ async def delete_project(
         raise HTTPException(404, "Project not found")
     await db.delete(project)
     await db.commit()
+
+@router.put("/{project_id}", response_model=ProjectOut)
+async def update_project(
+    project_id: uuid.UUID,
+    body: ProjectUpdate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(Project).where(Project.id == project_id, Project.owner_id == user.id)
+    )
+    project = result.scalar_one_or_none()
+    if not project:
+        raise HTTPException(404, "Project not found")
+    
+    if body.name is not None:
+        trimmed = body.name.strip()
+        if not trimmed:
+            raise HTTPException(400, "Project name cannot be empty")
+        project.name = trimmed
+        
+    if body.description is not None:
+        project.description = body.description.strip()
+        
+    await db.commit()
+    await db.refresh(project)
+    return project
 
 @router.post("/clone-repo")
 async def clone_repo(

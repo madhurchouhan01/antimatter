@@ -46,6 +46,8 @@ export const projectsApi = {
   create: (name, description) =>
     api.post("/api/projects/", { name, description }),
   delete: (id)       => api.delete(`/api/projects/${id}`),
+  update: (id, name, description) =>
+    api.put(`/api/projects/${id}`, { name, description }),
 }
 
 // File endpoints

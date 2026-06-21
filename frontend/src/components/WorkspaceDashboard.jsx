@@ -1,13 +1,14 @@
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import {
   LayoutDashboard, Wifi, WifiOff, Cpu, Database, Coins,
-  Timer, Activity, FolderOpen, Zap, X, Clock
+  Timer, Activity, FolderOpen, Zap, X, Clock, Pencil
 } from "lucide-react"
 import { useProjectStore }    from "../stores/projectStore"
 import { useSettingsStore }   from "../stores/settingsStore"
 import { useChatStore }       from "../stores/chatStore"
 import { useAgentTraceStore } from "../stores/agentTraceStore"
 import { useFileTreeStore }   from "../stores/fileTreeStore"
+import { projectsApi }        from "../lib/api"
 
 // ─── Model context window reference table ─────────────────────────────────────
 const MODEL_CTX = {
@@ -79,6 +80,32 @@ export default function WorkspaceDashboard({ onClose }) {
   const entries    = useAgentTraceStore((s) => s.entries)
   const isActive   = useAgentTraceStore((s) => s.isActive)
   const syncing    = useFileTreeStore((s) => s.syncing)
+
+  const [isEditingName, setIsEditingName] = useState(false)
+  const [editedName, setEditedName] = useState(project?.name || "")
+  const updateActiveProject = useProjectStore((s) => s.updateActiveProject)
+
+  useEffect(() => {
+    if (project?.name) {
+      setEditedName(project.name)
+    }
+  }, [project?.name])
+
+  const handleSaveName = async () => {
+    const trimmed = editedName.trim()
+    if (!trimmed || trimmed === project?.name) {
+      setIsEditingName(false)
+      return
+    }
+    try {
+      const res = await projectsApi.update(project.id, trimmed, project.description || "")
+      updateActiveProject(res.data)
+    } catch (err) {
+      console.error("Failed to update project name", err)
+    } finally {
+      setIsEditingName(false)
+    }
+  }
 
   // Total session tokens
   const totalTokens = messages.reduce((acc, msg) => {
@@ -155,13 +182,55 @@ export default function WorkspaceDashboard({ onClose }) {
 
         {/* Stats */}
         <div className="px-4 py-1">
-          <StatRow
-            icon={FolderOpen}
-            color="#9ece6a"
-            label="Active Project"
-            value={project?.name ?? "—"}
-            sub={project ? `#${String(project.id).slice(0,6)}` : undefined}
-          />
+          {/* Active Project Row (Inline editable) */}
+          <div className="flex items-center gap-3 py-2.5 border-b border-editor-border/20">
+            <div className="shrink-0 w-7 h-7 rounded-lg flex items-center justify-center"
+              style={{ background: "#9ece6a15", border: "1px solid #9ece6a25" }}>
+              <FolderOpen size={13} className="text-[#9ece6a]" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-[10px] text-editor-muted/60 uppercase tracking-wider font-semibold">Active Project</div>
+              {isEditingName ? (
+                <input
+                  className="bg-editor-bg border border-blue-500/50 rounded px-1.5 py-0.5 text-[13px] text-white w-full outline-none focus:ring-1 focus:ring-blue-500/50 font-medium"
+                  value={editedName}
+                  onChange={(e) => setEditedName(e.target.value)}
+                  onBlur={handleSaveName}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleSaveName()
+                    if (e.key === "Escape") {
+                      setIsEditingName(false)
+                      setEditedName(project?.name || "")
+                    }
+                  }}
+                  autoFocus
+                />
+              ) : (
+                <div 
+                  onClick={() => {
+                    if (project) {
+                      setIsEditingName(true)
+                      setEditedName(project.name)
+                    }
+                  }}
+                  className="flex items-center gap-1.5 group/proj cursor-pointer"
+                  title="Click to rename project"
+                >
+                  <div className="text-[13px] font-semibold text-white truncate group-hover/proj:text-blue-400 transition-colors">
+                    {project?.name ?? "—"}
+                  </div>
+                  {project && (
+                    <Pencil size={10} className="text-editor-muted/40 opacity-0 group-hover/proj:opacity-100 transition-opacity shrink-0 animate-in fade-in duration-200" />
+                  )}
+                </div>
+              )}
+            </div>
+            {project && (
+              <span className="text-[10px] text-editor-muted/50 font-mono shrink-0">
+                #{String(project.id).slice(0,6)}
+              </span>
+            )}
+          </div>
           <StatRow
             icon={isConnected ? Wifi : WifiOff}
             color={isConnected ? "#9ece6a" : "#f7768e"}

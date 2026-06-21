@@ -8,6 +8,10 @@ export const useProjectStore = create(
       activeProject: null,
       setProjects:      (projects) => set({ projects }),
       setActiveProject: (project)  => set({ activeProject: project }),
+      updateActiveProject: (project) => set((state) => ({
+        activeProject: state.activeProject?.id === project.id ? project : state.activeProject,
+        projects: state.projects.map((p) => (p.id === project.id ? project : p)),
+      })),
     }),
     { name: "project-storage" }
   )
