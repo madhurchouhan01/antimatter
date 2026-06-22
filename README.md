@@ -61,7 +61,7 @@ Most AI coding tools are glorified autocomplete — they suggest text in a singl
 - **Human-in-the-loop diff approval**: `write_file` and edit tools emit a `file.patch` event and wait — the agent never writes without your confirmation. Features a persistent changed-files sidebar list and glassmorphic floating control buttons.
 
 ### 🔍 Hybrid RAG Pipeline
-- **Tree-sitter chunking** for Python, JavaScript, TypeScript, and TSX — extracts functions and classes as semantic units rather than fixed line windows
+- **Tree-sitter chunking** for Python, JavaScript, TypeScript, and TSX — extracts functions and classes as semantic units rather than fixed line windows.
 - **VoyageAI embeddings** stored in PostgreSQL with the `pgvector` extension
 - **BM25 keyword search** alongside semantic search for exact identifier matching
 - **Reciprocal Rank Fusion (RRF)** to merge both result lists into a single ranked context
