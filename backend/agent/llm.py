@@ -76,6 +76,7 @@ PROVIDER_MODELS: dict[str, list[str]] = {
     "ollama": [
         "qwen2.5-coder:14b",
         "qwen2.5-coder:7b",
+        "qwen2.5-coder:3b"
         "qwen2.5:14b",
         "qwen2.5:7b",
         "llama3.3:70b",
