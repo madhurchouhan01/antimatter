@@ -8,7 +8,7 @@ export const useSettingsStore = create(
       provider: "groq",
       model: "llama-3.3-70b-versatile",
       hasApiKey: false,
-      ollamaBaseUrl: "http://localhost:11434/v1",
+      ollamaBaseUrl: "http://host.docker.internal:11434/v1",
       isLoading: false,
       isSaving: false,
       error: null,
@@ -24,7 +24,7 @@ export const useSettingsStore = create(
             provider: data.provider,
             model: data.model,
             hasApiKey: data.has_api_key,
-            ollamaBaseUrl: data.ollama_base_url || "http://localhost:11434/v1",
+            ollamaBaseUrl: data.ollama_base_url || "http://host.docker.internal:11434/v1",
             isLoading: false,
           })
         } catch (err) {
@@ -48,7 +48,7 @@ export const useSettingsStore = create(
             provider: data.provider,
             model: data.model,
             hasApiKey: data.has_api_key,
-            ollamaBaseUrl: data.ollama_base_url || "http://localhost:11434/v1",
+            ollamaBaseUrl: data.ollama_base_url || "http://host.docker.internal:11434/v1",
             isSaving: false,
           })
           return true

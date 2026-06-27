@@ -7,6 +7,7 @@ import os
 import re
 import json
 import asyncio
+import uuid
 from agent.llm import get_llm
 from agent.tools import make_tools
 from services.file_service import FileService
@@ -14,6 +15,83 @@ from sandbox.manager import sandbox_manager
 from core.logger import get_logger
 
 log = get_logger(__name__)
+
+def parse_text_tool_calls(content: str) -> list[dict]:
+    """
+    Attempts to extract JSON tool calls from text when a small model
+    outputs raw JSON instead of using the API-level tool calling.
+    """
+    if not content or not isinstance(content, str):
+        return []
+    
+    content_str = content.strip()
+    
+    # Try to find JSON block in markdown fences first
+    json_block_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', content_str)
+    if json_block_match:
+        candidate_str = json_block_match.group(1).strip()
+    else:
+        candidate_str = content_str
+
+    # Find the outermost JSON boundary: the first { or [ to the last } or ]
+    first_brace = candidate_str.find('{')
+    first_bracket = candidate_str.find('[')
+    
+    start_idx = -1
+    end_char = ''
+    
+    if first_brace != -1 and (first_bracket == -1 or first_brace < first_bracket):
+        start_idx = first_brace
+        end_char = '}'
+    elif first_bracket != -1:
+        start_idx = first_bracket
+        end_char = ']'
+        
+    if start_idx == -1:
+        return []
+        
+    end_idx = candidate_str.rfind(end_char)
+    if end_idx == -1 or end_idx < start_idx:
+        return []
+        
+    json_str = candidate_str[start_idx:end_idx + 1].strip()
+            
+    try:
+        data = json.loads(json_str)
+        if isinstance(data, dict):
+            calls = [data]
+        elif isinstance(data, list):
+            calls = data
+        else:
+            return []
+            
+        parsed_calls = []
+        for call in calls:
+            if not isinstance(call, dict):
+                continue
+            name = call.get("name") or call.get("tool")
+            args = call.get("arguments") or call.get("args") or {}
+            
+            if name:
+                if isinstance(args, str):
+                    try:
+                        args = json.loads(args)
+                    except Exception:
+                        args = {}
+                elif not isinstance(args, dict):
+                    args = {}
+                
+                parsed_calls.append({
+                    "name": name,
+                    "args": args,
+                    "id": f"call_{uuid.uuid4().hex[:12]}",
+                    "type": "tool_call"
+                })
+        return parsed_calls
+    except Exception as e:
+        log.warning(f"Failed to parse fallback tool calls from text: {e}")
+        return []
+
 
 SYSTEM_PROMPT = """You are an expert AI coding assistant embedded in a code editor.
 You have access to the user's project workspace through these tools:
@@ -275,6 +353,14 @@ Do not output anything else. No explanation, no markdown formatting. Just the ca
                 prompt += f"\n\n## Relevant Past Experience\n{memory_context}"
             messages = [SystemMessage(content=prompt)] + messages
         response = llm.invoke(messages)
+        
+        # Fallback tool calls parsing from text for small / local models (e.g. Ollama Qwen)
+        if not (hasattr(response, "tool_calls") and response.tool_calls):
+            parsed = parse_text_tool_calls(response.content)
+            if parsed:
+                response.tool_calls = parsed
+                log.info("Parsed fallback tool calls from text", tool_calls=parsed)
+                
         return {"messages": [response]}
 
     async def diagram_generator_node(state: AgentState):

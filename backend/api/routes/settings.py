@@ -120,7 +120,7 @@ async def get_models():
 
 @router.get("/ollama/models")
 async def get_ollama_models(
-    base_url: str | None = Query(default=None, description="Ollama base URL, e.g. http://localhost:11434/v1"),
+    base_url: str | None = Query(default=None, description="Ollama base URL, e.g. http://host.docker.internal:11434/v1"),
 ):
     """
     Probe the user's running Ollama instance.
@@ -137,6 +137,7 @@ async def get_ollama_models(
 
     # Curated models known to support tool calling well, with notes
     RECOMMENDED = [
+        {"name": "qwen2.5-coder:3b",   "note": "Best for 2GB RAM — strong tool calling"},
         {"name": "qwen2.5-coder:7b",   "note": "Best for 8GB RAM — strong tool calling"},
         {"name": "qwen2.5-coder:14b",  "note": "Best coding model if you have 12GB+ VRAM"},
         {"name": "qwen2.5-coder:32b",  "note": "Requires 24GB+ VRAM"},

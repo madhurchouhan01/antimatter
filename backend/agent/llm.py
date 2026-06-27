@@ -76,7 +76,7 @@ PROVIDER_MODELS: dict[str, list[str]] = {
     "ollama": [
         "qwen2.5-coder:14b",
         "qwen2.5-coder:7b",
-        "qwen2.5-coder:3b"
+        "qwen2.5-coder:3b",
         "qwen2.5:14b",
         "qwen2.5:7b",
         "llama3.3:70b",
@@ -94,7 +94,7 @@ PROVIDER_MODELS: dict[str, list[str]] = {
 # GitHub Marketplace Azure AI Inference endpoint
 _GITHUB_ENDPOINT = "https://models.github.ai/inference"
 _OPENROUTER_BASE  = "https://openrouter.ai/api/v1"
-_OLLAMA_DEFAULT_BASE = "http://localhost:11434/v1"
+_OLLAMA_DEFAULT_BASE = "http://host.docker.internal:11434/v1"
 
 
 async def fetch_ollama_models(base_url: str | None = None) -> dict:

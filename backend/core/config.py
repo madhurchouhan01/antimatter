@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
 
     # Ollama (local models)
-    ollama_base_url: str = "http://localhost:11434/v1"  # Override for remote Ollama instances
+    ollama_base_url: str = "http://host.docker.internal:11434/v1"  # Override for remote Ollama instances
 
 
     # LangSmith — supports both old LANGCHAIN_* and new LANGSMITH_* naming
