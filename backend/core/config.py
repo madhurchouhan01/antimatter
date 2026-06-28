@@ -69,6 +69,14 @@ class Settings(BaseSettings):
     github_client_id: str = ""
     github_client_secret: str = ""
     frontend_url: str = "http://localhost:5173"
+
+    # ── pgvector / IVFFlat tuning ────────────────────────────────────────────
+    # Number of clusters to probe at query time (higher = better recall, slower).
+    # pgvector default is 1; 10 is a safe starting point for most codebases.
+    ivfflat_nprobe: int = 10
+    # Minimum number of lists (clusters) for the dynamic index rebuild.
+    # The actual value is max(ivfflat_lists_min, sqrt(total_chunks)).
+    ivfflat_lists_min: int = 10
     
 @lru_cache
 def get_settings() -> Settings:

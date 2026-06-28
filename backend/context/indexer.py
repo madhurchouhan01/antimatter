@@ -38,7 +38,8 @@ class CodeIndexer:
             await asyncio.sleep(3)
         except Exception:
             pass
-            
+
+        result: dict = {}
         try:
             root  = Path(workspace_path)
             files = self._collect_files(root)
@@ -51,9 +52,26 @@ class CodeIndexer:
                     )
                     total_chunks += count
 
-            return {"files_indexed": len(files), "chunks": total_chunks}
+            result = {"files_indexed": len(files), "chunks": total_chunks}
+            return result
         finally:
             await manager.broadcast(str(project_id), {"type": "indexing.status", "status": False})
+
+            # Rebuild IVFFlat index with a dynamically computed lists count.
+            # Runs inside finally so it fires even if the indexing partially fails,
+            # but is non-fatal — any exception is logged and swallowed.
+            import logging as _logging
+            _log = _logging.getLogger(__name__)
+            try:
+                async with AsyncSessionLocal() as _db:
+                    reindex_result = await vector_store.reindex_if_needed(_db)
+                    _log.info("index_project: reindex result: %s", reindex_result)
+            except Exception:
+                _log.warning(
+                    "index_project: reindex_if_needed failed (non-fatal)",
+                    exc_info=True,
+                )
+
 
     async def index_file(
         self,
