@@ -77,6 +77,16 @@ class Settings(BaseSettings):
     # Minimum number of lists (clusters) for the dynamic index rebuild.
     # The actual value is max(ivfflat_lists_min, sqrt(total_chunks)).
     ivfflat_lists_min: int = 10
+
+    # ── Retrieval quality thresholds ─────────────────────────────────────────
+    # Minimum cosine similarity score [0.0–1.0] for a chunk to be included
+    # in semantic_search results. Chunks below this are dropped before RRF.
+    # Set to 0.0 to disable (return all results up to top_k).
+    retrieval_semantic_threshold: float = 0.25
+    # Minimum RRF fused score for a chunk to appear in hybrid_search output.
+    # RRF scores are typically in the range 0.008–0.017 for top results.
+    # Set to 0.0 to disable (no post-fusion filtering).
+    retrieval_rrf_threshold: float = 0.0
     
 @lru_cache
 def get_settings() -> Settings:

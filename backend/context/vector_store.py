@@ -71,6 +71,7 @@ class VectorStore:
         query_embedding: list[float],
         top_k: int = 15,
         nprobe: int | None = None,
+        score_threshold: float | None = None,
     ) -> list[tuple[CodeChunk, float]]:
         """
         Cosine similarity search via pgvector.
@@ -78,9 +79,19 @@ class VectorStore:
         nprobe controls how many IVFFlat lists are scanned per query.
         Higher values → better recall, slightly slower queries.
         Defaults to settings.ivfflat_nprobe (env: IVFFLAT_NPROBE, default 10).
+
+        score_threshold is the minimum cosine similarity [0–1] a chunk must
+        reach to be included in results. Chunks below this threshold are
+        dropped in the DB before returning to Python.
+        Defaults to settings.retrieval_semantic_threshold (env: RETRIEVAL_SEMANTIC_THRESHOLD).
         """
         settings = get_settings()
         effective_nprobe = nprobe if nprobe is not None else settings.ivfflat_nprobe
+        effective_threshold = (
+            score_threshold
+            if score_threshold is not None
+            else settings.retrieval_semantic_threshold
+        )
 
         # Set the session-level IVFFlat probe count before the search query.
         # pgvector reads this GUC before executing the ORDER BY <=> scan.
@@ -89,21 +100,32 @@ class VectorStore:
             {"n": effective_nprobe},
         )
 
+        # Wrap the base query in a subquery so we can filter on the computed
+        # `score` column without re-computing the distance expression.
+        # The threshold is applied AFTER the ORDER BY + LIMIT so pgvector
+        # can still use the index efficiently.
         result = await db.execute(
             text("""
                 SELECT id, file_path, start_line, end_line,
-                       language, chunk_type, content,
-                       1 - (embedding <=> :embedding) AS score
-                FROM code_chunks
-                WHERE project_id = :project_id
-                  AND embedding IS NOT NULL
-                ORDER BY embedding <=> :embedding
-                LIMIT :top_k
+                       language, chunk_type, content, score
+                FROM (
+                    SELECT id, file_path, start_line, end_line,
+                           language, chunk_type, content,
+                           1 - (embedding <=> :embedding) AS score
+                    FROM code_chunks
+                    WHERE project_id = :project_id
+                      AND embedding IS NOT NULL
+                    ORDER BY embedding <=> :embedding
+                    LIMIT :top_k
+                ) ranked
+                WHERE score >= :threshold
+                ORDER BY score DESC
             """),
             {
                 "embedding":  str(query_embedding),
                 "project_id": str(project_id),
                 "top_k":      top_k,
+                "threshold":  effective_threshold,
             }
         )
         return result.fetchall()

@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from context.vector_store import vector_store
 from context.embedder import embed_query
 from dataclasses import dataclass
+from core.config import get_settings
 from core.logger import get_logger
 
 log = get_logger(__name__)
@@ -26,11 +27,34 @@ async def hybrid_search(
     project_id: uuid.UUID,
     query: str,
     top_k: int = 10,
+    semantic_threshold: float | None = None,
+    rrf_threshold: float | None = None,
 ) -> list[RetrievedChunk]:
     """
     Combine semantic + BM25 results using Reciprocal Rank Fusion.
     This finds both conceptually similar code AND exact identifier matches.
+
+    semantic_threshold: min cosine similarity for a chunk to enter the
+        semantic result set (forwarded to vector_store.semantic_search).
+        Defaults to settings.retrieval_semantic_threshold.
+
+    rrf_threshold: min RRF fused score for a chunk to appear in the
+        final output. Useful for discarding tail results when BM25 alone
+        surfaces low-quality matches.
+        Defaults to settings.retrieval_rrf_threshold (0.0 = disabled).
     """
+    settings = get_settings()
+    effective_semantic_threshold = (
+        semantic_threshold
+        if semantic_threshold is not None
+        else settings.retrieval_semantic_threshold
+    )
+    effective_rrf_threshold = (
+        rrf_threshold
+        if rrf_threshold is not None
+        else settings.retrieval_rrf_threshold
+    )
+
     # Run searches with a fallback to BM25 if embedding fails
     query_embedding = None
     try:
@@ -42,7 +66,11 @@ async def hybrid_search(
     if query_embedding is not None:
         try:
             semantic_results = await vector_store.semantic_search(
-                db, project_id, query_embedding, top_k=top_k * 2
+                db,
+                project_id,
+                query_embedding,
+                top_k=top_k * 2,
+                score_threshold=effective_semantic_threshold,
             )
         except Exception as e:
             log.warning(f"Semantic search failed: {e}")
@@ -72,6 +100,17 @@ async def hybrid_search(
     # Sort by combined RRF score
     ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
 
+    # ── RRF threshold filter ──────────────────────────────────────────────────
+    if effective_rrf_threshold > 0.0:
+        before = len(ranked)
+        ranked = [(k, s) for k, s in ranked if s >= effective_rrf_threshold]
+        dropped = before - len(ranked)
+        if dropped:
+            log.info(
+                "hybrid_search: dropped %d/%d chunks below RRF threshold %.4f",
+                dropped, before, effective_rrf_threshold,
+            )
+
     results = []
     for key, score in ranked[:top_k]:
         row = chunk_map[key]
@@ -85,4 +124,10 @@ async def hybrid_search(
             score      = score,
         ))
 
-    return results
+    log.info(
+        "hybrid_search: query=%r semantic_hits=%d bm25_hits=%d rrf_final=%d threshold_sem=%.2f threshold_rrf=%.4f",
+        query[:60], len(semantic_results), len(bm25_results), len(results),
+        effective_semantic_threshold, effective_rrf_threshold,
+    )
+
+    return results
