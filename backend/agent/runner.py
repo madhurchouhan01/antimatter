@@ -4,7 +4,7 @@ import asyncio
 import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
+from langchain_core.messages import HumanMessage, AIMessage, ToolMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 from db.models import Conversation, Message, Project
 from db.session import AsyncSessionLocal
@@ -147,6 +147,8 @@ async def load_history(db: AsyncSession, conversation_id: uuid.UUID) -> list:
                 tool_call_id = m.tool_calls.get("id", "")
                 name = m.tool_calls.get("name", "")
             lc_messages.append(ToolMessage(content=m.content, tool_call_id=tool_call_id, name=name))
+        elif m.role == "system":
+            lc_messages.append(SystemMessage(content=m.content))
     return lc_messages
 
 async def run_agent_streaming(

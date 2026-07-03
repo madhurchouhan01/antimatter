@@ -82,6 +82,8 @@ export const conversationsApi = {
     api.put(`/api/projects/${projectId}/conversations/${convId}`, { title }),
   delete:   (projectId, convId) =>
     api.delete(`/api/projects/${projectId}/conversations/${convId}`),
+  compress: (projectId, convId) =>
+    api.post(`/api/projects/${projectId}/conversations/${convId}/compress`),
 }
 
 // Settings endpoints

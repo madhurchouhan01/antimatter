@@ -177,6 +177,16 @@ export const useChatStore = create(
           console.error("Failed to rename conversation:", err)
         }
       },
+
+      compressConversation: async (projectId, convId) => {
+        if (!projectId || !convId) return
+        try {
+          await conversationsApi.compress(projectId, convId)
+          await get().loadConversation(projectId, convId)
+        } catch (err) {
+          console.error("Failed to compress conversation:", err)
+        }
+      },
     }),
     {
       name: "chat-storage",
