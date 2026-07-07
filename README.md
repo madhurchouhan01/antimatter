@@ -65,7 +65,7 @@ Most AI coding tools are glorified autocomplete — they suggest text in a singl
 - **VoyageAI embeddings** stored in PostgreSQL with the `pgvector` extension
 - **BM25 keyword search** alongside semantic search for exact identifier matching
 - **Reciprocal Rank Fusion (RRF)** to merge both result lists into a single ranked context
-- **File watcher** auto-reindexes changed files in the background
+- **File watcher** auto-reindexes changed files in the background.
 
 ### 🧠 Episodic Memory (Agent Memory)
 - **Worthiness Filter**: Traces of runs containing non-obvious design decisions, multi-attempt bug fixes, or user corrections are automatically judged by an LLM to decide if they warrant a permanent lesson.
