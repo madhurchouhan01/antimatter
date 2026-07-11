@@ -14,11 +14,24 @@
 
 </div>
 
+
 ---
 
 AntiMatter is a self-hosted, web-based code editor where the AI agent can **read, write, search, and execute code** in an isolated Docker sandbox — and every proposed file change requires your approval before it lands on disk.
 
 The agent runs as a proper [LangGraph](https://github.com/langchain-ai/langgraph) ReAct loop with 14 real tools, backed by a hybrid RAG pipeline (semantic search + BM25 + Reciprocal Rank Fusion) over your entire codebase. It supports Groq, Anthropic, OpenAI, Gemini, and OpenRouter from a single provider abstraction layer.
+
+## 📺 Demo Video
+
+---
+
+<div align="center">
+  <video src="https://github.com/user-attachments/assets/30463d38-8e84-4bd0-a6b3-51491f59827b" width="100%" controls autoplay muted loop>
+    Your browser does not support the video tag.
+  </video>
+</div>
+
+---
 
 ---
 
